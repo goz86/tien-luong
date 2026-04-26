@@ -11,7 +11,8 @@ import {
   formatHoursCompact, 
   formatSelectedDate, 
   shiftMonth,
-  getVenueColor 
+  getVenueColor,
+  isKoreanHoliday
 } from '../utils/helpers';
 
 export function CalendarScreen({
@@ -217,31 +218,33 @@ export function CalendarScreen({
       <header className="appbar compact">
         <div>
           <p className="appbar-kicker">Lịch làm việc</p>
-          <button type="button" className="appbar-title calendar-title-large" onClick={openMonthPicker}>
-            {formatCalendarMonthTitle(month)}
-            <ChevronDown size={24} />
-          </button>
-          {isNotCurrentMonth && (
-            <button 
-              type="button" 
-              className="today-pill-btn" 
-              onClick={() => onSetMonth(currentMonthISO)}
-              style={{
-                marginLeft: '12px',
-                background: '#eff6ff',
-                color: '#2752ff',
-                border: 'none',
-                padding: '6px 12px',
-                borderRadius: '8px',
-                fontSize: '13px',
-                fontWeight: 800,
-                letterSpacing: '0.02em',
-                cursor: 'pointer'
-              }}
-            >
-              TODAY
+          <div className="calendar-title-group" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <button type="button" className="appbar-title calendar-title-large" onClick={openMonthPicker}>
+              {formatCalendarMonthTitle(month)}
+              <ChevronDown size={24} />
             </button>
-          )}
+            {isNotCurrentMonth && (
+              <button 
+                type="button" 
+                className="today-pill-btn" 
+                onClick={() => onSetMonth(currentMonthISO)}
+                style={{
+                  background: '#eff6ff',
+                  color: '#2752ff',
+                  border: 'none',
+                  padding: '5px 10px',
+                  borderRadius: '10px',
+                  fontSize: '11px',
+                  fontWeight: 900,
+                  letterSpacing: '0.04em',
+                  cursor: 'pointer',
+                  flexShrink: 0
+                }}
+              >
+                TODAY
+              </button>
+            )}
+          </div>
         </div>
         <div className="calendar-head-actions">
           <button type="button" className="calendar-icon-button" onClick={downloadCalendarImage} aria-label="Tải ảnh lịch">
@@ -297,7 +300,8 @@ export function CalendarScreen({
 
             const isSelected = cell.date === selectedDate;
             const isToday = cell.date === new Date().toISOString().slice(0, 10);
-            const toneClass = dayOfWeek === 0 ? ' sunday' : dayOfWeek === 6 ? ' saturday' : '';
+            const isHoliday = isKoreanHoliday(cell.date);
+            const toneClass = dayOfWeek === 0 || isHoliday ? ' sunday' : dayOfWeek === 6 ? ' saturday' : '';
             const outsideClass = cell.inMonth ? '' : ' outside';
             const cellClassName = `${isSelected ? 'calendar-day selected' : 'calendar-day'}${toneClass}${isToday ? ' today' : ''}${outsideClass}`;
 

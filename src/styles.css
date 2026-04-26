@@ -548,8 +548,8 @@ select {
 }
 
 .calendar-total-fixed {
-  flex: 0 0 112px;
-  width: 112px;
+  flex: 0 0 135px;
+  width: 135px;
   font-size: 20px;
   text-align: right;
   overflow: hidden;
@@ -1659,8 +1659,8 @@ select {
   }
 
   .calendar-total-fixed {
-    flex-basis: 100px;
-    width: 100px;
+    flex-basis: 125px;
+    width: 125px;
     font-size: 17px;
   }
 

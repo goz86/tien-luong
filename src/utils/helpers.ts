@@ -101,3 +101,36 @@ export function getVenueColor(venue: string, colors: Record<string, string>): st
   for (const char of venue) hash = (hash + (char.codePointAt(0) ?? 0)) % VENUE_PALETTE.length;
   return VENUE_PALETTE[hash];
 }
+
+export function isKoreanHoliday(dateIso: string): boolean {
+  const [year, month, day] = dateIso.split('-').map(Number);
+  
+  // Fixed holidays
+  const fixed = [
+    '01-01', // New Year
+    '03-01', // Independence Movement Day
+    '05-05', // Children's Day
+    '06-06', // Memorial Day
+    '08-15', // Liberation Day
+    '10-03', // National Foundation Day
+    '10-09', // Hangeul Day
+    '12-25', // Christmas
+  ];
+  if (fixed.includes(`${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`)) return true;
+
+  // Moving holidays (approximation for 2024-2025)
+  const moving = [
+    // 2024
+    '2024-02-09', '2024-02-10', '2024-02-11', '2024-02-12', // Seollal
+    '2024-04-10', // Election Day
+    '2024-05-15', // Buddha's Birthday
+    '2024-09-16', '2024-09-17', '2024-09-18', // Chuseok
+    // 2025
+    '2025-01-28', '2025-01-29', '2025-01-30', // Seollal
+    '2025-05-05', // Buddha's Birthday
+    '2025-10-05', '2025-10-06', '2025-10-07', // Chuseok
+  ];
+  if (moving.includes(dateIso)) return true;
+
+  return false;
+}
