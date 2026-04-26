@@ -86,6 +86,7 @@ export default function App() {
   const [incomeTarget, setIncomeTarget] = useState(initial.incomeTarget ?? 2000000);
   const [expenses, setExpenses] = useState(initial.expenses ?? []);
   const [draft, setDraft] = useState<ShiftDraft>(defaultDraft);
+  const [editingShiftId, setEditingShiftId] = useState<string | null>(null);
   const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(todayIso));
   const [selectedDate, setSelectedDate] = useState(todayIso);
   const [isDaySheetOpen, setIsDaySheetOpen] = useState(false);
@@ -249,9 +250,34 @@ export default function App() {
 
   async function deleteShift(id: string) {
     setShifts((current) => current.filter((shift) => shift.id !== id));
+    if (editingShiftId === id) {
+      setEditingShiftId(null);
+      setIsDaySheetOpen(false);
+    }
     if (supabase && session) {
       await supabase.from('shift_entries').delete().eq('id', id);
     }
+  }
+
+  function handleEditShift(shift: Shift) {
+    setEditingShiftId(shift.id);
+    setDraft({
+      venue: shift.label,
+      date: shift.date,
+      startTime: shift.startTime,
+      endTime: shift.endTime,
+      breakMinutes: shift.breakMinutes,
+      hourlyWage: shift.hourlyWage,
+      label: shift.notes,
+      note: shift.notes,
+      nightShift: shift.nightShift,
+      taxDeduction: shift.taxDeduction,
+      holidayAllowance: shift.holidayAllowance
+    });
+    setSelectedDate(shift.date);
+    setCalendarMonth(startOfMonth(shift.date));
+    setIsDaySheetOpen(true);
+    setTab('calendar');
   }
 
   async function requestConnection(id: string) {
@@ -262,6 +288,7 @@ export default function App() {
   }
 
   function openAddToday() {
+    setEditingShiftId(null);
     navigateToDate(todayIso);
   }
 
@@ -294,15 +321,18 @@ export default function App() {
               rate={rate} 
               workplaces={workplaceSummary} 
               recentShifts={recentShifts} 
+              allShifts={monthShifts}
               onRefresh={() => void refreshRate()} 
               onOpenAdd={openAddToday} 
+              onEditShift={handleEditShift}
+              onDeleteShift={(id) => void deleteShift(id)}
               venueColors={venueColors}
               currentMonth={calendarMonth}
               onPrevMonth={() => { const nextMonth = shiftMonth(calendarMonth, -1); setCalendarMonth(nextMonth); }}
               onNextMonth={() => { const nextMonth = shiftMonth(calendarMonth, 1); setCalendarMonth(nextMonth); }}
             />
           ) : null}
-          {tab === 'calendar' ? <CalendarScreen shifts={shifts} selectedDate={selectedDate} month={calendarMonth} venueSuggestions={[...new Set([...workplaceSummary.map((item) => item.label), 'Việc làm thêm', 'Cafe'])].slice(0, 4)} draft={draft} setDraft={setDraft} isSheetOpen={isDaySheetOpen} onCloseSheet={() => setIsDaySheetOpen(false)} onPrevMonth={() => { const nextMonth = shiftMonth(calendarMonth, -1); setCalendarMonth(nextMonth); setSelectedDate(nextMonth); setDraft((current) => ({ ...current, date: nextMonth })); }} onNextMonth={() => { const nextMonth = shiftMonth(calendarMonth, 1); setCalendarMonth(nextMonth); setSelectedDate(nextMonth); setDraft((current) => ({ ...current, date: nextMonth })); }} onSetMonth={(nextMonth) => { setCalendarMonth(nextMonth); setSelectedDate(nextMonth); setDraft((current) => ({ ...current, date: nextMonth })); }} onSelectDate={(date) => { setSelectedDate(date); setDraft((current) => ({ ...current, date })); setIsDaySheetOpen(true); }} onQuickSave={() => void addShift('calendar')} onUpdateShift={(shift) => void updateShift(shift)} onDeleteShift={(id) => void deleteShift(id)} venueColors={venueColors} onSetVenueColor={setVenueColor} /> : null}
+          {tab === 'calendar' ? <CalendarScreen shifts={shifts} selectedDate={selectedDate} month={calendarMonth} venueSuggestions={[...new Set([...workplaceSummary.map((item) => item.label), 'Việc làm thêm', 'Cafe'])].slice(0, 4)} draft={draft} setDraft={setDraft} editingShiftId={editingShiftId} setEditingShiftId={setEditingShiftId} isSheetOpen={isDaySheetOpen} onCloseSheet={() => setIsDaySheetOpen(false)} onPrevMonth={() => { const nextMonth = shiftMonth(calendarMonth, -1); setCalendarMonth(nextMonth); setSelectedDate(nextMonth); setDraft((current) => ({ ...current, date: nextMonth })); }} onNextMonth={() => { const nextMonth = shiftMonth(calendarMonth, 1); setCalendarMonth(nextMonth); setSelectedDate(nextMonth); setDraft((current) => ({ ...current, date: nextMonth })); }} onSetMonth={(nextMonth) => { setCalendarMonth(nextMonth); setSelectedDate(nextMonth); setDraft((current) => ({ ...current, date: nextMonth })); }} onSelectDate={(date) => { setEditingShiftId(null); setSelectedDate(date); setDraft((current) => ({ ...current, date })); setIsDaySheetOpen(true); }} onQuickSave={() => void addShift('calendar')} onUpdateShift={(shift) => void updateShift(shift)} onDeleteShift={(id) => void deleteShift(id)} venueColors={venueColors} onSetVenueColor={setVenueColor} /> : null}
           {tab === 'income' ? (
             <IncomeScreen 
               minimumWage={MINIMUM_WAGE_2026} 

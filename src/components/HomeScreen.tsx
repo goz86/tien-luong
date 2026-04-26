@@ -1,5 +1,6 @@
-import { Plus, ChevronLeft, ChevronRight } from 'lucide-react';
-import { formatKrw, calculateShiftPay } from '../lib/salary';
+import { useState } from 'react';
+import { Plus, ChevronLeft, ChevronRight, X, Edit3, Trash2 } from 'lucide-react';
+import { formatKrw, calculateShiftPay, shiftHours } from '../lib/salary';
 import { RateState, Shift, VenueColors } from '../lib/types';
 import { formatDateChip, getVenueColor } from '../utils/helpers';
 import { FinanceMetric } from './shared/ui';
@@ -11,9 +12,12 @@ export function HomeScreen({
   rate,
   workplaces,
   recentShifts,
+  allShifts,
   venueColors,
   onRefresh,
   onOpenAdd,
+  onEditShift,
+  onDeleteShift,
   currentMonth,
   onPrevMonth,
   onNextMonth
@@ -24,14 +28,21 @@ export function HomeScreen({
   rate: RateState;
   workplaces: Array<{ label: string; total: number; count: number; hours: number }>;
   recentShifts: Shift[];
+  allShifts: Shift[];
   venueColors: VenueColors;
   onRefresh: () => void;
   onOpenAdd: () => void;
+  onEditShift: (shift: Shift) => void;
+  onDeleteShift: (id: string) => void;
   currentMonth: string;
   onPrevMonth: () => void;
   onNextMonth: () => void;
 }) {
+  const [selectedWorkplace, setSelectedWorkplace] = useState<string | null>(null);
   const monthNumber = new Date(`${currentMonth}T00:00:00`).getMonth() + 1;
+
+  const workplaceShifts = allShifts.filter(s => s.label === selectedWorkplace)
+    .sort((a, b) => b.date.localeCompare(a.date));
 
   return (
     <>
@@ -103,6 +114,66 @@ export function HomeScreen({
           min-width: 20px;
           text-align: center;
         }
+        
+        .modal-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.6);
+          backdrop-filter: blur(4px);
+          z-index: 1000;
+          display: flex;
+          align-items: flex-end;
+        }
+        .modal-content {
+          background: white;
+          width: 100%;
+          max-height: 85vh;
+          border-top-left-radius: 32px;
+          border-top-right-radius: 32px;
+          padding: 24px;
+          overflow-y: auto;
+          box-shadow: 0 -10px 40px rgba(0,0,0,0.1);
+        }
+        .modal-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 24px;
+        }
+        .workplace-history-item {
+          display: flex;
+          align-items: center;
+          padding: 16px 0;
+          border-bottom: 1px solid #f1f5f9;
+        }
+        .history-actions {
+          display: flex;
+          gap: 8px;
+        }
+        .action-btn {
+          width: 36px;
+          height: 36px;
+          border-radius: 10px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: none;
+          cursor: pointer;
+        }
+        .edit-btn { background: #f1f5f9; color: #2752ff; }
+        .delete-btn { background: #fff1f2; color: #e11d48; }
+
+        .dark .modal-content {
+          background: #0f172a;
+          color: white;
+        }
+        .dark .workplace-history-item {
+          border-bottom-color: #1e293b;
+        }
+        .dark .edit-btn { background: #1e293b; }
       `}</style>
 
       <section className="section-block">
@@ -113,8 +184,13 @@ export function HomeScreen({
         </div>
 
         <div className="surface-card">
-          {workplaces.length ? workplaces.slice(0, 3).map((workplace) => (
-            <div key={workplace.label} className="workplace-row">
+          {workplaces.length ? workplaces.map((workplace) => (
+            <div 
+              key={workplace.label} 
+              className="workplace-row" 
+              onClick={() => setSelectedWorkplace(workplace.label)}
+              style={{ cursor: 'pointer' }}
+            >
               <div className="dot" style={{ background: getVenueColor(workplace.label, venueColors) }} />
               <div className="workplace-copy">
                 <strong>{workplace.label}</strong>
@@ -125,10 +201,57 @@ export function HomeScreen({
               <strong className="workplace-amount">{formatKrw(workplace.total)}</strong>
             </div>
           )) : (
-            <div style={{ padding: '10px 0', fontSize: '13px', color: '#94a3b8' }}>Chưa có dữ liệu làm việc</div>
+            <div style={{ padding: '20px 0', fontSize: '14px', color: '#94a3b8', textAlign: 'center' }}>Chưa có dữ liệu làm việc</div>
           )}
         </div>
       </section>
+
+      {selectedWorkplace && (
+        <div className="modal-overlay" onClick={() => setSelectedWorkplace(null)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <p style={{ fontSize: '12px', fontWeight: 700, color: '#2752ff', textTransform: 'uppercase' }}>Lịch sử ca làm</p>
+                <h3 style={{ fontSize: '20px', fontWeight: 800 }}>{selectedWorkplace}</h3>
+              </div>
+              <button onClick={() => setSelectedWorkplace(null)} style={{ border: 'none', background: '#f1f5f9', borderRadius: '50%', padding: '8px' }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="history-list">
+              {workplaceShifts.map(shift => (
+                <div key={shift.id} className="workplace-history-item">
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: '15px' }}>{formatDateChip(shift.date)}</div>
+                    <div style={{ fontSize: '13px', color: '#64748b', marginTop: '2px' }}>
+                      {shift.startTime} - {shift.endTime} • {shiftHours(shift)}h
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right', marginRight: '16px' }}>
+                    <div style={{ fontWeight: 800, color: '#0f172a' }}>{formatKrw(calculateShiftPay(shift).total)}</div>
+                  </div>
+                  <div className="history-actions">
+                    <button className="action-btn edit-btn" onClick={() => {
+                      onEditShift(shift);
+                      setSelectedWorkplace(null);
+                    }}>
+                      <Edit3 size={16} />
+                    </button>
+                    <button className="action-btn delete-btn" onClick={() => {
+                      if (confirm('Bạn có chắc muốn xoá ca làm này?')) {
+                        onDeleteShift(shift.id);
+                      }
+                    }}>
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       <section className="section-block">
         <div className="section-head">
@@ -158,7 +281,7 @@ export function HomeScreen({
       <section className="section-block">
         <div className="section-head">
           <div>
-            <p className="section-kicker">lịch sử</p>
+            <p className="section-kicker">lịch sử gần đây</p>
           </div>
         </div>
 

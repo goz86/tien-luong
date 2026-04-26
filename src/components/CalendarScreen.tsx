@@ -20,6 +20,8 @@ export function CalendarScreen({
   venueSuggestions,
   draft,
   setDraft,
+  editingShiftId,
+  setEditingShiftId,
   isSheetOpen,
   onCloseSheet,
   onPrevMonth,
@@ -38,6 +40,8 @@ export function CalendarScreen({
   venueSuggestions: string[];
   draft: ShiftDraft;
   setDraft: (next: ShiftDraft) => void;
+  editingShiftId: string | null;
+  setEditingShiftId: (id: string | null) => void;
   isSheetOpen: boolean;
   onCloseSheet: () => void;
   onPrevMonth: () => void;
@@ -60,7 +64,6 @@ export function CalendarScreen({
   const [isMonthPickerOpen, setIsMonthPickerOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [editingShiftId, setEditingShiftId] = useState<string | null>(null);
   const [pickerYear, setPickerYear] = useState(() => new Date(`${month}T00:00:00`).getFullYear());
   const [pickerMonth, setPickerMonth] = useState(() => new Date(`${month}T00:00:00`).getMonth() + 1);
   const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
@@ -342,50 +345,6 @@ export function CalendarScreen({
               </button>
             );
           })}
-        </div>
-      </section>
-
-      <section className="section-block workplace-ledger-section">
-        <div className="section-head">
-          <div>
-            <p className="section-kicker">Nơi đã làm</p>
-          </div>
-        </div>
-
-        <div className="workplace-mini-grid">
-          {monthWorkplaces.length ? (
-            monthWorkplaces.map((venue) => {
-              const venueShifts = monthShifts.filter((shift) => shift.label === venue);
-              const venueTotal = venueShifts.reduce((sum, shift) => sum + calculateShiftPay(shift).total, 0);
-              const vColor = getVenueColor(venue, venueColors);
-              return (
-                <button
-                  key={venue}
-                  type="button"
-                  className={effectiveVenue === venue ? 'workplace-mini-card active' : 'workplace-mini-card'}
-                  style={{ 
-                    borderLeft: `4px solid ${vColor}`, 
-                    background: effectiveVenue === venue ? vColor : `linear-gradient(135deg, ${vColor}12 0%, ${vColor}06 100%)`
-                  }}
-                  onClick={() => {
-                    setSelectedVenue(venue);
-                    setIsHistoryOpen(true);
-                  }}
-                >
-                  <strong style={{ color: effectiveVenue === venue ? 'white' : 'var(--text-main)' }}>{venue}</strong>
-                  <span style={{ color: effectiveVenue === venue ? 'rgba(255, 255, 255, 0.85)' : 'var(--text-soft)' }}>{formatCalendarKrw(venueTotal)}</span>
-                </button>
-              );
-            })
-          ) : (
-            <div className="empty-state">
-              <CalendarDays size={20} />
-              <div>
-                <strong>Tháng này chưa có ca làm</strong>
-                <p>Thêm ca để lịch tự cập nhật.</p>
-              </div>
-            </div>
-          )}
         </div>
       </section>
 
