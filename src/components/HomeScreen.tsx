@@ -112,7 +112,6 @@ export function HomeScreen({
           font-size: 18px;
           color: white;
           min-width: 20px;
-          text-align: center;
         }
         
         .modal-overlay {
@@ -121,32 +120,50 @@ export function HomeScreen({
           left: 0;
           right: 0;
           bottom: 0;
-          background: rgba(0, 0, 0, 0.6);
-          backdrop-filter: blur(4px);
-          z-index: 1000;
+          background: rgba(8, 22, 43, 0.4);
+          backdrop-filter: blur(8px);
+          z-index: 2000;
           display: flex;
           align-items: flex-end;
+          padding: 0;
         }
         .modal-content {
           background: white;
           width: 100%;
-          max-height: 85vh;
-          border-top-left-radius: 32px;
-          border-top-right-radius: 32px;
+          height: 65vh;
+          border-top-left-radius: 40px;
+          border-top-right-radius: 40px;
           padding: 24px;
           overflow-y: auto;
-          box-shadow: 0 -10px 40px rgba(0,0,0,0.1);
+          box-shadow: 0 -20px 60px rgba(0,0,0,0.15);
+          display: flex;
+          flex-direction: column;
+          position: relative;
+        }
+        .modal-handle {
+          width: 48px;
+          height: 5px;
+          background: #e2e8f0;
+          border-radius: 99px;
+          margin: 0 auto 20px;
+          flex-shrink: 0;
         }
         .modal-header {
           display: flex;
           justify-content: space-between;
           align-items: center;
           margin-bottom: 24px;
+          flex-shrink: 0;
+        }
+        .history-list {
+          flex: 1;
+          overflow-y: auto;
+          padding-bottom: 40px;
         }
         .workplace-history-item {
           display: flex;
           align-items: center;
-          padding: 16px 0;
+          padding: 18px 0;
           border-bottom: 1px solid #f1f5f9;
         }
         .history-actions {
@@ -154,16 +171,18 @@ export function HomeScreen({
           gap: 8px;
         }
         .action-btn {
-          width: 36px;
-          height: 36px;
-          border-radius: 10px;
+          width: 38px;
+          height: 38px;
+          border-radius: 12px;
           display: flex;
           align-items: center;
           justify-content: center;
           border: none;
           cursor: pointer;
+          transition: all 0.2s;
         }
-        .edit-btn { background: #f1f5f9; color: #2752ff; }
+        .action-btn:active { transform: scale(0.9); }
+        .edit-btn { background: #eff6ff; color: #2752ff; }
         .delete-btn { background: #fff1f2; color: #e11d48; }
 
         .dark .modal-content {
@@ -173,6 +192,7 @@ export function HomeScreen({
         .dark .workplace-history-item {
           border-bottom-color: #1e293b;
         }
+        .dark .modal-handle { background: #334155; }
         .dark .edit-btn { background: #1e293b; }
       `}</style>
 
@@ -209,13 +229,14 @@ export function HomeScreen({
       {selectedWorkplace && (
         <div className="modal-overlay" onClick={() => setSelectedWorkplace(null)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <div className="modal-handle" />
             <div className="modal-header">
               <div>
-                <p style={{ fontSize: '12px', fontWeight: 700, color: '#2752ff', textTransform: 'uppercase' }}>Lịch sử ca làm</p>
-                <h3 style={{ fontSize: '20px', fontWeight: 800 }}>{selectedWorkplace}</h3>
+                <p style={{ fontSize: '13px', fontWeight: 700, color: '#2752ff', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Lịch sử ca làm</p>
+                <h3 style={{ fontSize: '24px', fontWeight: 900, color: 'var(--text-main)' }}>{selectedWorkplace}</h3>
               </div>
-              <button onClick={() => setSelectedWorkplace(null)} style={{ border: 'none', background: '#f1f5f9', borderRadius: '50%', padding: '8px' }}>
-                <X size={20} />
+              <button onClick={() => setSelectedWorkplace(null)} style={{ border: 'none', background: '#f1f5f9', borderRadius: '16px', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <X size={20} color="#64748b" />
               </button>
             </div>
 
@@ -223,27 +244,27 @@ export function HomeScreen({
               {workplaceShifts.map(shift => (
                 <div key={shift.id} className="workplace-history-item">
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, fontSize: '15px' }}>{formatDateChip(shift.date)}</div>
-                    <div style={{ fontSize: '13px', color: '#64748b', marginTop: '2px' }}>
+                    <div style={{ fontWeight: 800, fontSize: '16px', color: 'var(--text-main)' }}>{formatDateChip(shift.date)}</div>
+                    <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px', fontWeight: 500 }}>
                       {shift.startTime} - {shift.endTime} • {shiftHours(shift)}h
                     </div>
                   </div>
                   <div style={{ textAlign: 'right', marginRight: '16px' }}>
-                    <div style={{ fontWeight: 800, color: '#0f172a' }}>{formatKrw(calculateShiftPay(shift).total)}</div>
+                    <div style={{ fontWeight: 900, fontSize: '17px', color: '#2752ff', fontFeatureSettings: '"tnum"' }}>{formatKrw(calculateShiftPay(shift).total)}</div>
                   </div>
                   <div className="history-actions">
                     <button className="action-btn edit-btn" onClick={() => {
                       onEditShift(shift);
                       setSelectedWorkplace(null);
                     }}>
-                      <Edit3 size={16} />
+                      <Edit3 size={18} />
                     </button>
                     <button className="action-btn delete-btn" onClick={() => {
                       if (confirm('Bạn có chắc muốn xoá ca làm này?')) {
                         onDeleteShift(shift.id);
                       }
                     }}>
-                      <Trash2 size={16} />
+                      <Trash2 size={18} />
                     </button>
                   </div>
                 </div>
@@ -252,6 +273,7 @@ export function HomeScreen({
           </div>
         </div>
       )}
+
 
       <section className="section-block">
         <div className="section-head">

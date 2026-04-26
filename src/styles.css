@@ -168,7 +168,8 @@ select {
 }
 
 .screen-shell:has(.calendar-modal-backdrop),
-.screen-shell:has(.day-sheet-backdrop) {
+.screen-shell:has(.day-sheet-backdrop),
+.screen-shell:has(.modal-overlay) {
   z-index: 120;
 }
 
