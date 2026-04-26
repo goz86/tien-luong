@@ -103,7 +103,13 @@ export function getVenueColor(venue: string, colors: Record<string, string>): st
 }
 
 export function isKoreanHoliday(dateIso: string): boolean {
-  const [year, month, day] = dateIso.split('-').map(Number);
+  if (!dateIso) return false;
+  const parts = dateIso.split('-');
+  if (parts.length < 3) return false;
+  
+  const month = parts[1];
+  const day = parts[2];
+  const mmdd = `${month}-${day}`;
   
   // Fixed holidays
   const fixed = [
@@ -116,19 +122,27 @@ export function isKoreanHoliday(dateIso: string): boolean {
     '10-09', // Hangeul Day
     '12-25', // Christmas
   ];
-  if (fixed.includes(`${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`)) return true;
+  if (fixed.includes(mmdd)) return true;
 
-  // Moving holidays (approximation for 2024-2025)
+  // Moving holidays (2024-2026)
   const moving = [
     // 2024
-    '2024-02-09', '2024-02-10', '2024-02-11', '2024-02-12', // Seollal
-    '2024-04-10', // Election Day
-    '2024-05-15', // Buddha's Birthday
-    '2024-09-16', '2024-09-17', '2024-09-18', // Chuseok
+    '2024-02-09', '2024-02-10', '2024-02-11', '2024-02-12',
+    '2024-04-10', '2024-05-15',
+    '2024-09-16', '2024-09-17', '2024-09-18',
     // 2025
-    '2025-01-28', '2025-01-29', '2025-01-30', // Seollal
-    '2025-05-05', // Buddha's Birthday
-    '2025-10-05', '2025-10-06', '2025-10-07', // Chuseok
+    '2025-01-28', '2025-01-29', '2025-01-30',
+    '2025-05-05',
+    '2025-10-05', '2025-10-06', '2025-10-07',
+    // 2026
+    '2026-02-16', '2026-02-17', '2026-02-18', // Seollal
+    '2026-03-02', // Sub holiday for Independence day
+    '2026-05-05', // Children's Day (just in case)
+    '2026-05-24', // Buddha's Birthday
+    '2026-09-24', '2026-09-25', '2026-09-26', // Chuseok
+    '2026-09-27', // Chuseok sub holiday
+    '2026-10-03', // National Foundation Day (just in case)
+    '2026-10-09', // Hangeul Day (just in case)
   ];
   if (moving.includes(dateIso)) return true;
 

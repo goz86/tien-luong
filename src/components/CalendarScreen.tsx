@@ -301,9 +301,10 @@ export function CalendarScreen({
             const isSelected = cell.date === selectedDate;
             const isToday = cell.date === new Date().toISOString().slice(0, 10);
             const isHoliday = isKoreanHoliday(cell.date);
-            const toneClass = dayOfWeek === 0 || isHoliday ? ' sunday' : dayOfWeek === 6 ? ' saturday' : '';
+            const toneClass = (dayOfWeek === 0 || isHoliday) ? ' sunday' : dayOfWeek === 6 ? ' saturday' : '';
+            const holidayClass = isHoliday ? ' holiday' : '';
             const outsideClass = cell.inMonth ? '' : ' outside';
-            const cellClassName = `${isSelected ? 'calendar-day selected' : 'calendar-day'}${toneClass}${isToday ? ' today' : ''}${outsideClass}`;
+            const cellClassName = `${isSelected ? 'calendar-day selected' : 'calendar-day'}${toneClass}${holidayClass}${isToday ? ' today' : ''}${outsideClass}`;
 
             return (
               <button key={cell.date} type="button" className={cellClassName} onClick={() => startNewShift(cell.date)}>

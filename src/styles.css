@@ -670,8 +670,9 @@ select {
 }
 
 .calendar-day.sunday .calendar-date-number,
+.calendar-day.holiday .calendar-date-number,
 .calendar-weekdays span:first-child {
-  color: var(--coral-500);
+  color: var(--coral-500) !important;
 }
 
 .calendar-day.saturday .calendar-date-number,
