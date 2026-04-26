@@ -1,0 +1,19 @@
+{
+  "name": "Duhoc Mate",
+  "short_name": "DuhocMate",
+  "description": "Lương, tỷ giá và kết nối bạn bè cho du học sinh Việt tại Hàn Quốc.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f8fafc",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
