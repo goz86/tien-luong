@@ -108,22 +108,25 @@ export function HomeScreen({
       <section className="section-block">
         <div className="section-head">
           <div>
-            <p className="section-kicker">Ca làm tiếp theo</p>
-            <h3>Sắp tới bạn có lịch</h3>
+            <p className="section-kicker">Nơi làm tháng này ({workplaces.length})</p>
           </div>
         </div>
-        <div style={{ background: 'white', padding: '16px', borderRadius: '24px', margin: '0', display: 'flex', alignItems: 'center', gap: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.03)' }}>
-          <div style={{ width: '50px', height: '50px', borderRadius: '16px', background: '#f1f5f9', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ fontSize: '10px', fontWeight: 700, color: '#64748b' }}>MAI</span>
-            <span style={{ fontSize: '18px', fontWeight: 900, color: '#0f172a' }}>27</span>
-          </div>
-          <div style={{ flex: 1 }}>
-            <strong style={{ display: 'block', fontSize: '15px' }}>Quán Cafe Hollys</strong>
-            <span style={{ fontSize: '13px', color: '#64748b' }}>18:00 - 22:00 (4h)</span>
-          </div>
-          <div style={{ padding: '8px 12px', borderRadius: '12px', background: '#dcfce7', color: '#166534', fontSize: '12px', fontWeight: 700 }}>
-            +44k ₩
-          </div>
+
+        <div className="surface-card">
+          {workplaces.length ? workplaces.slice(0, 3).map((workplace) => (
+            <div key={workplace.label} className="workplace-row">
+              <div className="dot" style={{ background: getVenueColor(workplace.label, venueColors) }} />
+              <div className="workplace-copy">
+                <strong>{workplace.label}</strong>
+                <span>
+                  {workplace.count} ca • {workplace.hours.toFixed(1)}h
+                </span>
+              </div>
+              <strong className="workplace-amount">{formatKrw(workplace.total)}</strong>
+            </div>
+          )) : (
+            <div style={{ padding: '10px 0', fontSize: '13px', color: '#94a3b8' }}>Chưa có dữ liệu làm việc</div>
+          )}
         </div>
       </section>
 
@@ -155,25 +158,23 @@ export function HomeScreen({
       <section className="section-block">
         <div className="section-head">
           <div>
-            <p className="section-kicker">Nơi làm tháng này</p>
+            <p className="section-kicker">lịch sử</p>
           </div>
         </div>
 
-        <div className="surface-card">
-          {workplaces.length ? workplaces.slice(0, 3).map((workplace) => (
-            <div key={workplace.label} className="workplace-row">
-              <div className="dot" style={{ background: getVenueColor(workplace.label, venueColors) }} />
+        <div className="list-stack">
+          {recentShifts.map((shift) => (
+            <article key={shift.id} className="list-row">
+              <div className="dot" style={{ background: getVenueColor(shift.label, venueColors) }} />
               <div className="workplace-copy">
-                <strong>{workplace.label}</strong>
+                <strong>{shift.label}</strong>
                 <span>
-                  {workplace.count} ca • {workplace.hours.toFixed(1)}h
+                  {formatDateChip(shift.date)} • {shift.startTime}-{shift.endTime}
                 </span>
               </div>
-              <strong className="workplace-amount">{formatKrw(workplace.total)}</strong>
-            </div>
-          )) : (
-            <div style={{ padding: '10px 0', fontSize: '13px', color: '#94a3b8' }}>Chưa có dữ liệu làm việc</div>
-          )}
+              <strong className="workplace-amount">{formatKrw(calculateShiftPay(shift).total)}</strong>
+            </article>
+          ))}
         </div>
       </section>
     </>
