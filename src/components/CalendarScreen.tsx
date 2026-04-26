@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
+import { toPng } from 'html-to-image';
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Download, Settings2, Plus } from 'lucide-react';
 import { calculateShiftPay, shiftHours, formatKrw } from '../lib/salary';
 import { Shift, ShiftDraft, VenueColors } from '../lib/types';
@@ -67,6 +68,10 @@ export function CalendarScreen({
   const [pickerYear, setPickerYear] = useState(() => new Date(`${month}T00:00:00`).getFullYear());
   const [pickerMonth, setPickerMonth] = useState(() => new Date(`${month}T00:00:00`).getMonth() + 1);
   const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
+  const calendarRef = useRef<HTMLDivElement>(null);
+  
+  const currentMonthISO = new Date().toISOString().slice(0, 7) + '-01';
+  const isNotCurrentMonth = month.slice(0, 7) !== currentMonthISO.slice(0, 7);
   
   const monthWorkplaces = [...new Set(monthShifts.map((shift) => shift.label))];
   const monthWorkplaceKey = monthWorkplaces.join('|');
@@ -184,76 +189,27 @@ export function CalendarScreen({
     else onNextMonth();
   }
 
-  function downloadCalendarImage() {
-    const canvas = document.createElement('canvas');
-    const scale = 2;
-    const width = 900;
-    const headerHeight = 170;
-    const rowHeight = 132;
-    const height = headerHeight + Math.ceil(grid.length / 7) * rowHeight + 80;
-    canvas.width = width * scale;
-    canvas.height = height * scale;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.scale(scale, scale);
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, width, height);
-    ctx.fillStyle = '#08162b';
-    ctx.font = '800 42px sans-serif';
-    ctx.fillText(`Lịch làm việc ${formatCalendarMonthTitle(month)}`, 34, 62);
-    ctx.font = '800 30px sans-serif';
-    ctx.fillText(formatCalendarKrw(monthTotal), 34, 112);
-    ctx.fillStyle = '#72809b';
-    ctx.font = '700 22px sans-serif';
-    ctx.fillText(`${monthShifts.length} ca • ${formatHoursCompact(monthHours)}`, 34, 145);
-
-    const weekdays = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
-    const cellWidth = width / 7;
-    weekdays.forEach((day, index) => {
-      ctx.fillStyle = index === 0 ? '#ff6b7a' : index === 6 ? '#44a5e8' : '#72809b';
-      ctx.font = '800 20px sans-serif';
-      ctx.fillText(day, index * cellWidth + 18, headerHeight - 18);
-    });
-
-    grid.forEach((cell, index) => {
-      const col = index % 7;
-      const row = Math.floor(index / 7);
-      const x = col * cellWidth;
-      const y = headerHeight + row * rowHeight;
-      ctx.strokeStyle = '#e4e6ea';
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(width, y);
-      ctx.stroke();
-      ctx.fillStyle = cell.inMonth ? '#08162b' : '#c6ccd4';
-      ctx.font = '800 22px sans-serif';
-      ctx.fillText(String(cell.day), x + 18, y + 34);
-
-      cell.items.slice(0, 2).forEach((shift, shiftIdx) => {
-        const venueCol = getVenueColor(shift.label, venueColors);
-        const chipY = y + 44 + shiftIdx * 32;
-        ctx.fillStyle = venueCol;
-        ctx.beginPath();
-        ctx.roundRect(x + 8, chipY, cellWidth - 16, 26, 7);
-        ctx.fill();
-        ctx.fillStyle = '#ffffff';
-        ctx.font = '800 13px sans-serif';
-        ctx.fillText(getCalendarShiftLine(shift), x + 14, chipY + 18);
+  async function downloadCalendarImage() {
+    if (!calendarRef.current) return;
+    
+    try {
+      const dataUrl = await toPng(calendarRef.current, {
+        backgroundColor: '#ffffff',
+        style: {
+          borderRadius: '0',
+          boxShadow: 'none',
+          padding: '20px'
+        },
+        pixelRatio: 2
       });
-
-      if (cell.total > 0) {
-        ctx.fillStyle = '#657080';
-        ctx.font = '800 17px sans-serif';
-        ctx.textAlign = 'right';
-        ctx.fillText(formatCalendarKrw(cell.total), x + cellWidth - 14, y + rowHeight - 18);
-        ctx.textAlign = 'left';
-      }
-    });
-
-    const link = document.createElement('a');
-    link.download = `lich-lam-viec-${formatCalendarMonthTitle(month)}.png`;
-    link.href = canvas.toDataURL('image/png');
-    link.click();
+      
+      const link = document.createElement('a');
+      link.download = `lich-lam-viec-${formatCalendarMonthTitle(month)}.png`;
+      link.href = dataUrl;
+      link.click();
+    } catch (error) {
+      console.error('Lỗi khi tải ảnh:', error);
+    }
   }
 
   return (
@@ -265,6 +221,27 @@ export function CalendarScreen({
             {formatCalendarMonthTitle(month)}
             <ChevronDown size={24} />
           </button>
+          {isNotCurrentMonth && (
+            <button 
+              type="button" 
+              className="today-pill-btn" 
+              onClick={() => onSetMonth(currentMonthISO)}
+              style={{
+                marginLeft: '12px',
+                background: '#eff6ff',
+                color: '#2752ff',
+                border: 'none',
+                padding: '6px 12px',
+                borderRadius: '8px',
+                fontSize: '13px',
+                fontWeight: 800,
+                letterSpacing: '0.02em',
+                cursor: 'pointer'
+              }}
+            >
+              TODAY
+            </button>
+          )}
         </div>
         <div className="calendar-head-actions">
           <button type="button" className="calendar-icon-button" onClick={downloadCalendarImage} aria-label="Tải ảnh lịch">
@@ -277,6 +254,7 @@ export function CalendarScreen({
       </header>
 
       <section
+        ref={calendarRef}
         className="calendar-surface"
         onTouchStart={(event) => setTouchStart({ x: event.touches[0]?.clientX ?? 0, y: event.touches[0]?.clientY ?? 0 })}
         onTouchEnd={(event) => handleCalendarSwipe(event.changedTouches[0]?.clientX ?? 0, event.changedTouches[0]?.clientY ?? 0)}
