@@ -72,7 +72,8 @@ export function CalendarScreen({
   const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
   const calendarRef = useRef<HTMLDivElement>(null);
   
-  const currentMonthISO = new Date().toISOString().slice(0, 7) + '-01';
+  const todayStr = new Date().toLocaleDateString('sv-SE');
+  const currentMonthISO = todayStr.slice(0, 7) + '-01';
   const isNotCurrentMonth = month.slice(0, 7) !== currentMonthISO.slice(0, 7);
   
   const monthWorkplaces = [...new Set(monthShifts.map((shift) => shift.label))];
@@ -107,6 +108,7 @@ export function CalendarScreen({
   const yearColRef = useRef<HTMLDivElement>(null);
 
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [sheetMode, setSheetMode] = useState<'history' | 'form'>('form');
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -149,6 +151,8 @@ export function CalendarScreen({
   }
 
   function startNewShift(date: string) {
+    const dayShifts = shifts.filter(s => s.date === date);
+    setSheetMode(dayShifts.length > 0 ? 'history' : 'form');
     setEditingShiftId(null);
     onSelectDate(date);
   }
@@ -169,6 +173,7 @@ export function CalendarScreen({
       holidayAllowance: shift.holidayAllowance
     });
     setIsHistoryOpen(false);
+    setSheetMode('form');
     onSelectDate(shift.date);
   }
 
@@ -354,7 +359,7 @@ export function CalendarScreen({
             if (!cell) return <div key={`empty-${index}`} className="calendar-empty" />;
 
             const isSelected = cell.date === selectedDate;
-            const isToday = cell.date === new Date().toISOString().slice(0, 10);
+            const isToday = cell.date === todayStr;
             const isHoliday = isKoreanHoliday(cell.date);
             const toneClass = (dayOfWeek === 0 || isHoliday) ? ' sunday' : dayOfWeek === 6 ? ' saturday' : '';
             const holidayClass = isHoliday ? ' holiday' : '';
@@ -515,182 +520,210 @@ export function CalendarScreen({
             <div className="sheet-handle" />
             <div className="sheet-head">
               <div>
-                <p className="section-kicker">{editingShiftId ? 'Sửa giờ làm' : 'Thêm giờ làm thêm'}</p>
+                <p className="section-kicker">
+                  {sheetMode === 'history' ? 'Lịch sử ca làm' : (editingShiftId ? 'Sửa giờ làm' : 'Thêm giờ làm thêm')}
+                </p>
                 <h3>{formatSelectedDate(selectedDate)}</h3>
               </div>
               <div className="sheet-preview">
-                <span> Ước tính</span>
-                <strong>{formatKrw(quickPreview)}</strong>
+                <span>{sheetMode === 'history' ? 'Tổng ngày' : 'Ước tính'}</span>
+                <strong>{formatKrw(sheetMode === 'history' ? shifts.filter(s => s.date === selectedDate).reduce((sum, s) => sum + calculateShiftPay(s).total, 0) : quickPreview)}</strong>
               </div>
             </div>
 
-            <div className="sheet-history-list">
-              {shifts
-                .filter((shift) => shift.date === draft.date)
-                .sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''))
-                .map((shift) => (
-                  <article key={shift.id} className={editingShiftId === shift.id ? 'sheet-history-row active' : 'sheet-history-row'}>
-                    <button type="button" onClick={() => startEditShift(shift)}>
-                      <strong>{shift.label}</strong>
-                      <span>
-                        {shift.startTime}-{shift.endTime} • {formatCalendarKrw(calculateShiftPay(shift).total)}
-                      </span>
-                    </button>
-                    <button type="button" className="danger" onClick={() => deleteShift(shift.id)}>Xoá</button>
-                  </article>
-                ))}
-            </div>
-
-            {venueSuggestions.length ? (
-              <div className="venue-presets">
-                {venueSuggestions.map((venue) => {
-                  const isActive = venue === draft.venue;
-                  const venueColor = getVenueColor(venue, venueColors);
-                  return (
-                    <button
-                      key={venue}
-                      type="button"
-                      className={isActive ? 'preset-chip active' : 'preset-chip'}
-                      onClick={() => setDraft({ ...draft, venue, label: venue })}
-                      style={isActive ? {
-                        background: venueColor,
-                        borderColor: venueColor,
-                        color: 'white',
-                        boxShadow: `0 4px 12px ${venueColor}30`
-                      } : {
-                        borderColor: `${venueColor}40`,
-                        color: venueColor,
-                        background: `${venueColor}10`
-                      }}
-                    >
-                      {venue}
-                    </button>
-                  );
-                })}
-              </div>
-            ) : null}
-
-            <div className="quick-grid">
-              <label className="micro-field wide">
-                <span>Nơi làm</span>
-                <input value={draft.venue} onChange={(event) => setDraft({ ...draft, venue: event.target.value })} />
-              </label>
-              <label className="micro-field wide">
-                <span>Ghi chú nhanh</span>
-                <input 
-                  className="premium-input" 
-                  value={draft.note} 
-                  onChange={(event) => setDraft({ ...draft, note: event.target.value })} 
-                  placeholder="Nhập ghi chú..."
-                />
-              </label>
-            </div>
-
-            <div className="sheet-row">
-              <label className="micro-field">
-                <span className="field-label">Bắt đầu</span>
-                <input 
-                  type="time" 
-                  className="premium-input" 
-                  value={draft.startTime} 
-                  onChange={(event) => setDraft({ ...draft, startTime: event.target.value })} 
-                />
-              </label>
-              <label className="micro-field">
-                <span className="field-label">Kết thúc</span>
-                <input 
-                  type="time" 
-                  className="premium-input" 
-                  value={draft.endTime} 
-                  onChange={(event) => setDraft({ ...draft, endTime: event.target.value })} 
-                />
-              </label>
-            </div>
-
-            <div className="sheet-row">
-              <label className="micro-field">
-                <span className="field-label">Lương giờ</span>
-                <div className="settings-select-wrap">
-                  <input 
-                    type="number" 
-                    className="premium-input" 
-                    value={draft.hourlyWage} 
-                    onChange={(event) => setDraft({ ...draft, hourlyWage: Number(event.target.value) })} 
-                  />
-                  <span className="input-unit">KRW</span>
+            {sheetMode === 'history' ? (
+              <div className="sheet-history-mode">
+                <div className="sheet-history-list" style={{ marginTop: '0', maxHeight: '40vh', overflowY: 'auto' }}>
+                  {shifts
+                    .filter((shift) => shift.date === selectedDate)
+                    .sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''))
+                    .map((shift) => (
+                      <article key={shift.id} className="sheet-history-row">
+                        <button type="button" onClick={() => startEditShift(shift)}>
+                          <strong>{shift.label}</strong>
+                          <span>
+                            {shift.startTime}-{shift.endTime} • {formatCalendarKrw(calculateShiftPay(shift).total)}
+                          </span>
+                        </button>
+                        <button type="button" className="danger" onClick={() => setDeleteConfirmId(shift.id)}>Xoá</button>
+                      </article>
+                    ))}
                 </div>
+                
                 <button 
                   type="button" 
-                  className="min-wage-badge-v2" 
-                  onClick={() => setDraft({ ...draft, hourlyWage: 10320 })}
-                  style={{ marginTop: '2px' }}
+                  className="quick-save-button" 
+                  style={{ marginTop: '20px' }}
+                  onClick={() => setSheetMode('form')}
                 >
-                  Mức tối thiểu: 10,320
+                  <Plus size={16} />
+                  Thêm ca làm mới cho ngày này
                 </button>
-              </label>
-              <label className="micro-field">
-                <span className="field-label">Thời gian nghỉ</span>
-                <div className="settings-select-wrap">
-                  <input 
-                    type="number" 
-                    className="premium-input" 
-                    value={draft.breakMinutes} 
-                    onChange={(event) => setDraft({ ...draft, breakMinutes: Number(event.target.value) })} 
-                  />
-                  <span className="input-unit">phút</span>
-                </div>
-              </label>
-            </div>
-            
-            {/* NEW: Luật lao động Hàn Quốc */}
-            <div className="korean-law-fields" style={{ marginTop: '16px', background: '#f5f7fa', padding: '16px', borderRadius: '16px' }}>
-              <p style={{ fontSize: '13px', fontWeight: 800, color: '#08162b', marginBottom: '12px' }}>Cài đặt tính lương (Luật HQ)</p>
-              
-              <label className="korean-law-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <strong style={{ fontSize: '14px', color: '#08162b' }}>Thuế 3.3%</strong>
-                  <span style={{ fontSize: '12px', color: '#657080' }}>Dành cho freelancer/Alba</span>
-                </div>
-                <input 
-                  type="checkbox" 
-                  checked={draft.taxDeduction || false} 
-                  onChange={(event) => setDraft({ ...draft, taxDeduction: event.target.checked })} 
-                  style={{ width: '20px', height: '20px', accentColor: '#2752ff' }}
-                />
-              </label>
+              </div>
+            ) : (
+              <div className="sheet-form-mode">
+                {shifts.some(s => s.date === selectedDate) && (
+                  <button 
+                    type="button" 
+                    className="inline-link-button" 
+                    style={{ marginBottom: '16px', background: '#f1f5f9', color: '#64748b' }}
+                    onClick={() => setSheetMode('history')}
+                  >
+                    <ChevronLeft size={16} /> Quay lại danh sách
+                  </button>
+                )}
 
-              <label className="korean-law-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <strong style={{ fontSize: '14px', color: '#08162b' }}>Phụ cấp ca đêm (x1.5)</strong>
-                  <span style={{ fontSize: '12px', color: '#657080' }}>Thường áp dụng sau 22:00</span>
-                </div>
-                <input 
-                  type="checkbox" 
-                  checked={draft.nightShift || false} 
-                  onChange={(event) => setDraft({ ...draft, nightShift: event.target.checked })} 
-                  style={{ width: '20px', height: '20px', accentColor: '#2752ff' }}
-                />
-              </label>
+                {venueSuggestions.length ? (
+                  <div className="venue-presets">
+                    {venueSuggestions.map((venue) => {
+                      const isActive = venue === draft.venue;
+                      const venueColor = getVenueColor(venue, venueColors);
+                      return (
+                        <button
+                          key={venue}
+                          type="button"
+                          className={isActive ? 'preset-chip active' : 'preset-chip'}
+                          onClick={() => setDraft({ ...draft, venue, label: venue })}
+                          style={isActive ? {
+                            background: venueColor,
+                            borderColor: venueColor,
+                            color: 'white',
+                            boxShadow: `0 4px 12px ${venueColor}30`
+                          } : {
+                            borderColor: `${venueColor}40`,
+                            color: venueColor,
+                            background: `${venueColor}10`
+                          }}
+                        >
+                          {venue}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
 
-              <label className="korean-law-row" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <strong style={{ fontSize: '14px', color: '#08162b' }}>Phụ cấp nghỉ / Cuối tuần (주휴수당)</strong>
-                <div className="settings-select-wrap">
-                  <input 
-                    type="number" 
-                    className="premium-input"
-                    value={draft.holidayAllowance || ''} 
-                    onChange={(event) => setDraft({ ...draft, holidayAllowance: Number(event.target.value) })} 
-                    placeholder="Nhập số tiền phụ cấp (nếu có)" 
-                  />
-                  <span style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', color: '#657080', fontSize: '13px', fontWeight: 700 }}>KRW</span>
+                <div className="quick-grid">
+                  <label className="micro-field wide">
+                    <span>Nơi làm</span>
+                    <input value={draft.venue} onChange={(event) => setDraft({ ...draft, venue: event.target.value })} />
+                  </label>
+                  <label className="micro-field wide">
+                    <span>Ghi chú nhanh</span>
+                    <input 
+                      className="premium-input" 
+                      value={draft.note} 
+                      onChange={(event) => setDraft({ ...draft, note: event.target.value })} 
+                      placeholder="Nhập ghi chú..."
+                    />
+                  </label>
                 </div>
-              </label>
-            </div>
 
-            <button type="button" className="quick-save-button" onClick={saveSheetShift} style={{ marginTop: '16px' }}>
-              <Plus size={16} />
-              {editingShiftId ? 'Lưu thay đổi' : 'Lưu ca cho ngày này'}
-            </button>
+                <div className="sheet-row">
+                  <label className="micro-field">
+                    <span className="field-label">Bắt đầu</span>
+                    <input 
+                      type="time" 
+                      className="premium-input" 
+                      value={draft.startTime} 
+                      onChange={(event) => setDraft({ ...draft, startTime: event.target.value })} 
+                    />
+                  </label>
+                  <label className="micro-field">
+                    <span className="field-label">Kết thúc</span>
+                    <input 
+                      type="time" 
+                      className="premium-input" 
+                      value={draft.endTime} 
+                      onChange={(event) => setDraft({ ...draft, endTime: event.target.value })} 
+                    />
+                  </label>
+                </div>
+
+                <div className="sheet-row">
+                  <label className="micro-field">
+                    <span className="field-label">Lương giờ</span>
+                    <div className="settings-select-wrap">
+                      <input 
+                        type="number" 
+                        className="premium-input" 
+                        value={draft.hourlyWage} 
+                        onChange={(event) => setDraft({ ...draft, hourlyWage: Number(event.target.value) })} 
+                      />
+                      <span className="input-unit">KRW</span>
+                    </div>
+                    <button 
+                      type="button" 
+                      className="min-wage-badge-v2" 
+                      onClick={() => setDraft({ ...draft, hourlyWage: 10320 })}
+                      style={{ marginTop: '2px' }}
+                    >
+                      Mức tối thiểu: 10,320
+                    </button>
+                  </label>
+                  <label className="micro-field">
+                    <span className="field-label">Thời gian nghỉ</span>
+                    <div className="settings-select-wrap">
+                      <input 
+                        type="number" 
+                        className="premium-input" 
+                        value={draft.breakMinutes} 
+                        onChange={(event) => setDraft({ ...draft, breakMinutes: Number(event.target.value) })} 
+                      />
+                      <span className="input-unit">phút</span>
+                    </div>
+                  </label>
+                </div>
+
+                <div className="korean-law-fields" style={{ marginTop: '16px', background: '#f5f7fa', padding: '16px', borderRadius: '16px' }}>
+                  <p style={{ fontSize: '13px', fontWeight: 800, color: '#08162b', marginBottom: '12px' }}>Cài đặt tính lương (Luật HQ)</p>
+                  
+                  <label className="korean-law-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <strong style={{ fontSize: '14px', color: '#08162b' }}>Thuế 3.3%</strong>
+                      <span style={{ fontSize: '12px', color: '#657080' }}>Dành cho freelancer/Alba</span>
+                    </div>
+                    <input 
+                      type="checkbox" 
+                      checked={draft.taxDeduction || false} 
+                      onChange={(event) => setDraft({ ...draft, taxDeduction: event.target.checked })} 
+                      style={{ width: '20px', height: '20px', accentColor: '#2752ff' }}
+                    />
+                  </label>
+
+                  <label className="korean-law-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <strong style={{ fontSize: '14px', color: '#08162b' }}>Phụ cấp ca đêm (x1.5)</strong>
+                      <span style={{ fontSize: '12px', color: '#657080' }}>Thường áp dụng sau 22:00</span>
+                    </div>
+                    <input 
+                      type="checkbox" 
+                      checked={draft.nightShift || false} 
+                      onChange={(event) => setDraft({ ...draft, nightShift: event.target.checked })} 
+                      style={{ width: '20px', height: '20px', accentColor: '#2752ff' }}
+                    />
+                  </label>
+
+                  <label className="korean-law-row" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <strong style={{ fontSize: '14px', color: '#08162b' }}>Phụ cấp nghỉ / Cuối tuần (주휴수당)</strong>
+                    <div className="settings-select-wrap">
+                      <input 
+                        type="number" 
+                        className="premium-input"
+                        value={draft.holidayAllowance || ''} 
+                        onChange={(event) => setDraft({ ...draft, holidayAllowance: Number(event.target.value) })} 
+                        placeholder="Nhập số tiền phụ cấp (nếu có)" 
+                      />
+                      <span style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', color: '#657080', fontSize: '13px', fontWeight: 700 }}>KRW</span>
+                    </div>
+                  </label>
+                </div>
+
+                <button type="button" className="quick-save-button" onClick={saveSheetShift} style={{ marginTop: '16px' }}>
+                  <Plus size={16} />
+                  {editingShiftId ? 'Lưu thay đổi' : 'Lưu ca cho ngày này'}
+                </button>
+              </div>
+            )}
           </div>
         </section>
       ) : null}

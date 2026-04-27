@@ -3290,3 +3290,15 @@ select {
   border: 1px solid rgba(39, 82, 255, 0.1);
 }
 
+
+/* Fix Venue Presets Clipping */
+.venue-presets {
+  display: flex !important;
+  gap: 10px !important;
+  padding: 8px 2px !important;
+  margin-top: 4px !important;
+  margin-bottom: 14px !important;
+  overflow-x: auto !important;
+  scrollbar-width: none !important;
+}
+
