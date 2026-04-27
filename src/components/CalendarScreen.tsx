@@ -562,7 +562,6 @@ export function CalendarScreen({
               </div>
             ) : (
               <div className="sheet-form-mode">
-                )}
 
                 {venueSuggestions.length ? (
                   <div className="venue-presets">
