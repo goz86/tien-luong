@@ -694,14 +694,6 @@ select {
   opacity: 0.55;
 }
 
-.calendar-today-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: var(--lime-400);
-  box-shadow: 0 0 0 4px rgba(215, 255, 95, 0.22);
-}
-
 .calendar-shift-lines {
   display: flex;
   flex-direction: column;
@@ -2995,3 +2987,306 @@ select {
   color: white;
   border-color: rgba(255, 255, 255, 0.08);
 }
+
+/* Confirm Dialog */
+.confirm-backdrop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+}
+
+.confirm-dialog {
+  width: 100%;
+  max-width: 340px;
+  background: white;
+  border-radius: 28px;
+  overflow: hidden;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+  animation: confirmPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes confirmPop {
+  from { opacity: 0; transform: scale(0.9) translateY(20px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.confirm-content {
+  padding: 32px 24px 24px;
+  text-align: center;
+}
+
+.confirm-content h3 {
+  font-size: 20px;
+  font-weight: 900;
+  color: #08162b;
+  margin-bottom: 12px;
+}
+
+.confirm-content p {
+  font-size: 15px;
+  line-height: 1.5;
+  color: #657080;
+}
+
+.confirm-footer {
+  display: flex;
+  padding: 16px;
+  gap: 12px;
+  background: rgba(0, 0, 0, 0.02);
+  border-top: 1px solid #e4e6ea;
+}
+
+.confirm-btn {
+  flex: 1;
+  height: 52px;
+  border: 0;
+  border-radius: 18px;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.confirm-btn.cancel {
+  background: #f1f3f7;
+  color: #657080;
+}
+
+.confirm-btn.danger {
+  background: #ffecf0;
+  color: #ff3b30;
+}
+
+.confirm-btn:active {
+  transform: scale(0.96);
+}
+
+/* Today Highlight Refinement */
+.calendar-today-dot { display: none; }
+
+.calendar-date-number.today-number {
+  background: #2752ff;
+  color: white !important;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  box-shadow: 0 4px 12px rgba(39, 82, 255, 0.35);
+  font-weight: 900;
+  margin-bottom: 2px;
+}
+
+.calendar-day.today {
+  background: rgba(39, 82, 255, 0.04) !important;
+}
+
+
+/* Premium Inputs */
+.premium-input {
+  width: 100%;
+  height: 54px;
+  padding: 0 16px;
+  font-size: 15px;
+  font-weight: 700;
+  border-radius: 16px;
+  border: 1.5px solid #e4e6ea;
+  background: #f8fafc;
+  color: #08162b;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  outline: none;
+  box-sizing: border-box;
+}
+
+.premium-input::placeholder {
+  color: #a0aec0;
+  font-weight: 400;
+}
+
+.premium-input:focus {
+  border-color: #2752ff;
+  background: white;
+  box-shadow: 0 0 0 4px rgba(39, 82, 255, 0.1);
+}
+
+/* Hide number spinners */
+.premium-input::-webkit-outer-spin-button,
+.premium-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.settings-select-wrap {
+  position: relative;
+  width: 100%;
+}
+
+
+/* Input Units & Specific Types */
+.input-unit {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #657080;
+  font-size: 13px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.premium-input[type="time"] {
+  padding-right: 12px;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23a0aec0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpolyline points='12 6 12 12 16 14'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 18px;
+}
+
+
+/* Field Label Rows & Badges */
+.field-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  margin-bottom: 6px;
+}
+
+.min-wage-badge {
+  padding: 4px 8px;
+  background: #f0f7ff;
+  color: #2752ff;
+  font-size: 11px;
+  font-weight: 800;
+  border-radius: 8px;
+  border: 1px solid rgba(39, 82, 255, 0.15);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.min-wage-badge:active {
+  transform: scale(0.95);
+  background: #e1efff;
+}
+
+
+/* Label Stacks for Alignment */
+.label-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 48px;
+  justify-content: flex-end;
+}
+
+.label-stack span {
+  font-size: 14px;
+  font-weight: 800;
+  color: #08162b;
+  white-space: nowrap;
+}
+
+.min-wage-badge-v2 {
+  align-self: flex-start;
+  padding: 2px 8px;
+  background: #f0f7ff;
+  color: #2752ff;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 6px;
+  border: 1px solid rgba(39, 82, 255, 0.1);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.label-stack-spacer {
+  height: 21px; /* Matches height of min-wage-badge-v2 */
+}
+
+
+/* Sheet Layout Optimization */
+.sheet-row {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+}
+
+.micro-field {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px; /* Reduced gap */
+}
+
+.label-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px; /* Reduced internal gap */
+  min-height: 40px; /* Reduced height for closer feel */
+  justify-content: flex-end;
+}
+
+.label-stack span {
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.premium-input {
+  height: 50px; /* More compact for mobile */
+}
+
+
+/* Final Sheet Fixes */
+.label-stack, .label-stack-spacer { display: none; }
+
+.field-label {
+  font-size: 14px;
+  font-weight: 800;
+  color: #08162b;
+  margin-bottom: 4px;
+  display: block;
+}
+
+.sheet-row {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  margin-bottom: 12px;
+}
+
+.micro-field {
+  flex: 1;
+  min-width: 0; /* Prevents flex children from overflowing parent */
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.day-sheet {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 500px;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+.min-wage-badge-v2 {
+  display: inline-flex;
+  align-self: flex-start;
+  margin-top: 4px;
+  background: #f0f7ff;
+  color: #2752ff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(39, 82, 255, 0.1);
+}
+

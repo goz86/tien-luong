@@ -106,6 +106,8 @@ export function CalendarScreen({
   const monthColRef = useRef<HTMLDivElement>(null);
   const yearColRef = useRef<HTMLDivElement>(null);
 
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent | TouchEvent) => {
@@ -362,8 +364,7 @@ export function CalendarScreen({
             return (
               <button key={cell.date} type="button" className={cellClassName} onClick={() => startNewShift(cell.date)}>
                 <div className="calendar-day-top">
-                  <span className="calendar-date-number">{cell.day}</span>
-                  {isToday ? <span className="calendar-today-dot" /> : null}
+                  <span className={`calendar-date-number ${isToday ? 'today-number' : ''}`}>{cell.day}</span>
                 </div>
                 <div className="calendar-shift-lines">
                   {cell.items.slice(0, 2).map((shift, lineIndex) => (
@@ -499,7 +500,7 @@ export function CalendarScreen({
                   <strong className="history-pay">{formatCalendarKrw(calculateShiftPay(shift).total)}</strong>
                   <div className="history-actions">
                     <button type="button" onClick={() => startEditShift(shift)}>Sửa</button>
-                    <button type="button" className="danger" onClick={() => deleteShift(shift.id)}>Xoá</button>
+                    <button type="button" className="danger" onClick={() => setDeleteConfirmId(shift.id)}>Xoá</button>
                   </div>
                 </article>
               ))}
@@ -518,7 +519,7 @@ export function CalendarScreen({
                 <h3>{formatSelectedDate(selectedDate)}</h3>
               </div>
               <div className="sheet-preview">
-                <span>Ước tính</span>
+                <span> Ước tính</span>
                 <strong>{formatKrw(quickPreview)}</strong>
               </div>
             </div>
@@ -576,23 +577,68 @@ export function CalendarScreen({
               </label>
               <label className="micro-field wide">
                 <span>Ghi chú nhanh</span>
-                <input value={draft.note} onChange={(event) => setDraft({ ...draft, note: event.target.value })} />
+                <input 
+                  className="premium-input" 
+                  value={draft.note} 
+                  onChange={(event) => setDraft({ ...draft, note: event.target.value })} 
+                  placeholder="Nhập ghi chú..."
+                />
+              </label>
+            </div>
+
+            <div className="sheet-row">
+              <label className="micro-field">
+                <span className="field-label">Bắt đầu</span>
+                <input 
+                  type="time" 
+                  className="premium-input" 
+                  value={draft.startTime} 
+                  onChange={(event) => setDraft({ ...draft, startTime: event.target.value })} 
+                />
               </label>
               <label className="micro-field">
-                <span>Bắt đầu</span>
-                <input type="time" value={draft.startTime} onChange={(event) => setDraft({ ...draft, startTime: event.target.value })} />
+                <span className="field-label">Kết thúc</span>
+                <input 
+                  type="time" 
+                  className="premium-input" 
+                  value={draft.endTime} 
+                  onChange={(event) => setDraft({ ...draft, endTime: event.target.value })} 
+                />
+              </label>
+            </div>
+
+            <div className="sheet-row">
+              <label className="micro-field">
+                <span className="field-label">Lương giờ</span>
+                <div className="settings-select-wrap">
+                  <input 
+                    type="number" 
+                    className="premium-input" 
+                    value={draft.hourlyWage} 
+                    onChange={(event) => setDraft({ ...draft, hourlyWage: Number(event.target.value) })} 
+                  />
+                  <span className="input-unit">KRW</span>
+                </div>
+                <button 
+                  type="button" 
+                  className="min-wage-badge-v2" 
+                  onClick={() => setDraft({ ...draft, hourlyWage: 10320 })}
+                  style={{ marginTop: '2px' }}
+                >
+                  Mức tối thiểu: 10,320
+                </button>
               </label>
               <label className="micro-field">
-                <span>Kết thúc</span>
-                <input type="time" value={draft.endTime} onChange={(event) => setDraft({ ...draft, endTime: event.target.value })} />
-              </label>
-              <label className="micro-field">
-                <span>Lương giờ</span>
-                <input type="number" value={draft.hourlyWage} onChange={(event) => setDraft({ ...draft, hourlyWage: Number(event.target.value) })} />
-              </label>
-              <label className="micro-field">
-                <span>Nghỉ</span>
-                <input type="number" value={draft.breakMinutes} onChange={(event) => setDraft({ ...draft, breakMinutes: Number(event.target.value) })} />
+                <span className="field-label">Thời gian nghỉ</span>
+                <div className="settings-select-wrap">
+                  <input 
+                    type="number" 
+                    className="premium-input" 
+                    value={draft.breakMinutes} 
+                    onChange={(event) => setDraft({ ...draft, breakMinutes: Number(event.target.value) })} 
+                  />
+                  <span className="input-unit">phút</span>
+                </div>
               </label>
             </div>
             
@@ -631,8 +677,7 @@ export function CalendarScreen({
                 <div className="settings-select-wrap">
                   <input 
                     type="number" 
-                    className="settings-select"
-                    style={{ background: 'white' }}
+                    className="premium-input"
                     value={draft.holidayAllowance || ''} 
                     onChange={(event) => setDraft({ ...draft, holidayAllowance: Number(event.target.value) })} 
                     placeholder="Nhập số tiền phụ cấp (nếu có)" 
@@ -649,6 +694,30 @@ export function CalendarScreen({
           </div>
         </section>
       ) : null}
+
+      {deleteConfirmId && (
+        <section className="calendar-modal-backdrop confirm-backdrop" onClick={() => setDeleteConfirmId(null)} style={{ zIndex: 1000 }}>
+          <div className="confirm-dialog" onClick={(event) => event.stopPropagation()}>
+            <div className="confirm-content">
+              <h3>Xác nhận</h3>
+              <p>Bạn có chắc chắn muốn xoá ca làm việc này không? Dữ liệu đã xoá sẽ không thể khôi phục.</p>
+            </div>
+            <div className="confirm-footer">
+              <button type="button" className="confirm-btn cancel" onClick={() => setDeleteConfirmId(null)}>Hủy bỏ</button>
+              <button 
+                type="button" 
+                className="confirm-btn danger" 
+                onClick={() => {
+                  deleteShift(deleteConfirmId);
+                  setDeleteConfirmId(null);
+                }}
+              >
+                Đồng ý
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
     </>
   );
 }
