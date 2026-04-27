@@ -748,7 +748,7 @@ select {
 .calendar-modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 90;
+  z-index: 3100;
   display: flex;
   align-items: flex-end;
   background: rgba(7, 20, 37, 0.34);
@@ -2441,7 +2441,7 @@ select {
 
 .community-compose-button {
   position: fixed;
-  z-index: 90;
+  z-index: 3100;
   right: 24px;
   bottom: calc(106px + env(safe-area-inset-bottom));
   min-height: 56px;

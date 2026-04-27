@@ -562,15 +562,6 @@ export function CalendarScreen({
               </div>
             ) : (
               <div className="sheet-form-mode">
-                {shifts.some(s => s.date === selectedDate) && (
-                  <button 
-                    type="button" 
-                    className="inline-link-button" 
-                    style={{ marginBottom: '16px', background: '#f1f5f9', color: '#64748b' }}
-                    onClick={() => setSheetMode('history')}
-                  >
-                    <ChevronLeft size={16} /> Quay lại danh sách
-                  </button>
                 )}
 
                 {venueSuggestions.length ? (
