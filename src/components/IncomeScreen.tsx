@@ -25,6 +25,7 @@ import confetti from 'canvas-confetti';
 import { calculateShiftPay, formatKrw } from '../lib/salary';
 import { Expense, RateState, Shift, VenueColors } from '../lib/types';
 import { getVenueColor } from '../utils/helpers';
+import { Logo } from './shared/Logo';
 
 type IncomeTab = 'overview' | 'expenses' | 'workplaces' | 'analysis';
 type IconComponent = LucideIcon;
@@ -164,15 +165,10 @@ export function IncomeScreen({
 
   return (
     <>
-      <header className="income-header">
-        <div>
-          <p className="income-eyebrow">Sổ tài chính</p>
-          <h1>Thu nhập</h1>
-          <span>{monthLabel}</span>
+      <header className="income-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', paddingBottom: '0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <span style={{ fontSize: '18px', fontWeight: 900, color: '#0f172a' }}>{monthLabel}</span>
         </div>
-        <button type="button" className="income-header-action" onClick={() => setIsAddingExpense(true)} aria-label="Thêm chi tiêu">
-          <Plus size={21} />
-        </button>
       </header>
 
       <section className="income-ledger-hero">

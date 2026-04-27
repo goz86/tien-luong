@@ -1,108 +1,112 @@
-create extension if not exists "pgcrypto";
-
-create table if not exists public.profiles (
-  id uuid primary key references auth.users(id) on delete cascade,
-  display_name text not null,
-  avatar_url text,
-  school text,
-  region text not null default 'Seoul - Hongdae',
-  intro text,
-  interests text[] not null default '{}',
-  is_visible boolean not null default true,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+CREATE TABLE IF NOT EXISTS profiles (
+  id UUID REFERENCES auth.users(id) PRIMARY KEY,
+  display_name TEXT,
+  school TEXT,
+  region TEXT,
+  note TEXT,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
-create table if not exists public.work_shifts (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade,
-  work_date date not null,
-  label text not null,
-  start_time time not null,
-  end_time time not null,
-  break_minutes integer not null default 0,
-  hourly_wage integer not null,
-  night_bonus boolean not null default false,
-  overtime_bonus boolean not null default false,
-  holiday_bonus boolean not null default false,
-  weekly_allowance boolean not null default false,
-  created_at timestamptz not null default now()
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view their own profile." ON profiles;
+CREATE POLICY "Users can view their own profile." ON profiles FOR SELECT USING (auth.uid() = id);
+DROP POLICY IF EXISTS "Users can insert their own profile." ON profiles;
+CREATE POLICY "Users can insert their own profile." ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
+DROP POLICY IF EXISTS "Users can update their own profile." ON profiles;
+CREATE POLICY "Users can update their own profile." ON profiles FOR UPDATE USING (auth.uid() = id);
+
+CREATE TABLE IF NOT EXISTS shift_entries (
+  id TEXT PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) NOT NULL,
+  work_date TEXT,
+  venue TEXT,
+  start_time TEXT,
+  end_time TEXT,
+  hourly_wage NUMERIC,
+  break_minutes INTEGER,
+  notes TEXT,
+  night_shift BOOLEAN,
+  tax_deduction BOOLEAN,
+  holiday_allowance NUMERIC,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
-create table if not exists public.friend_profiles (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid references auth.users(id) on delete cascade,
-  display_name text not null,
-  school text,
-  region text not null,
-  intro text not null,
-  tags text[] not null default '{}',
-  is_visible boolean not null default true,
-  created_at timestamptz not null default now()
+ALTER TABLE shift_entries ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view their own shifts." ON shift_entries;
+CREATE POLICY "Users can view their own shifts." ON shift_entries FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can insert their own shifts." ON shift_entries;
+CREATE POLICY "Users can insert their own shifts." ON shift_entries FOR INSERT WITH CHECK (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can update their own shifts." ON shift_entries;
+CREATE POLICY "Users can update their own shifts." ON shift_entries FOR UPDATE USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can delete their own shifts." ON shift_entries;
+CREATE POLICY "Users can delete their own shifts." ON shift_entries FOR DELETE USING (auth.uid() = user_id);
+
+CREATE TABLE IF NOT EXISTS companion_requests (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  requester_id UUID REFERENCES auth.users(id),
+  companion_id TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
-create table if not exists public.friend_requests (
-  id uuid primary key default gen_random_uuid(),
-  requester_id uuid references auth.users(id) on delete set null,
-  target_profile_id uuid not null references public.friend_profiles(id) on delete cascade,
-  message text,
-  status text not null default 'pending' check (status in ('pending', 'accepted', 'declined')),
-  created_at timestamptz not null default now(),
-  unique (requester_id, target_profile_id)
+ALTER TABLE companion_requests ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view their own requests." ON companion_requests;
+CREATE POLICY "Users can view their own requests." ON companion_requests FOR SELECT USING (auth.uid() = requester_id);
+DROP POLICY IF EXISTS "Users can insert their own requests." ON companion_requests;
+CREATE POLICY "Users can insert their own requests." ON companion_requests FOR INSERT WITH CHECK (auth.uid() = requester_id);
+
+CREATE TABLE IF NOT EXISTS expenses (
+  id TEXT PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) NOT NULL,
+  category TEXT,
+  amount NUMERIC,
+  date TEXT,
+  note TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
-create table if not exists public.exchange_rates (
-  id uuid primary key default gen_random_uuid(),
-  base text not null,
-  target text not null,
-  rate numeric not null,
-  fetched_at timestamptz not null default now(),
-  unique (base, target)
+ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view their own expenses." ON expenses;
+CREATE POLICY "Users can view their own expenses." ON expenses FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can insert their own expenses." ON expenses;
+CREATE POLICY "Users can insert their own expenses." ON expenses FOR INSERT WITH CHECK (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can update their own expenses." ON expenses;
+CREATE POLICY "Users can update their own expenses." ON expenses FOR UPDATE USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can delete their own expenses." ON expenses;
+CREATE POLICY "Users can delete their own expenses." ON expenses FOR DELETE USING (auth.uid() = user_id);
+
+CREATE TABLE IF NOT EXISTS community_posts (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) NOT NULL,
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  board TEXT NOT NULL,
+  is_anonymous BOOLEAN DEFAULT false,
+  likes_count INTEGER DEFAULT 0,
+  comments_count INTEGER DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
-alter table public.profiles enable row level security;
-alter table public.work_shifts enable row level security;
-alter table public.friend_profiles enable row level security;
-alter table public.friend_requests enable row level security;
-alter table public.exchange_rates enable row level security;
+ALTER TABLE community_posts ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Anyone can view posts." ON community_posts;
+CREATE POLICY "Anyone can view posts." ON community_posts FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Users can insert posts." ON community_posts;
+CREATE POLICY "Users can insert posts." ON community_posts FOR INSERT WITH CHECK (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can delete own posts." ON community_posts;
+CREATE POLICY "Users can delete own posts." ON community_posts FOR DELETE USING (auth.uid() = user_id);
 
-create policy "Profiles are readable when visible"
-  on public.profiles for select
-  using (is_visible = true or auth.uid() = id);
+CREATE TABLE IF NOT EXISTS community_comments (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  post_id UUID REFERENCES community_posts(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES auth.users(id) NOT NULL,
+  content TEXT NOT NULL,
+  is_anonymous BOOLEAN DEFAULT false,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
 
-create policy "Users manage own profile"
-  on public.profiles for all
-  using (auth.uid() = id)
-  with check (auth.uid() = id);
-
-create policy "Users manage own shifts"
-  on public.work_shifts for all
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
-
-create policy "Visible friend profiles are public"
-  on public.friend_profiles for select
-  using (is_visible = true);
-
-create policy "Users manage own friend profile"
-  on public.friend_profiles for all
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
-
-create policy "Authenticated users create friend requests"
-  on public.friend_requests for insert
-  with check (auth.uid() = requester_id);
-
-create policy "Users read related friend requests"
-  on public.friend_requests for select
-  using (
-    auth.uid() = requester_id
-    or exists (
-      select 1 from public.friend_profiles fp
-      where fp.id = target_profile_id and fp.user_id = auth.uid()
-    )
-  );
-
-create policy "Exchange rates are readable"
-  on public.exchange_rates for select
-  using (true);
+ALTER TABLE community_comments ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Anyone can view comments." ON community_comments;
+CREATE POLICY "Anyone can view comments." ON community_comments FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Users can insert comments." ON community_comments;
+CREATE POLICY "Users can insert comments." ON community_comments FOR INSERT WITH CHECK (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can delete own comments." ON community_comments;
+CREATE POLICY "Users can delete own comments." ON community_comments FOR DELETE USING (auth.uid() = user_id);

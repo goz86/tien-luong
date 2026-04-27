@@ -1,16 +1,14 @@
-import { FormEvent } from 'react';
-import { LogIn } from 'lucide-react';
+import { FormEvent, useState } from 'react';
+import { LogIn, UserPlus, KeyRound, LogOut } from 'lucide-react';
 import { Session } from '@supabase/supabase-js';
 import { ProfileDraft } from '../lib/types';
 import { Field } from './shared/ui';
 import { regions } from '../data';
+import { supabase } from '../lib/supabase';
+
+type AuthMode = 'login' | 'register' | 'forgot';
 
 export function ProfileScreen({
-  authEmail,
-  authMessage,
-  sendingAuth,
-  onAuthEmailChange,
-  onSendMagicLink,
   profile,
   setProfile,
   saveProfile,
@@ -19,11 +17,6 @@ export function ProfileScreen({
   isDarkMode,
   onToggleDarkMode
 }: {
-  authEmail: string;
-  authMessage: string;
-  sendingAuth: boolean;
-  onAuthEmailChange: (value: string) => void;
-  onSendMagicLink: (event: FormEvent<HTMLFormElement>) => void;
   profile: ProfileDraft;
   setProfile: (draft: ProfileDraft) => void;
   saveProfile: () => void;
@@ -32,25 +25,90 @@ export function ProfileScreen({
   isDarkMode: boolean;
   onToggleDarkMode: () => void;
 }) {
+  const [authMode, setAuthMode] = useState<AuthMode>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [authMessage, setAuthMessage] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  async function handleAuth(event: FormEvent) {
+    event.preventDefault();
+    if (!supabase) return;
+    setLoading(true);
+    setAuthMessage('');
+
+    try {
+      if (authMode === 'login') {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        setAuthMessage('Đăng nhập thành công!');
+      } else if (authMode === 'register') {
+        const { error } = await supabase.auth.signUp({ email, password });
+        if (error) throw error;
+        setAuthMessage('Vui lòng kiểm tra email để xác nhận!');
+      } else if (authMode === 'forgot') {
+        const { error } = await supabase.auth.resetPasswordForEmail(email);
+        if (error) throw error;
+        setAuthMessage('Đã gửi link đặt lại mật khẩu vào email!');
+      }
+    } catch (err: any) {
+      setAuthMessage(err.message || 'Có lỗi xảy ra.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleSignOut() {
+    if (!supabase) return;
+    await supabase.auth.signOut();
+  }
+
   return (
     <>
       <header className="appbar compact">
-        <div>
-          <p className="appbar-kicker">Hồ sơ và đồng bộ</p>
-          <h1 className="appbar-title">Tài khoản của tôi</h1>
-        </div>
+        <span className="appbar-title" style={{ fontSize: '18px', fontWeight: 900 }}>Hồ sơ</span>
       </header>
 
       <section className="surface-card card-section">
-        <p className="card-title">Đăng nhập</p>
-        <form onSubmit={onSendMagicLink} className="form-stack">
-          <input className="solid-input" type="email" value={authEmail} onChange={(event) => onAuthEmailChange(event.target.value)} placeholder="name@email.com" />
-          <button type="submit" className="solid-button">
-            <LogIn size={16} />
-            {sendingAuth ? 'Đang gửi...' : 'Gửi magic link'}
-          </button>
-        </form>
-        <p className="helper-copy">{session?.user.email ? `Đang đăng nhập bằng ${session.user.email}` : authMessage || 'Bạn vẫn có thể dùng app ở chế độ khách.'}</p>
+        {session?.user.email ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <p className="card-title">Tài khoản</p>
+            <p className="helper-copy" style={{ color: '#0f172a', fontWeight: 600 }}>Đang đăng nhập bằng {session.user.email}</p>
+            <button type="button" onClick={handleSignOut} className="solid-button" style={{ background: '#fef2f2', color: '#ef4444' }}>
+              <LogOut size={16} />
+              Đăng xuất
+            </button>
+          </div>
+        ) : (
+          <>
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
+              <button 
+                className={`tab-pill ${authMode === 'login' ? 'active' : ''}`} 
+                onClick={() => { setAuthMode('login'); setAuthMessage(''); }}
+              >Đăng nhập</button>
+              <button 
+                className={`tab-pill ${authMode === 'register' ? 'active' : ''}`} 
+                onClick={() => { setAuthMode('register'); setAuthMessage(''); }}
+              >Đăng ký</button>
+              <button 
+                className={`tab-pill ${authMode === 'forgot' ? 'active' : ''}`} 
+                onClick={() => { setAuthMode('forgot'); setAuthMessage(''); }}
+              >Quên mật khẩu</button>
+            </div>
+            
+            <form onSubmit={handleAuth} className="form-stack">
+              <input className="solid-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" required />
+              {authMode !== 'forgot' && (
+                <input className="solid-input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mật khẩu" required minLength={6} />
+              )}
+              <button type="submit" className="solid-button" disabled={loading}>
+                {authMode === 'login' ? <LogIn size={16} /> : authMode === 'register' ? <UserPlus size={16} /> : <KeyRound size={16} />}
+                {loading ? 'Đang xử lý...' : authMode === 'login' ? 'Đăng nhập' : authMode === 'register' ? 'Đăng ký' : 'Lấy lại mật khẩu'}
+              </button>
+            </form>
+            {authMessage && <p className="helper-copy" style={{ marginTop: '12px', color: '#3b82f6' }}>{authMessage}</p>}
+          </>
+        )}
       </section>
 
       <section className="surface-card card-section">

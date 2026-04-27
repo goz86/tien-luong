@@ -14,6 +14,7 @@ import {
   getVenueColor,
   isKoreanHoliday
 } from '../utils/helpers';
+import { Logo } from './shared/Logo';
 
 export function CalendarScreen({
   shifts,
@@ -98,6 +99,39 @@ export function CalendarScreen({
     taxDeduction: draft.taxDeduction,
     holidayAllowance: draft.holidayAllowance
   }).total;
+  
+  // Custom Select State
+  const [activeSelect, setActiveSelect] = useState<string | null>(null);
+
+  const monthColRef = useRef<HTMLDivElement>(null);
+  const yearColRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as HTMLElement;
+      if (activeSelect && !target.closest('.settings-select-wrap')) {
+        setActiveSelect(null);
+      }
+    };
+    document.addEventListener('click', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [activeSelect]);
+
+  // Scroll to active month/year when picker opens
+  useEffect(() => {
+    if (isMonthPickerOpen) {
+      const timer = setTimeout(() => {
+        monthColRef.current?.querySelector('.active')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        yearColRef.current?.querySelector('.active')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isMonthPickerOpen]);
 
   useEffect(() => {
     if (effectiveVenue !== selectedVenue) setSelectedVenue(effectiveVenue);
@@ -194,14 +228,23 @@ export function CalendarScreen({
     if (!calendarRef.current) return;
     
     try {
-      const dataUrl = await toPng(calendarRef.current, {
+      const el = calendarRef.current;
+      const width = el.offsetWidth + 20; 
+      const height = el.offsetHeight + 20;
+
+      const dataUrl = await toPng(el, {
         backgroundColor: '#ffffff',
+        width: width,
+        height: height,
         style: {
           borderRadius: '0',
           boxShadow: 'none',
-          padding: '20px'
+          padding: '10px',
+          margin: '0',
+          width: `${width}px`,
+          height: `${height}px`
         },
-        pixelRatio: 2
+        pixelRatio: 3
       });
       
       const link = document.createElement('a');
@@ -215,13 +258,12 @@ export function CalendarScreen({
 
   return (
     <>
-      <header className="appbar compact">
-        <div>
-          <p className="appbar-kicker">Lịch làm việc</p>
+      <header className="appbar compact" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div className="calendar-title-group" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <button type="button" className="appbar-title calendar-title-large" onClick={openMonthPicker}>
+            <button type="button" className="appbar-title calendar-title-large" onClick={openMonthPicker} style={{ fontSize: '18px' }}>
               {formatCalendarMonthTitle(month)}
-              <ChevronDown size={24} />
+              <ChevronDown size={20} />
             </button>
             {isNotCurrentMonth && (
               <button 
@@ -267,19 +309,30 @@ export function CalendarScreen({
             <ChevronLeft size={18} />
           </button>
           <div className="calendar-chip-track">
-            {monthWorkplaces.map((venue) => (
-              <button
-                key={venue}
-                type="button"
-                className={effectiveVenue === venue ? 'calendar-summary-chip active' : 'calendar-summary-chip'}
-                onClick={() => {
-                  setSelectedVenue(venue);
-                  setIsHistoryOpen(true);
-                }}
-              >
-                {venue}
-              </button>
-            ))}
+            {monthWorkplaces.map((venue) => {
+              const isActive = effectiveVenue === venue;
+              const venueColor = getVenueColor(venue, venueColors);
+              return (
+                <button
+                  key={venue}
+                  type="button"
+                  className={isActive ? 'calendar-summary-chip active' : 'calendar-summary-chip'}
+                  onClick={() => {
+                    setSelectedVenue(venue);
+                    setIsHistoryOpen(true);
+                  }}
+                  style={{ 
+                    background: isActive ? venueColor : `${venueColor}15`, 
+                    color: isActive ? 'white' : venueColor,
+                    boxShadow: isActive ? `0 10px 22px ${venueColor}40` : 'none',
+                    border: `1px solid ${venueColor}${isActive ? '00' : '40'}`,
+                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+                  }}
+                >
+                  {venue}
+                </button>
+              );
+            })}
           </div>
           <strong className="calendar-total-fixed">{formatCalendarKrw(monthTotal)}</strong>
           <button type="button" className="calendar-month-nav" onClick={onNextMonth} aria-label="Tháng sau">
@@ -332,21 +385,21 @@ export function CalendarScreen({
       </section>
 
       {isMonthPickerOpen ? (
-        <section className="calendar-modal-backdrop" onClick={() => setIsMonthPickerOpen(false)}>
+        <section className="calendar-modal-backdrop" onClick={() => { setIsMonthPickerOpen(false); setActiveSelect(null); }}>
           <div className="calendar-modal month-wheel-modal" onClick={(event) => event.stopPropagation()}>
             <div className="month-wheel-actions">
               <button type="button" onClick={() => setIsMonthPickerOpen(false)}>Huỷ</button>
               <button type="button" onClick={confirmMonthPicker}>Xác nhận</button>
             </div>
             <div className="month-wheel-picker">
-              <div className="wheel-column">
+              <div className="wheel-column" ref={monthColRef}>
                 {monthOptions.map((monthNumber) => (
                   <button key={monthNumber} type="button" className={pickerMonth === monthNumber ? 'active' : ''} onClick={() => setPickerMonth(monthNumber)}>
                     Tháng {monthNumber}
                   </button>
                 ))}
               </div>
-              <div className="wheel-column">
+              <div className="wheel-column" ref={yearColRef}>
                 {yearOptions.map((year) => (
                   <button key={year} type="button" className={pickerYear === year ? 'active' : ''} onClick={() => setPickerYear(year)}>
                     {year}
@@ -359,7 +412,7 @@ export function CalendarScreen({
       ) : null}
 
       {isSettingsOpen ? (
-        <section className="calendar-modal-backdrop" onClick={() => setIsSettingsOpen(false)}>
+        <section className="calendar-modal-backdrop" onClick={() => { setIsSettingsOpen(false); setActiveSelect(null); }}>
           <div className="calendar-modal settings-modal" onClick={(event) => event.stopPropagation()}>
             <div className="sheet-handle" />
             <h3 className="settings-title">Cài đặt lịch</h3>
@@ -367,15 +420,20 @@ export function CalendarScreen({
             <div className="settings-group">
               <label className="settings-label">Kiểu hiển thị giờ làm</label>
               <div className="settings-select-wrap">
-                <select
-                  className="settings-select"
-                  value={calendarDisplay}
-                  onChange={(e) => setCalendarDisplay(e.target.value as 'duration' | 'range')}
+                <button 
+                  type="button"
+                  className="settings-select-trigger"
+                  onClick={() => setActiveSelect(activeSelect === 'display' ? null : 'display')}
                 >
-                  <option value="duration">Thời lượng (ví dụ: 4h)</option>
-                  <option value="range">Khung giờ (ví dụ: 18:00-22:00)</option>
-                </select>
-                <ChevronDown size={16} className="select-chevron" />
+                  {calendarDisplay === 'duration' ? 'Thời gian làm (ví dụ: 4h)' : 'Khung giờ (ví dụ: 18:00-22:00)'}
+                  <ChevronDown size={16} className={`select-chevron ${activeSelect === 'display' ? 'open' : ''}`} />
+                </button>
+                {activeSelect === 'display' && (
+                  <div className="settings-dropdown">
+                    <button type="button" onClick={() => { setCalendarDisplay('duration'); setActiveSelect(null); }}>Thời gian làm (ví dụ: 4h)</button>
+                    <button type="button" onClick={() => { setCalendarDisplay('range'); setActiveSelect(null); }}>Khung giờ (ví dụ: 18:00-22:00)</button>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -390,19 +448,26 @@ export function CalendarScreen({
                         <div className="venue-color-preview" style={{ background: currentColor }} />
                         <span className="venue-color-name">{venue}</span>
                         <div className="settings-select-wrap mini">
-                          <select
-                            className="settings-select"
-                            value={currentColor}
-                            onChange={(e) => onSetVenueColor(venue, e.target.value)}
-                            style={{ paddingLeft: 12 }}
+                          <button 
+                            type="button"
+                            className="settings-select-trigger"
+                            onClick={() => setActiveSelect(activeSelect === venue ? null : venue)}
+                            style={{ color: currentColor }}
                           >
-                            {VENUE_PALETTE.map((color) => (
-                              <option key={color} value={color} style={{ color }}>
-                                {color === '#2752ff' ? '🔵 Xanh dương' : color === '#0d9b72' ? '🟢 Xanh lá' : color === '#ff6b7a' ? '🔴 Hồng' : color === '#f59e0b' ? '🟡 Vàng' : color === '#9333ea' ? '🟣 Tím' : color === '#0891b2' ? '🔵 Cyan' : color === '#e11d48' ? '🔴 Đỏ' : '🟢 Lục'}
-                              </option>
-                            ))}
-                          </select>
-                          <ChevronDown size={14} className="select-chevron" />
+                            <div className="venue-color-dot" style={{ background: currentColor }} />
+                            {currentColor === '#2752ff' ? 'Xanh dương' : currentColor === '#0d9b72' ? 'Xanh lá' : currentColor === '#ff6b7a' ? 'Hồng' : currentColor === '#f59e0b' ? 'Vàng' : currentColor === '#9333ea' ? 'Tím' : currentColor === '#0891b2' ? 'Cyan' : currentColor === '#e11d48' ? 'Đỏ' : 'Lục'}
+                            <ChevronDown size={14} className={`select-chevron ${activeSelect === venue ? 'open' : ''}`} />
+                          </button>
+                          {activeSelect === venue && (
+                            <div className="settings-dropdown">
+                              {VENUE_PALETTE.map((color) => (
+                                <button key={color} type="button" onClick={() => { onSetVenueColor(venue, color); setActiveSelect(null); }} style={{ color }}>
+                                  <div className="venue-color-dot" style={{ background: color }} />
+                                  {color === '#2752ff' ? 'Xanh dương' : color === '#0d9b72' ? 'Xanh lá' : color === '#ff6b7a' ? 'Hồng' : color === '#f59e0b' ? 'Vàng' : color === '#9333ea' ? 'Tím' : color === '#0891b2' ? 'Cyan' : color === '#e11d48' ? 'Đỏ' : 'Lục'}
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
@@ -415,7 +480,7 @@ export function CalendarScreen({
       ) : null}
 
       {isHistoryOpen ? (
-        <section className="calendar-modal-backdrop" onClick={() => setIsHistoryOpen(false)}>
+        <section className="calendar-modal-backdrop" onClick={() => { setIsHistoryOpen(false); setActiveSelect(null); }}>
           <div className="calendar-modal history-modal" onClick={(event) => event.stopPropagation()}>
             <div className="sheet-handle" />
             <div className="calendar-modal-head">
@@ -444,7 +509,7 @@ export function CalendarScreen({
       ) : null}
 
       {isSheetOpen ? (
-        <section className="day-sheet-backdrop" onClick={onCloseSheet}>
+        <section className="day-sheet-backdrop" onClick={() => { onCloseSheet(); setActiveSelect(null); }}>
           <div className="day-sheet" onClick={(event) => event.stopPropagation()}>
             <div className="sheet-handle" />
             <div className="sheet-head">
@@ -461,7 +526,7 @@ export function CalendarScreen({
             <div className="sheet-history-list">
               {shifts
                 .filter((shift) => shift.date === draft.date)
-                .sort((a, b) => a.startTime.localeCompare(b.startTime))
+                .sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''))
                 .map((shift) => (
                   <article key={shift.id} className={editingShiftId === shift.id ? 'sheet-history-row active' : 'sheet-history-row'}>
                     <button type="button" onClick={() => startEditShift(shift)}>
@@ -477,16 +542,30 @@ export function CalendarScreen({
 
             {venueSuggestions.length ? (
               <div className="venue-presets">
-                {venueSuggestions.map((venue) => (
-                  <button
-                    key={venue}
-                    type="button"
-                    className={venue === draft.venue ? 'preset-chip active' : 'preset-chip'}
-                    onClick={() => setDraft({ ...draft, venue, label: venue })}
-                  >
-                    {venue}
-                  </button>
-                ))}
+                {venueSuggestions.map((venue) => {
+                  const isActive = venue === draft.venue;
+                  const venueColor = getVenueColor(venue, venueColors);
+                  return (
+                    <button
+                      key={venue}
+                      type="button"
+                      className={isActive ? 'preset-chip active' : 'preset-chip'}
+                      onClick={() => setDraft({ ...draft, venue, label: venue })}
+                      style={isActive ? {
+                        background: venueColor,
+                        borderColor: venueColor,
+                        color: 'white',
+                        boxShadow: `0 4px 12px ${venueColor}30`
+                      } : {
+                        borderColor: `${venueColor}40`,
+                        color: venueColor,
+                        background: `${venueColor}10`
+                      }}
+                    >
+                      {venue}
+                    </button>
+                  );
+                })}
               </div>
             ) : null}
 

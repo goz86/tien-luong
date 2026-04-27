@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Plus, ChevronLeft, ChevronRight, X, Edit3, Trash2 } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, X, Edit3, Trash2, Bell } from 'lucide-react';
 import { formatKrw, calculateShiftPay, shiftHours } from '../lib/salary';
 import { RateState, Shift, VenueColors } from '../lib/types';
 import { formatDateChip, getVenueColor } from '../utils/helpers';
 import { FinanceMetric } from './shared/ui';
+import { Logo } from './shared/Logo';
 
 export function HomeScreen({
   monthlyTotal,
@@ -39,24 +40,58 @@ export function HomeScreen({
   onNextMonth: () => void;
 }) {
   const [selectedWorkplace, setSelectedWorkplace] = useState<string | null>(null);
+  const [isVND, setIsVND] = useState(false);
   const monthNumber = new Date(`${currentMonth}T00:00:00`).getMonth() + 1;
 
   const workplaceShifts = allShifts.filter(s => s.label === selectedWorkplace)
-    .sort((a, b) => b.date.localeCompare(a.date));
+    .sort((a, b) => {
+      const strA = `${a.date}T${a.startTime || '00:00'}`;
+      const strB = `${b.date}T${b.startTime || '00:00'}`;
+      return strA < strB ? 1 : strA > strB ? -1 : 0;
+    });
 
   return (
     <>
       <header className="appbar">
-        <div>
-          <p className="appbar-kicker">Duhoc Mate</p>
-        </div>
+        <Logo />
+        <button 
+          type="button" 
+          aria-label="Thông báo"
+          style={{
+            background: 'white',
+            border: 'none',
+            borderRadius: '16px',
+            width: '44px',
+            height: '44px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
+            cursor: 'pointer',
+            position: 'relative'
+          }}
+        >
+          <Bell size={22} color="#64748b" />
+          <span style={{
+            position: 'absolute',
+            top: '10px',
+            right: '10px',
+            width: '8px',
+            height: '8px',
+            background: '#e11d48',
+            borderRadius: '50%',
+            border: '2px solid white'
+          }} />
+        </button>
       </header>
 
       <section className="hero-balance-card">
         <div className="hero-topline">
-          <div>
+          <div onClick={() => setIsVND(!isVND)} style={{ cursor: 'pointer', flex: 1, minWidth: 0 }} title="Nhấn để đổi tiền tệ">
             <p>Thu nhập tháng này</p>
-            <h2>{formatKrw(monthlyTotal)}</h2>
+            <h2 style={{ whiteSpace: 'nowrap', fontSize: isVND ? '28px' : '35px' }}>
+              {isVND ? `${Math.round(monthlyTotal * rate.value).toLocaleString('vi-VN')} VNĐ` : formatKrw(monthlyTotal)}
+            </h2>
           </div>
           
           <div className="month-navigator">
@@ -71,8 +106,8 @@ export function HomeScreen({
         </div>
 
         <div className="hero-metrics">
-          <FinanceMetric label="Số giờ" value={`${monthlyHours.toFixed(1)}h`} />
-          <FinanceMetric label="Mức / giờ" value={formatKrw(averageHourly)} />
+          <FinanceMetric label="Tổng số giờ" value={`${monthlyHours.toFixed(1)}h`} />
+          <FinanceMetric label="Lương TB/ giờ" value={formatKrw(averageHourly)} />
           <FinanceMetric label="Tỷ giá" value={rate.source === 'live' ? `${rate.value.toFixed(2)} VND` : 'Dùng cache'} />
         </div>
 

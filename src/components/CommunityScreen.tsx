@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   BadgeCheck,
   Bell,
@@ -21,9 +21,13 @@ import {
   Tag,
   ThumbsUp,
   Users,
-  type LucideIcon
+  type LucideIcon,
+  X
 } from 'lucide-react';
+import { Session } from '@supabase/supabase-js';
 import { CompanionProfile } from '../lib/types';
+import { Logo } from './shared/Logo';
+import { supabase } from '../lib/supabase';
 
 type CommunityTab = 'feed' | 'friends' | 'market' | 'reviews' | 'qa';
 type IconComponent = LucideIcon;
@@ -43,121 +47,97 @@ const shortcuts: Array<{ label: string; icon: IconComponent; tone: string }> = [
   { label: 'Đang hot', icon: Flame, tone: 'amber' }
 ];
 
-const notices = [
-  { title: 'Cách ghi phụ cấp ngày lễ vào bảng lương', likes: 41, comments: 35 },
-  { title: 'Mẫu hỏi chủ quán khi lương bị trả chậm', likes: 28, comments: 12 }
-];
-
-const hotPosts = [
-  {
-    board: 'Việc làm thêm',
-    title: 'Đi làm ca tối ở quán ăn, có cần ghi break time không?',
-    excerpt: 'Mình mới đi làm ở Hongdae, chủ bảo nghỉ 30 phút nhưng thực tế vẫn phải dọn bàn...',
-    time: '2 giờ trước',
-    likes: 18,
-    comments: 9
-  },
-  {
-    board: 'Sinh hoạt',
-    title: 'Chia tiền nhà với roommate sao cho rõ ngay từ đầu?',
-    excerpt: 'Có bạn nào có mẫu note bằng tiếng Hàn để thống nhất tiền nhà, điện, gas không?',
-    time: 'Hôm qua',
-    likes: 12,
-    comments: 17
-  }
-];
-
-const feedSections = [
-  {
-    title: 'Bảng tin lương',
-    icon: ClipboardList,
-    posts: [
-      { title: 'Lương tháng này của mình thấp hơn hợp đồng 3 giờ', meta: 'Mới', comments: 4, likes: 6 },
-      { title: 'Có ai từng nhận phụ cấp ca đêm ở cửa hàng tiện lợi chưa?', meta: 'Seoul', comments: 11, likes: 15 },
-      { title: 'Checklist trước khi ký hợp đồng part-time', meta: 'Ghim', comments: 8, likes: 24 }
-    ]
-  },
-  {
-    title: 'Tự do',
-    icon: MessageCircle,
-    posts: [
-      { title: 'Mẹo đi chợ tiết kiệm cho tuần thi TOPIK', meta: 'Mới', comments: 3, likes: 7 },
-      { title: 'Xin địa chỉ quán Việt gần Konkuk', meta: 'Konkuk', comments: 6, likes: 5 },
-      { title: 'Cách xin đổi lịch làm khi trùng lịch học', meta: 'Hỏi nhanh', comments: 2, likes: 4 }
-    ]
-  }
-];
-
-const marketItems = [
-  { title: 'Nồi cơm mini Cuckoo', area: 'Sinchon', price: '30,000원', status: 'Còn hàng', icon: Store },
-  { title: 'Bàn học gấp', area: 'Konkuk', price: '15,000원', status: 'Hẹn xem', icon: ClipboardList },
-  { title: 'Bộ chăn ga mùa đông', area: 'Suwon', price: '20,000원', status: 'Còn hàng', icon: ShoppingBag },
-  { title: 'Sách TOPIK II', area: 'Hongdae', price: '8,000원', status: 'Giá tốt', icon: Tag }
-];
-
-const reviewItems = [
-  {
-    venue: 'Cafe Hollys Sinchon',
-    area: 'Seoul',
-    rating: 5,
-    tags: ['Lương đúng hạn', 'Chủ dễ'],
-    review: 'Ca tối hơi đông nhưng đồng nghiệp chỉ việc kỹ, phù hợp bạn mới sang.'
-  },
-  {
-    venue: 'Xưởng đóng gói Incheon',
-    area: 'Incheon',
-    rating: 3,
-    tags: ['Việc nặng', 'Cần hỏi kỹ'],
-    review: 'Tiền ổn nhưng lịch đổi nhanh. Nên hỏi rõ break time và tiền tăng ca.'
-  },
-  {
-    venue: 'Quán BBQ Gangnam',
-    area: 'Gangnam',
-    rating: 4,
-    tags: ['Bao ăn', 'Ca tối'],
-    review: 'Không khí ổn, cuối tuần đông. Có phụ cấp nếu làm qua 22:00.'
-  }
-];
-
-const qaItems = [
-  { title: 'Visa D-2 được làm tối đa bao nhiêu giờ trong kỳ học?', answers: 6, tag: 'Luật làm thêm' },
-  { title: 'Chủ quán giữ lương thử việc thì xử lý thế nào?', answers: 9, tag: 'Lương' },
-  { title: 'Có nên mua bảo hiểm điện thoại khi mới sang không?', answers: 3, tag: 'Sinh hoạt' }
-];
-
-function renderPostStats(likes: number, comments: number) {
-  return (
-    <div className="community-post-stats">
-      <span>
-        <ThumbsUp size={15} />
-        {likes}
-      </span>
-      <span>
-        <MessageCircle size={15} />
-        {comments}
-      </span>
-    </div>
-  );
+interface Post {
+  id: string;
+  user_id: string;
+  title: string;
+  content: string;
+  board: string;
+  is_anonymous: boolean;
+  likes_count: number;
+  comments_count: number;
+  created_at: string;
 }
 
 export function CommunityScreen({
   companions,
   requested,
-  onRequest
+  onRequest,
+  session
 }: {
   companions: CompanionProfile[];
   requested: string[];
   onRequest: (id: string) => void;
+  session: Session | null;
 }) {
   const [activeTab, setActiveTab] = useState<CommunityTab>('feed');
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [isWriting, setIsWriting] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newContent, setNewContent] = useState('');
+  const [isAnonymous, setIsAnonymous] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [authError, setAuthError] = useState('');
+
+  useEffect(() => {
+    fetchPosts();
+  }, []);
+
+  async function fetchPosts() {
+    if (!supabase) return;
+    const { data } = await supabase.from('community_posts').select('*').order('created_at', { ascending: false });
+    if (data) setPosts(data);
+  }
+
+  async function handleCreatePost() {
+    if (!session || !supabase) {
+      setAuthError('Vui lòng đăng nhập ở tab Hồ sơ để viết bài.');
+      return;
+    }
+    if (!newTitle.trim() || !newContent.trim()) return;
+
+    setSubmitting(true);
+    const { data, error } = await supabase.from('community_posts').insert({
+      user_id: session.user.id,
+      title: newTitle,
+      content: newContent,
+      board: activeTab,
+      is_anonymous: isAnonymous
+    }).select().single();
+
+    setSubmitting(false);
+    if (!error && data) {
+      setPosts([data, ...posts]);
+      setIsWriting(false);
+      setNewTitle('');
+      setNewContent('');
+      setIsAnonymous(false);
+      setAuthError('');
+    }
+  }
+
+  function renderPostStats(likes: number, comments: number) {
+    return (
+      <div className="community-post-stats">
+        <span>
+          <ThumbsUp size={15} />
+          {likes}
+        </span>
+        <span>
+          <MessageCircle size={15} />
+          {comments}
+        </span>
+      </div>
+    );
+  }
+
+  // Filter posts based on active tab
+  const tabPosts = posts.filter(post => post.board === activeTab);
 
   return (
     <>
-      <header className="community-header">
-        <div>
-          <p className="community-eyebrow">Duhoc Mate</p>
-          <h1>Cộng đồng</h1>
-        </div>
+      <header className="community-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Logo />
         <div className="community-header-actions">
           <button type="button" className="community-icon-button" aria-label="Tìm kiếm">
             <Search size={21} />
@@ -168,6 +148,38 @@ export function CommunityScreen({
         </div>
       </header>
 
+      {/* Write Post Modal */}
+      {isWriting && (
+        <div className="sheet-backdrop" onClick={() => setIsWriting(false)}>
+          <div className="bottom-sheet" onClick={(e) => e.stopPropagation()}>
+            <header className="sheet-header">
+              <h2>Tạo bài viết mới</h2>
+              <button type="button" className="icon-button" onClick={() => setIsWriting(false)}>
+                <X size={20} />
+              </button>
+            </header>
+            <div className="sheet-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {authError && <div style={{ color: '#ef4444', background: '#fef2f2', padding: '12px', borderRadius: '8px' }}>{authError}</div>}
+              <div className="field-group">
+                <label>Tiêu đề</label>
+                <input className="solid-input" value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="Nhập tiêu đề..." />
+              </div>
+              <div className="field-group">
+                <label>Nội dung</label>
+                <textarea className="solid-input" value={newContent} onChange={e => setNewContent(e.target.value)} placeholder="Nhập nội dung bài viết..." rows={4} />
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '8px 0' }}>
+                <input type="checkbox" checked={isAnonymous} onChange={e => setIsAnonymous(e.target.checked)} style={{ width: '18px', height: '18px' }} />
+                <span>Chế độ ẩn danh</span>
+              </label>
+              <button type="button" className="solid-button" onClick={handleCreatePost} disabled={submitting}>
+                {submitting ? 'Đang đăng...' : 'Đăng bài'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <section className="community-shortcuts" aria-label="Lối tắt cộng đồng">
         {shortcuts.map(({ label, icon: Icon, tone }) => (
           <button key={label} type="button" className="community-shortcut">
@@ -177,47 +189,6 @@ export function CommunityScreen({
             <strong>{label}</strong>
           </button>
         ))}
-      </section>
-
-      <section className="community-panel">
-        <button type="button" className="community-panel-title">
-          <span>
-            <Megaphone size={20} />
-            Thông báo
-          </span>
-          <ChevronRight size={20} />
-        </button>
-        <div className="community-compact-list">
-          {notices.map((notice) => (
-            <article key={notice.title} className="community-compact-row">
-              <p>{notice.title}</p>
-              {renderPostStats(notice.likes, notice.comments)}
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="community-panel community-hot-panel">
-        <div className="community-section-head">
-          <div>
-            <p>Đang hot</p>
-            <h2>Bài đang nổi</h2>
-          </div>
-          <Flame size={22} />
-        </div>
-        <div className="community-hot-list">
-          {hotPosts.map((post) => (
-            <article key={post.title} className="community-hot-post">
-              <span>{post.board}</span>
-              <h3>{post.title}</h3>
-              <p>{post.excerpt}</p>
-              <footer>
-                <small>{post.time}</small>
-                {renderPostStats(post.likes, post.comments)}
-              </footer>
-            </article>
-          ))}
-        </div>
       </section>
 
       <div className="community-subtabs" role="tablist" aria-label="Mục cộng đồng">
@@ -237,32 +208,33 @@ export function CommunityScreen({
       </div>
 
       <div className="community-tab-body">
-        {activeTab === 'feed' ? (
+        {activeTab !== 'friends' && (
           <div className="community-board-stack">
-            {feedSections.map(({ title, icon: Icon, posts }) => (
-              <section key={title} className="community-board-section">
-                <button type="button" className="community-panel-title">
-                  <span>
-                    <Icon size={19} />
-                    {title}
-                  </span>
-                  <ChevronRight size={20} />
-                </button>
-                <div className="community-thread-list">
-                  {posts.map((post) => (
-                    <article key={post.title} className="community-thread-row">
-                      <span className="community-new-badge">{post.meta}</span>
-                      <p>{post.title}</p>
-                      {renderPostStats(post.likes, post.comments)}
+            <section className="community-board-section">
+              <div className="community-thread-list">
+                {tabPosts.length === 0 ? (
+                  <p style={{ textAlign: 'center', color: '#64748b', padding: '32px 0' }}>Chưa có bài viết nào.</p>
+                ) : (
+                  tabPosts.map((post) => (
+                    <article key={post.id} className="community-thread-row" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span className="community-new-badge" style={{ background: post.is_anonymous ? '#f1f5f9' : '#e0e7ff', color: post.is_anonymous ? '#64748b' : '#3730a3' }}>
+                          {post.is_anonymous ? 'Ẩn danh' : 'Thành viên'}
+                        </span>
+                        <small style={{ color: '#94a3b8' }}>{new Date(post.created_at).toLocaleDateString('vi-VN')}</small>
+                      </div>
+                      <p style={{ fontWeight: 600, fontSize: '15px' }}>{post.title}</p>
+                      <p style={{ color: '#475569', fontSize: '14px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{post.content}</p>
+                      {renderPostStats(post.likes_count, post.comments_count)}
                     </article>
-                  ))}
-                </div>
-              </section>
-            ))}
+                  ))
+                )}
+              </div>
+            </section>
           </div>
-        ) : null}
+        )}
 
-        {activeTab === 'friends' ? (
+        {activeTab === 'friends' && (
           <div className="community-friend-list">
             {companions.map((companion) => {
               const sent = requested.includes(companion.id);
@@ -298,73 +270,16 @@ export function CommunityScreen({
               );
             })}
           </div>
-        ) : null}
-
-        {activeTab === 'market' ? (
-          <div className="community-market-grid">
-            {marketItems.map(({ title, area, price, status, icon: Icon }) => (
-              <article key={title} className="community-market-card">
-                <div className="community-market-thumb">
-                  <Icon size={30} />
-                </div>
-                <div>
-                  <strong>{title}</strong>
-                  <span>{area}</span>
-                </div>
-                <footer>
-                  <b>{price}</b>
-                  <small>{status}</small>
-                </footer>
-              </article>
-            ))}
-          </div>
-        ) : null}
-
-        {activeTab === 'reviews' ? (
-          <div className="community-review-list">
-            {reviewItems.map((item) => (
-              <article key={item.venue} className="community-review-card">
-                <header>
-                  <div>
-                    <strong>{item.venue}</strong>
-                    <span>
-                      <MapPin size={13} />
-                      {item.area}
-                    </span>
-                  </div>
-                  <div className="community-stars" aria-label={`${item.rating} trên 5 sao`}>
-                    {Array.from({ length: 5 }, (_, index) => (
-                      <Star key={index} size={14} fill={index < item.rating ? 'currentColor' : 'none'} />
-                    ))}
-                  </div>
-                </header>
-                <p>{item.review}</p>
-                <div className="community-chip-row">
-                  {item.tags.map((tag) => (
-                    <span key={tag}>{tag}</span>
-                  ))}
-                </div>
-              </article>
-            ))}
-          </div>
-        ) : null}
-
-        {activeTab === 'qa' ? (
-          <div className="community-qa-list">
-            {qaItems.map((item) => (
-              <article key={item.title} className="community-qa-row">
-                <div>
-                  <span>{item.tag}</span>
-                  <strong>{item.title}</strong>
-                </div>
-                <p>{item.answers} trả lời</p>
-              </article>
-            ))}
-          </div>
-        ) : null}
+        )}
       </div>
 
-      <button type="button" className="community-compose-button">
+      <button type="button" className="community-compose-button" onClick={() => {
+        if (!session) {
+          alert('Vui lòng đăng nhập ở tab Hồ sơ để viết bài.');
+          return;
+        }
+        setIsWriting(true);
+      }}>
         <Plus size={22} />
         {activeTab === 'market'
           ? 'Đăng bán'

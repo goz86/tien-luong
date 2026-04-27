@@ -14,7 +14,11 @@ import { CommunityScreen } from './components/CommunityScreen';
 import { ProfileScreen } from './components/ProfileScreen';
 
 const STORAGE_KEY = 'duhoc-mate-redesign-state';
-const todayIso = new Date().toISOString().slice(0, 10);
+const getLocalDateString = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+const todayIso = getLocalDateString();
 const tabs: Array<{ id: Tab; label: string; icon: typeof House }> = [
   { id: 'home', label: 'Trang chủ', icon: House },
   { id: 'calendar', label: 'Lịch', icon: CalendarDays },
@@ -100,18 +104,58 @@ export default function App() {
     window.localStorage.setItem('duhoc-mate-dark', isDarkMode.toString());
   }, [isDarkMode]);
 
-  function addExpense(expense: Omit<Expense, 'id'>) {
+  async function addExpense(expense: Omit<Expense, 'id'>) {
     const next: Expense = { ...expense, id: crypto.randomUUID() };
     setExpenses((current) => [...current, next]);
+    if (supabase && session) {
+      await supabase.from('expenses').insert({
+        id: next.id,
+        user_id: session.user.id,
+        category: next.category,
+        amount: next.amount,
+        date: next.date,
+        note: next.note
+      });
+    }
   }
 
-  function deleteExpense(id: string) {
+  async function deleteExpense(id: string) {
     setExpenses((current) => current.filter((e) => e.id !== id));
+    if (supabase && session) {
+      await supabase.from('expenses').delete().eq('id', id);
+    }
   }
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ shifts, profile, companions, requested, rate, venueColors, incomeTarget, expenses } as StoredState));
   }, [companions, profile, rate, requested, shifts, venueColors, incomeTarget, expenses]);
+
+  // Tự động xoá ca bị lỗi ngày 15/4 theo yêu cầu
+  useEffect(() => {
+    // Quét tìm tất cả các ca "Cafe" có ngày 15/4 (kể cả khi chuỗi date bị sai định dạng)
+    setShifts(prev => {
+      const buggedIds = prev.filter(s => {
+        if (s.label === 'Cafe') {
+          try {
+            const d = new Date(`${s.date}T00:00:00`);
+            if (d.getDate() === 15 && d.getMonth() === 3) return true;
+          } catch {}
+          if (s.date.includes('15/04') || s.date.includes('-4-15') || s.date.includes('-04-15')) return true;
+        }
+        return false;
+      }).map(s => s.id);
+      
+      if (buggedIds.length > 0) {
+        if (supabase && session) {
+          buggedIds.forEach(id => {
+            supabase.from('shifts').delete().eq('id', id).then();
+          });
+        }
+        return prev.filter(s => !buggedIds.includes(s.id));
+      }
+      return prev;
+    });
+  }, []);
 
   useEffect(() => {
     const goOnline = () => setOnline(true);
@@ -135,6 +179,51 @@ export default function App() {
     return () => data.subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (!supabase || !session) return;
+    let isMounted = true;
+    Promise.all([
+      supabase.from('shift_entries').select('*').eq('user_id', session.user.id),
+      supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle(),
+      supabase.from('expenses').select('*').eq('user_id', session.user.id)
+    ]).then(([shiftsRes, profileRes, expensesRes]) => {
+      if (!isMounted) return;
+      if (shiftsRes.data) {
+        setShifts(shiftsRes.data.map(row => ({
+          id: row.id,
+          date: row.work_date,
+          label: row.venue,
+          startTime: row.start_time,
+          endTime: row.end_time,
+          hourlyWage: row.hourly_wage,
+          breakMinutes: row.break_minutes,
+          notes: row.notes || '',
+          nightShift: row.night_shift,
+          taxDeduction: row.tax_deduction,
+          holidayAllowance: row.holiday_allowance
+        })));
+      }
+      if (profileRes.data) {
+        setProfile({
+          displayName: profileRes.data.display_name || '',
+          school: profileRes.data.school || '',
+          region: profileRes.data.region || '',
+          note: profileRes.data.note || ''
+        });
+      }
+      if (expensesRes.data) {
+        setExpenses(expensesRes.data.map(row => ({
+          id: row.id,
+          category: row.category as Expense['category'],
+          amount: row.amount,
+          date: row.date,
+          note: row.note || ''
+        })));
+      }
+    });
+    return () => { isMounted = false; };
+  }, [session]);
+
   const monthKey = calendarMonth.slice(0, 7);
   const monthShifts = useMemo(() => shifts.filter((shift) => shift.date.startsWith(monthKey)), [monthKey, shifts]);
   const monthlyTotal = useMemo(() => monthShifts.reduce((sum, shift) => sum + calculateShiftPay(shift).total, 0), [monthShifts]);
@@ -154,7 +243,11 @@ export default function App() {
   }, [monthShifts]);
   
   const recentShifts = useMemo(
-    () => [...shifts].sort((a, b) => `${b.date}T${b.startTime}`.localeCompare(`${a.date}T${a.startTime}`)).slice(0, 4),
+    () => [...shifts].sort((a, b) => {
+      const strA = `${a.date}T${a.startTime || '00:00'}`;
+      const strB = `${b.date}T${b.startTime || '00:00'}`;
+      return strA < strB ? 1 : strA > strB ? -1 : 0;
+    }).slice(0, 4),
     [shifts]
   );
 
@@ -223,7 +316,10 @@ export default function App() {
         end_time: shift.endTime,
         hourly_wage: shift.hourlyWage,
         break_minutes: shift.breakMinutes,
-        notes: shift.notes
+        notes: shift.notes,
+        night_shift: shift.nightShift,
+        tax_deduction: shift.taxDeduction,
+        holiday_allowance: shift.holidayAllowance
       });
     }
     setTab(nextTab);
@@ -243,7 +339,10 @@ export default function App() {
         end_time: nextShift.endTime,
         hourly_wage: nextShift.hourlyWage,
         break_minutes: nextShift.breakMinutes,
-        notes: nextShift.notes
+        notes: nextShift.notes,
+        night_shift: nextShift.nightShift,
+        tax_deduction: nextShift.taxDeduction,
+        holiday_allowance: nextShift.holidayAllowance
       });
     }
   }
@@ -313,7 +412,7 @@ export default function App() {
     <div className="app-stage">
       <div className="phone-shell">
         <main key={tab} className="screen-shell">
-          {tab === 'home' ? (
+              {tab === 'home' ? (
             <HomeScreen 
               monthlyTotal={monthlyTotal} 
               monthlyHours={monthlyHours} 
@@ -350,14 +449,9 @@ export default function App() {
               onSetTarget={setIncomeTarget}
             />
           ) : null}
-          {tab === 'friends' ? <CommunityScreen companions={companions} requested={requested} onRequest={(id) => void requestConnection(id)} /> : null}
+          {tab === 'friends' ? <CommunityScreen companions={companions} requested={requested} onRequest={(id) => void requestConnection(id)} session={session} /> : null}
           {tab === 'profile' ? (
             <ProfileScreen 
-              authEmail={authEmail} 
-              authMessage={authMessage} 
-              sendingAuth={sendingAuth} 
-              onAuthEmailChange={setAuthEmail} 
-              onSendMagicLink={(event) => void sendMagicLink(event)} 
               profile={profile} 
               setProfile={setProfile} 
               saveProfile={() => void saveProfile()} 
