@@ -108,7 +108,7 @@ export default function App() {
     const next: Expense = { ...expense, id: crypto.randomUUID() };
     setExpenses((current) => [...current, next]);
     if (supabase && session) {
-      await supabase.from('expenses').insert({
+      await supabase!.from('expenses').insert({
         id: next.id,
         user_id: session.user.id,
         category: next.category,
@@ -122,7 +122,7 @@ export default function App() {
   async function deleteExpense(id: string) {
     setExpenses((current) => current.filter((e) => e.id !== id));
     if (supabase && session) {
-      await supabase.from('expenses').delete().eq('id', id);
+      await supabase!.from('expenses').delete().eq('id', id);
     }
   }
 
@@ -148,7 +148,7 @@ export default function App() {
       if (buggedIds.length > 0) {
         if (supabase && session) {
           buggedIds.forEach(id => {
-            supabase.from('shifts').delete().eq('id', id).then();
+            supabase?.from('shifts').delete().eq('id', id).then();
           });
         }
         return prev.filter(s => !buggedIds.includes(s.id));
@@ -174,18 +174,20 @@ export default function App() {
 
   useEffect(() => {
     if (!supabase) return;
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => setSession(nextSession));
+    const client = supabase;
+    client.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data } = client.auth.onAuthStateChange((_event, nextSession) => setSession(nextSession));
     return () => data.subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
     if (!supabase || !session) return;
+    const client = supabase;
     let isMounted = true;
     Promise.all([
-      supabase.from('shift_entries').select('*').eq('user_id', session.user.id),
-      supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle(),
-      supabase.from('expenses').select('*').eq('user_id', session.user.id)
+      client.from('shift_entries').select('*').eq('user_id', session.user.id),
+      client.from('profiles').select('*').eq('id', session.user.id).maybeSingle(),
+      client.from('expenses').select('*').eq('user_id', session.user.id)
     ]).then(([shiftsRes, profileRes, expensesRes]) => {
       if (!isMounted) return;
       if (shiftsRes.data) {
@@ -269,7 +271,7 @@ export default function App() {
       return;
     }
     setSendingAuth(true);
-    const { error } = await supabase.auth.signInWithOtp({ email: authEmail, options: { emailRedirectTo: window.location.origin } });
+    const { error } = await supabase!.auth.signInWithOtp({ email: authEmail, options: { emailRedirectTo: window.location.origin } });
     setSendingAuth(false);
     setAuthMessage(error ? 'Chưa gửi được link đăng nhập.' : 'Mình đã gửi magic link vào email của bạn.');
   }
@@ -277,7 +279,7 @@ export default function App() {
   async function saveProfile() {
     setSavingProfile(true);
     if (supabase && session) {
-      await supabase.from('profiles').upsert({
+      await supabase!.from('profiles').upsert({
         id: session.user.id,
         display_name: profile.displayName,
         school: profile.school,
@@ -307,7 +309,7 @@ export default function App() {
     setCalendarMonth(startOfMonth(shift.date));
     setIsDaySheetOpen(false);
     if (supabase && session) {
-      await supabase.from('shift_entries').upsert({
+      await supabase!.from('shift_entries').upsert({
         id: shift.id,
         user_id: session.user.id,
         work_date: shift.date,
@@ -330,7 +332,7 @@ export default function App() {
     setSelectedDate(nextShift.date);
     setCalendarMonth(startOfMonth(nextShift.date));
     if (supabase && session) {
-      await supabase.from('shift_entries').upsert({
+      await supabase!.from('shift_entries').upsert({
         id: nextShift.id,
         user_id: session.user.id,
         work_date: nextShift.date,
@@ -354,7 +356,7 @@ export default function App() {
       setIsDaySheetOpen(false);
     }
     if (supabase && session) {
-      await supabase.from('shift_entries').delete().eq('id', id);
+      await supabase!.from('shift_entries').delete().eq('id', id);
     }
   }
 
@@ -382,7 +384,7 @@ export default function App() {
   async function requestConnection(id: string) {
     setRequested((current) => [...new Set([...current, id])]);
     if (supabase && session) {
-      await supabase.from('companion_requests').insert({ requester_id: session.user.id, companion_id: id });
+      await supabase!.from('companion_requests').insert({ requester_id: session.user.id, companion_id: id });
     }
   }
 

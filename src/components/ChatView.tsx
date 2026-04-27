@@ -58,7 +58,8 @@ export function ChatView({
 
   async function fetchMessages() {
     if (!supabase || !userId) return;
-    const { data, error } = await supabase
+    const client = supabase;
+    const { data, error } = await client
       .from('chat_messages')
       .select('*')
       .or(`and(sender_id.eq.${userId},receiver_id.eq.${friendId}),and(sender_id.eq.${friendId},receiver_id.eq.${userId})`)
@@ -71,8 +72,8 @@ export function ChatView({
   async function sendMessage(e: React.FormEvent) {
     e.preventDefault();
     if (!supabase || !userId || !newMessage.trim()) return;
-
-    const { error } = await supabase.from('chat_messages').insert({
+    const client = supabase;
+    const { error } = await client.from('chat_messages').insert({
       sender_id: userId,
       receiver_id: friendId,
       content: newMessage.trim()

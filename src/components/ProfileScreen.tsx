@@ -38,16 +38,17 @@ export function ProfileScreen({
     setAuthMessage('');
 
     try {
+      const client = supabase;
       if (authMode === 'login') {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error } = await client.auth.signInWithPassword({ email, password });
         if (error) throw error;
         setAuthMessage('Đăng nhập thành công!');
       } else if (authMode === 'register') {
-        const { error } = await supabase.auth.signUp({ email, password });
+        const { error } = await client.auth.signUp({ email, password });
         if (error) throw error;
         setAuthMessage('Vui lòng kiểm tra email để xác nhận!');
       } else if (authMode === 'forgot') {
-        const { error } = await supabase.auth.resetPasswordForEmail(email);
+        const { error } = await client.auth.resetPasswordForEmail(email);
         if (error) throw error;
         setAuthMessage('Đã gửi link đặt lại mật khẩu vào email!');
       }
@@ -60,7 +61,7 @@ export function ProfileScreen({
 
   async function handleSignOut() {
     if (!supabase) return;
-    await supabase.auth.signOut();
+    await supabase!.auth.signOut();
   }
 
   return (

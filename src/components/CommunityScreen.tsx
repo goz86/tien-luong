@@ -85,7 +85,8 @@ export function CommunityScreen({
 
   async function fetchPosts() {
     if (!supabase) return;
-    const { data } = await supabase.from('community_posts').select('*').order('created_at', { ascending: false });
+    const client = supabase;
+    const { data } = await client.from('community_posts').select('*').order('created_at', { ascending: false });
     if (data) setPosts(data);
   }
 
@@ -97,7 +98,8 @@ export function CommunityScreen({
     if (!newTitle.trim() || !newContent.trim()) return;
 
     setSubmitting(true);
-    const { data, error } = await supabase.from('community_posts').insert({
+    const client = supabase;
+    const { data, error } = await client.from('community_posts').insert({
       user_id: session.user.id,
       title: newTitle,
       content: newContent,

@@ -25,7 +25,8 @@ export function CommunityView({ t }: { t: any }) {
 
   async function fetchPosts() {
     if (!supabase) return;
-    const { data, error } = await supabase
+    const client = supabase;
+    const { data, error } = await client
       .from('community_posts')
       .select('*, profiles(display_name)')
       .order('created_at', { ascending: false });
@@ -43,11 +44,12 @@ export function CommunityView({ t }: { t: any }) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!supabase) return;
+    const client = supabase;
     
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await client.auth.getSession();
     if (!session) return alert('Vui lòng đăng nhập');
 
-    const { error } = await supabase.from('community_posts').insert({
+    const { error } = await client.from('community_posts').insert({
       ...newPost,
       author_id: session.user.id
     });
