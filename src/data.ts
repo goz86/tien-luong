@@ -1,21 +1,5 @@
 import type { Shift } from './lib/salary';
-
-export type CompanionProfile = {
-  id: string;
-  displayName: string;
-  school: string;
-  region: string;
-  focus: string;
-  availability: string;
-  tags: string[];
-};
-
-export type ProfileDraft = {
-  displayName: string;
-  school: string;
-  region: string;
-  note: string;
-};
+import type { CompanionProfile, ProfileDraft } from './lib/types';
 
 export const regions = ['Seoul - Hongdae', 'Seoul - Konkuk', 'Seoul - Gangnam', 'Suwon', 'Incheon', 'Busan', 'Daegu'];
 
@@ -23,32 +7,33 @@ export const demoShifts: Shift[] = [
   {
     id: 'shift-1',
     date: '2026-04-20',
-    label: 'Việc làm thêm',
+    label: 'Quán ăn Hongdae',
     startTime: '18:00',
     endTime: '22:00',
     hourlyWage: 11000,
     breakMinutes: 0,
-    notes: 'Ca tối quán ăn gần trường.'
+    notes: 'Ca tối gần trường.'
   },
   {
     id: 'shift-2',
     date: '2026-04-20',
-    label: 'Việc làm thêm',
+    label: 'Quán ăn Hongdae',
     startTime: '13:00',
     endTime: '17:00',
     hourlyWage: 11000,
     breakMinutes: 0,
-    notes: 'Ca trưa hỗ trợ phục vụ.'
+    notes: 'Ca trưa phụ bếp.'
   },
   {
     id: 'shift-3',
     date: '2026-04-26',
-    label: 'Cafe',
+    label: 'Cafe Sinchon',
     startTime: '18:00',
     endTime: '23:30',
     hourlyWage: 12000,
     breakMinutes: 30,
-    notes: 'Ca tối cuối tuần, đông khách hơn.'
+    notes: 'Ca cuối tuần, đông khách hơn.',
+    nightShift: true
   }
 ];
 
@@ -58,7 +43,7 @@ export const demoCompanions: CompanionProfile[] = [
     displayName: 'Minh Anh',
     school: 'Yonsei KLI',
     region: 'Seoul - Hongdae',
-    focus: 'Thích học tiếng Hàn buổi sáng và hẹn cafe cuối tuần.',
+    focus: 'Muốn tìm bạn học tiếng Hàn buổi sáng và đi cafe cuối tuần.',
     availability: 'Tối thứ 4 hoặc cuối tuần',
     tags: ['TOPIK', 'Cafe', 'Học nhóm']
   },

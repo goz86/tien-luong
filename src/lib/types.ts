@@ -1,4 +1,3 @@
-import { House } from 'lucide-react';
 import { Shift } from './salary';
 
 export type Tab = 'home' | 'calendar' | 'income' | 'friends' | 'profile';
@@ -17,6 +16,7 @@ export interface CompanionProfile {
   school: string;
   region: string;
   focus: string;
+  availability?: string;
   tags: string[];
 }
 

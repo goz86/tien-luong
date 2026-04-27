@@ -1798,3 +1798,1135 @@ select {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Community upgrade */
+.community-header,
+.income-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 2px 18px;
+}
+
+.community-eyebrow,
+.income-eyebrow {
+  margin: 0 0 6px;
+  color: var(--blue-700);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.community-header h1,
+.income-header h1 {
+  margin: 0;
+  color: var(--text-main);
+  font-size: 34px;
+  line-height: 1.08;
+  letter-spacing: 0;
+  font-weight: 900;
+}
+
+.income-header span {
+  display: block;
+  margin-top: 5px;
+  color: var(--text-soft);
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: capitalize;
+}
+
+.community-header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.community-icon-button,
+.income-header-action,
+.income-mini-action,
+.income-edit-button {
+  border: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow: 0 12px 26px rgba(28, 43, 76, 0.1);
+}
+
+.community-icon-button,
+.income-header-action {
+  width: 44px;
+  height: 44px;
+  border-radius: 17px;
+}
+
+.community-icon-button.muted {
+  color: #7d8aa0;
+}
+
+.community-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.community-shortcut {
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-main);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+}
+
+.community-shortcut-icon {
+  width: 62px;
+  height: 62px;
+  border-radius: 24px;
+  display: grid;
+  place-items: center;
+  background: #f2f5fa;
+  color: #4b5563;
+  box-shadow: inset 0 0 0 1px rgba(112, 129, 159, 0.12), 0 10px 22px rgba(28, 43, 76, 0.1);
+}
+
+.community-shortcut-icon.green {
+  color: var(--green-600);
+  background: #e8fff6;
+}
+
+.community-shortcut-icon.blue {
+  color: var(--blue-700);
+  background: #eaf0ff;
+}
+
+.community-shortcut-icon.amber {
+  color: #d97706;
+  background: #fff7db;
+}
+
+.community-shortcut strong {
+  max-width: 100%;
+  color: var(--text-main);
+  font-size: 12px;
+  line-height: 1.25;
+  font-weight: 900;
+  text-align: center;
+}
+
+.community-panel,
+.community-board-section,
+.income-goal-panel,
+.income-chart-panel,
+.income-expense-panel,
+.income-workplace-panel,
+.income-analysis-panel {
+  margin-bottom: 16px;
+  border: 1px solid rgba(112, 129, 159, 0.12);
+  border-radius: 26px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 14px 34px rgba(28, 43, 76, 0.08);
+}
+
+.community-panel,
+.community-board-section,
+.income-expense-panel,
+.income-workplace-panel,
+.income-analysis-panel {
+  padding: 16px;
+}
+
+.community-panel-title {
+  width: 100%;
+  min-height: 38px;
+  border: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: transparent;
+  color: var(--text-main);
+  font-size: 20px;
+  font-weight: 900;
+  text-align: left;
+}
+
+.community-panel-title span {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.community-compact-list,
+.community-thread-list,
+.community-hot-list,
+.community-review-list,
+.community-qa-list,
+.community-friend-list,
+.income-expense-list,
+.income-workplace-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.community-compact-row,
+.community-thread-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 0;
+}
+
+.community-compact-row + .community-compact-row,
+.community-thread-row + .community-thread-row,
+.community-hot-post + .community-hot-post,
+.income-expense-row + .income-expense-row,
+.income-workplace-row + .income-workplace-row {
+  border-top: 1px solid var(--line);
+}
+
+.community-compact-row p,
+.community-thread-row p {
+  margin: 0;
+  min-width: 0;
+  color: var(--text-main);
+  font-size: 15px;
+  line-height: 1.38;
+  font-weight: 800;
+}
+
+.community-post-stats {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #7a8798;
+  font-size: 14px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.community-post-stats span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.community-hot-panel {
+  padding: 18px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 250, 255, 0.92));
+}
+
+.community-section-head,
+.income-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.community-section-head p,
+.income-section-head p {
+  margin: 0 0 4px;
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.community-section-head h2,
+.income-section-head h2 {
+  margin: 0;
+  color: var(--text-main);
+  font-size: 22px;
+  line-height: 1.14;
+  letter-spacing: 0;
+  font-weight: 900;
+}
+
+.community-hot-post {
+  padding: 14px 0;
+}
+
+.community-hot-post span {
+  display: inline-flex;
+  margin-bottom: 8px;
+  color: var(--blue-700);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.community-hot-post h3 {
+  margin: 0;
+  color: var(--text-main);
+  font-size: 18px;
+  line-height: 1.32;
+  letter-spacing: 0;
+  font-weight: 900;
+}
+
+.community-hot-post p {
+  margin: 8px 0 0;
+  color: var(--text-soft);
+  font-size: 14px;
+  line-height: 1.58;
+}
+
+.community-hot-post footer {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.community-hot-post small {
+  color: var(--text-faint);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.community-subtabs,
+.income-subtabs {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 8px 0 14px;
+  margin: 0 -2px 2px;
+  background: linear-gradient(180deg, rgba(247, 249, 253, 0.96), rgba(247, 249, 253, 0.82));
+  scrollbar-width: none;
+}
+
+.community-subtabs::-webkit-scrollbar,
+.income-subtabs::-webkit-scrollbar {
+  display: none;
+}
+
+.community-subtabs button,
+.income-subtabs button {
+  flex: 0 0 auto;
+  min-height: 42px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: #edf2f8;
+  color: #66758a;
+  font-size: 13px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.community-subtabs button.active,
+.income-subtabs button.active {
+  background: var(--text-main);
+  color: white;
+  box-shadow: 0 12px 22px rgba(8, 22, 43, 0.18);
+}
+
+.community-tab-body,
+.income-tab-body {
+  padding-bottom: 96px;
+}
+
+.community-board-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.community-thread-row {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.community-new-badge {
+  min-width: 38px;
+  min-height: 24px;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff0f2;
+  color: #e84b5f;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.community-friend-list {
+  gap: 12px;
+}
+
+.community-friend-row {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr) 46px;
+  gap: 12px;
+  align-items: start;
+  padding: 14px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 12px 28px rgba(28, 43, 76, 0.08);
+}
+
+.community-avatar {
+  width: 54px;
+  height: 54px;
+  border-radius: 20px;
+  display: grid;
+  place-items: center;
+  color: white;
+  background: linear-gradient(135deg, var(--blue-700), var(--green-600));
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.community-friend-main {
+  min-width: 0;
+}
+
+.community-friend-main strong,
+.community-market-card strong,
+.community-review-card strong,
+.community-qa-row strong,
+.income-expense-row strong,
+.income-workplace-row strong {
+  display: block;
+  color: var(--text-main);
+  font-size: 16px;
+  line-height: 1.28;
+  font-weight: 900;
+}
+
+.community-friend-main span,
+.community-market-card span,
+.income-expense-row span,
+.income-workplace-row small {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.community-friend-main p {
+  margin: 10px 0;
+  color: var(--text-soft);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.community-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.community-chip-row span {
+  min-height: 28px;
+  border-radius: 999px;
+  padding: 0 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #eef3fb;
+  color: #617089;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.community-request {
+  width: 42px;
+  height: 42px;
+  border: 0;
+  border-radius: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--blue-700);
+  color: white;
+  box-shadow: 0 12px 20px rgba(39, 82, 255, 0.24);
+}
+
+.community-request.sent {
+  background: #e8fff6;
+  color: var(--green-600);
+  box-shadow: none;
+}
+
+.community-market-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.community-market-card {
+  min-width: 0;
+  padding: 12px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 12px 28px rgba(28, 43, 76, 0.08);
+}
+
+.community-market-thumb {
+  height: 106px;
+  border-radius: 18px;
+  margin-bottom: 12px;
+  display: grid;
+  place-items: center;
+  color: var(--blue-700);
+  background: linear-gradient(135deg, #f2f7ff, #e8fff6);
+}
+
+.community-market-card footer {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.community-market-card b {
+  color: var(--blue-700);
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.community-market-card small {
+  border-radius: 999px;
+  padding: 5px 7px;
+  background: #eef8f3;
+  color: var(--green-600);
+  font-size: 10px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.community-review-list,
+.community-qa-list {
+  gap: 12px;
+}
+
+.community-review-card,
+.community-qa-row {
+  padding: 16px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 12px 28px rgba(28, 43, 76, 0.08);
+}
+
+.community-review-card header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.community-review-card header span {
+  margin-top: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.community-stars {
+  display: flex;
+  gap: 2px;
+  color: #f59e0b;
+  white-space: nowrap;
+}
+
+.community-review-card p {
+  margin: 12px 0;
+  color: var(--text-soft);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.community-qa-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.community-qa-row > div {
+  min-width: 0;
+}
+
+.community-qa-row span {
+  display: inline-flex;
+  margin-bottom: 6px;
+  color: var(--blue-700);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.community-qa-row p {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.community-compose-button {
+  position: fixed;
+  z-index: 90;
+  right: 24px;
+  bottom: calc(106px + env(safe-area-inset-bottom));
+  min-height: 56px;
+  max-width: calc(100vw - 48px);
+  border: 0;
+  border-radius: 20px;
+  padding: 0 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--blue-700);
+  color: white;
+  font-size: 15px;
+  font-weight: 900;
+  box-shadow: 0 18px 34px rgba(39, 82, 255, 0.3);
+  white-space: nowrap;
+}
+
+/* Income upgrade */
+.income-ledger-hero {
+  margin-bottom: 16px;
+  border-radius: 28px;
+  padding: 22px;
+  color: white;
+  background: linear-gradient(135deg, #08162b 0%, #2752ff 58%, #0d9b72 100%);
+  box-shadow: 0 18px 40px rgba(39, 82, 255, 0.26);
+}
+
+.income-hero-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.income-hero-top span,
+.income-hero-metrics span,
+.income-goal-head span {
+  display: block;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.income-hero-top span,
+.income-hero-metrics span {
+  color: rgba(255, 255, 255, 0.76);
+}
+
+.income-hero-top h2 {
+  margin: 7px 0 0;
+  font-size: 34px;
+  line-height: 1.04;
+  letter-spacing: 0;
+  font-weight: 900;
+}
+
+.income-hero-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+  margin-top: 20px;
+}
+
+.income-hero-metrics article {
+  min-width: 0;
+  border-radius: 18px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.income-hero-metrics strong {
+  display: block;
+  margin-top: 7px;
+  font-size: 14px;
+  line-height: 1.22;
+  font-weight: 900;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.income-goal-panel {
+  padding: 16px;
+}
+
+.income-goal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.income-goal-head span {
+  color: var(--text-soft);
+  text-transform: uppercase;
+}
+
+.income-goal-head strong {
+  display: block;
+  margin-top: 6px;
+  color: var(--text-main);
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.income-edit-button,
+.income-mini-action {
+  width: 38px;
+  height: 38px;
+  border-radius: 14px;
+}
+
+.income-target-edit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.income-target-edit input {
+  width: 150px;
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 0 12px;
+  color: var(--text-main);
+  background: #f8fafc;
+  font-weight: 900;
+}
+
+.income-target-edit button {
+  width: 42px;
+  height: 42px;
+  border: 0;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  background: var(--blue-700);
+}
+
+.income-progress-track {
+  height: 12px;
+  border-radius: 999px;
+  padding: 3px;
+  margin-top: 16px;
+  background: #edf2f8;
+  overflow: hidden;
+}
+
+.income-progress-track span {
+  height: 100%;
+  border-radius: inherit;
+  display: block;
+  transition: width 420ms ease;
+}
+
+.income-goal-panel p {
+  margin: 10px 0 0;
+  color: var(--text-soft);
+  font-size: 13px;
+  line-height: 1.45;
+  font-weight: 700;
+}
+
+.income-chart-panel {
+  padding: 18px 16px 16px;
+}
+
+.income-week-bars {
+  height: 132px;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  align-items: end;
+  gap: 8px;
+}
+
+.income-week-bars div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.income-week-bars span {
+  width: 100%;
+  max-width: 34px;
+  border-radius: 12px 12px 6px 6px;
+  background: #e4ebf5;
+  transition: height 420ms ease, background-color 180ms ease;
+}
+
+.income-week-bars .hot span {
+  background: linear-gradient(180deg, #0d9b72, #2752ff);
+}
+
+.income-week-bars small {
+  color: var(--text-soft);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.income-week-bars .hot small {
+  color: var(--blue-700);
+}
+
+.income-snapshot-grid,
+.income-analysis-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.income-snapshot-grid article,
+.income-analysis-grid article {
+  min-width: 0;
+  border-radius: 22px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 12px 28px rgba(28, 43, 76, 0.08);
+}
+
+.income-snapshot-grid svg {
+  color: var(--blue-700);
+}
+
+.income-snapshot-grid span,
+.income-analysis-grid span {
+  display: block;
+  margin-top: 10px;
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.income-snapshot-grid strong,
+.income-analysis-grid strong {
+  display: block;
+  margin-top: 6px;
+  color: var(--text-main);
+  font-size: 18px;
+  line-height: 1.18;
+  font-weight: 900;
+}
+
+.income-expense-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 14px;
+  border-radius: 22px;
+  background: #f6f8fc;
+}
+
+.income-expense-form label {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.income-expense-form label.wide,
+.income-expense-form button {
+  grid-column: 1 / -1;
+}
+
+.income-expense-form label span {
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.income-expense-form input,
+.income-expense-form select {
+  min-width: 0;
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  padding: 0 12px;
+  color: var(--text-main);
+  background: white;
+  font-weight: 800;
+}
+
+.income-expense-form button {
+  min-height: 50px;
+  border: 0;
+  border-radius: 16px;
+  color: white;
+  background: var(--blue-700);
+  font-weight: 900;
+}
+
+.income-expense-row {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 0;
+}
+
+.income-expense-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 17px;
+  display: grid;
+  place-items: center;
+  color: var(--blue-700);
+  background: #eaf0ff;
+}
+
+.income-expense-icon.green {
+  color: var(--green-600);
+  background: #e8fff6;
+}
+
+.income-expense-icon.amber {
+  color: #d97706;
+  background: #fff7db;
+}
+
+.income-expense-icon.coral {
+  color: #e84b5f;
+  background: #fff0f2;
+}
+
+.income-expense-amount {
+  text-align: right;
+}
+
+.income-expense-amount b {
+  display: block;
+  color: #e84b5f;
+  font-size: 15px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.income-expense-amount button {
+  border: 0;
+  margin-top: 5px;
+  padding: 4px;
+  color: #b6c0cf;
+  background: transparent;
+}
+
+.income-empty {
+  padding: 34px 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  color: var(--text-faint);
+}
+
+.income-empty strong {
+  margin-top: 12px;
+  color: var(--text-main);
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.income-empty p {
+  max-width: 270px;
+  margin: 7px 0 0;
+  color: var(--text-soft);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.income-workplace-row {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0;
+}
+
+.income-venue-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  box-shadow: 0 0 0 5px rgba(255, 255, 255, 0.9);
+}
+
+.income-workplace-track {
+  height: 8px;
+  border-radius: 999px;
+  margin-top: 9px;
+  background: #edf2f8;
+  overflow: hidden;
+}
+
+.income-workplace-track span {
+  height: 100%;
+  display: block;
+  border-radius: inherit;
+}
+
+.income-workplace-row p {
+  margin: 0;
+  text-align: right;
+}
+
+.income-workplace-row b,
+.income-workplace-row p span {
+  display: block;
+  white-space: nowrap;
+}
+
+.income-workplace-row b {
+  color: var(--text-main);
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.income-workplace-row p span {
+  margin-top: 4px;
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.income-alert-card {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 20px;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+  border-radius: 24px;
+  padding: 16px;
+}
+
+.income-alert-card.warning {
+  background: #fff7db;
+  color: #b45309;
+}
+
+.income-alert-card.success {
+  background: #e8fff6;
+  color: var(--green-600);
+}
+
+.income-alert-card strong {
+  display: block;
+  color: var(--text-main);
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.income-alert-card p,
+.income-analysis-grid p {
+  margin: 5px 0 0;
+  color: var(--text-soft);
+  font-size: 12px;
+  line-height: 1.45;
+  font-weight: 700;
+}
+
+@media (max-width: 380px) {
+  .community-shortcut-icon {
+    width: 54px;
+    height: 54px;
+    border-radius: 20px;
+  }
+
+  .community-thread-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .community-new-badge {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .income-hero-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .income-expense-form,
+  .income-snapshot-grid,
+  .income-analysis-grid,
+  .community-market-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 480px) {
+  .community-compose-button {
+    right: auto;
+    left: calc(50% + 52px);
+    max-width: 170px;
+  }
+}
+
+.dark .community-panel,
+.dark .community-board-section,
+.dark .community-friend-row,
+.dark .community-market-card,
+.dark .community-review-card,
+.dark .community-qa-row,
+.dark .income-goal-panel,
+.dark .income-chart-panel,
+.dark .income-expense-panel,
+.dark .income-workplace-panel,
+.dark .income-analysis-panel,
+.dark .income-snapshot-grid article,
+.dark .income-analysis-grid article {
+  background: rgba(30, 41, 59, 0.92);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+.dark .community-subtabs,
+.dark .income-subtabs {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(15, 23, 42, 0.82));
+}
+
+.dark .community-subtabs button,
+.dark .income-subtabs button,
+.dark .community-chip-row span,
+.dark .income-progress-track,
+.dark .income-workplace-track {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.dark .community-subtabs button.active,
+.dark .income-subtabs button.active {
+  background: #ffffff;
+  color: #08162b;
+}
+
+.dark .income-expense-form {
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.dark .income-expense-form input,
+.dark .income-expense-form select,
+.dark .income-target-edit input {
+  background: #0f172a;
+  color: white;
+  border-color: rgba(255, 255, 255, 0.08);
+}
