@@ -1693,7 +1693,8 @@ select {
   }
 
   .day-sheet,
-  .calendar-modal {
+  .calendar-modal,
+  .modal-content {
     width: 430px;
     margin: 0 auto;
   }

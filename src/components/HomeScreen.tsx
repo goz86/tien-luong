@@ -40,6 +40,7 @@ export function HomeScreen({
   onNextMonth: () => void;
 }) {
   const [selectedWorkplace, setSelectedWorkplace] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [isVND, setIsVND] = useState(false);
   const monthNumber = new Date(`${currentMonth}T00:00:00`).getMonth() + 1;
 
@@ -165,6 +166,8 @@ export function HomeScreen({
         .modal-content {
           background: white;
           width: 100%;
+          max-width: 430px;
+          margin: 0 auto;
           height: 65vh;
           border-top-left-radius: 40px;
           border-top-right-radius: 40px;
@@ -294,11 +297,7 @@ export function HomeScreen({
                     }}>
                       <Edit3 size={18} />
                     </button>
-                    <button className="action-btn delete-btn" onClick={() => {
-                      if (confirm('Bạn có chắc muốn xoá ca làm này?')) {
-                        onDeleteShift(shift.id);
-                      }
-                    }}>
+                    <button className="action-btn delete-btn" onClick={() => setDeleteConfirmId(shift.id)}>
                       <Trash2 size={18} />
                     </button>
                   </div>
@@ -357,6 +356,29 @@ export function HomeScreen({
           ))}
         </div>
       </section>
+      {deleteConfirmId && (
+        <section className="calendar-modal-backdrop confirm-backdrop" style={{ zIndex: 3500 }} onClick={() => setDeleteConfirmId(null)}>
+          <div className="confirm-dialog" onClick={(event) => event.stopPropagation()}>
+            <div className="confirm-content">
+              <h3>Xác nhận</h3>
+              <p>Bạn có chắc chắn muốn xoá ca làm việc này không? Dữ liệu đã xoá sẽ không thể khôi phục.</p>
+            </div>
+            <div className="confirm-footer">
+              <button type="button" className="confirm-btn cancel" onClick={() => setDeleteConfirmId(null)}>Hủy bỏ</button>
+              <button 
+                type="button" 
+                className="confirm-btn danger" 
+                onClick={() => {
+                  onDeleteShift(deleteConfirmId);
+                  setDeleteConfirmId(null);
+                }}
+              >
+                Đồng ý
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
     </>
   );
 }
