@@ -719,7 +719,7 @@ export function CalendarScreen({
       ) : null}
 
       {deleteConfirmId && (
-        <section className="calendar-modal-backdrop confirm-backdrop" onClick={() => setDeleteConfirmId(null)} style={{ zIndex: 1000 }}>
+        <section className="calendar-modal-backdrop confirm-backdrop" onClick={() => setDeleteConfirmId(null)}>
           <div className="confirm-dialog" onClick={(event) => event.stopPropagation()}>
             <div className="confirm-content">
               <h3>Xác nhận</h3>
