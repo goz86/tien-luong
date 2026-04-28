@@ -40,11 +40,13 @@ export function CommunityScreen({
   requested,
   onRequest,
   session,
+  profile,
 }: {
   companions: CompanionProfile[];
   requested: string[];
   onRequest: (id: string) => void;
   session: Session | null;
+  profile?: any;
 }) {
   const [view, setView] = useState<CommunityView>('feed');
   const [activeCategory, setActiveCategory] = useState<CategoryFilter>('all');
@@ -58,6 +60,8 @@ export function CommunityScreen({
   const [feedFilter, setFeedFilter] = useState<FeedFilter>('all');
   const [newComment, setNewComment] = useState('');
   const [replyTo, setReplyTo] = useState<string | null>(null);
+  const [isAnonymous, setIsAnonymous] = useState(true);
+  const [editingPostId, setEditingPostId] = useState<string | null>(null);
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
   const [dislikedPosts, setDislikedPosts] = useState<Set<string>>(new Set());
   const [bookmarkedPosts, setBookmarkedPosts] = useState<Set<string>>(new Set());
@@ -70,6 +74,9 @@ export function CommunityScreen({
     function handlePopstate() {
       if (isWriting) {
         setIsWriting(false);
+        setEditingPostId(null);
+        setNewTitle('');
+        setNewContent('');
         return;
       }
       if (view === 'detail') {
@@ -163,8 +170,8 @@ export function CommunityScreen({
       parent_id: replyTo,
       user_id: session?.user.id || 'me',
       content: newComment.trim(),
-      is_anonymous: true,
-      display_name: 'Bạn',
+      is_anonymous: isAnonymous,
+      display_name: isAnonymous ? 'Ẩn danh' : (profile?.displayName || 'Du học sinh'),
       is_author: false,
       likes_count: 0,
       created_at: new Date().toISOString(),
@@ -180,24 +187,35 @@ export function CommunityScreen({
 
   function addPost() {
     if (!newTitle.trim() || !newContent.trim()) return;
-    const post: CommunityPost = {
-      id: `post-new-${Date.now()}`,
-      user_id: session?.user.id || 'me',
-      category: newCategory,
-      title: newTitle.trim(),
-      content: newContent.trim(),
-      is_anonymous: true,
-      display_name: 'Bạn',
-      likes_count: 0,
-      dislikes_count: 0,
-      comments_count: 0,
-      views_count: 0,
-      created_at: new Date().toISOString(),
-    };
-    setPosts((prev) => [post, ...prev]);
+    const postDisplayName = isAnonymous ? 'Ẩn danh' : (profile?.displayName || 'Du học sinh');
+
+    if (editingPostId) {
+      setPosts((prev) => prev.map((p) => p.id === editingPostId ? { ...p, title: newTitle.trim(), content: newContent.trim(), category: newCategory, is_anonymous: isAnonymous, display_name: postDisplayName } : p));
+      if (selectedPost?.id === editingPostId) {
+        setSelectedPost((p) => p ? { ...p, title: newTitle.trim(), content: newContent.trim(), category: newCategory, is_anonymous: isAnonymous, display_name: postDisplayName } : p);
+      }
+    } else {
+      const post: CommunityPost = {
+        id: `post-new-${Date.now()}`,
+        user_id: session?.user.id || 'me',
+        category: newCategory,
+        title: newTitle.trim(),
+        content: newContent.trim(),
+        is_anonymous: isAnonymous,
+        display_name: postDisplayName,
+        likes_count: 0,
+        dislikes_count: 0,
+        comments_count: 0,
+        views_count: 0,
+        created_at: new Date().toISOString(),
+      };
+      setPosts((prev) => [post, ...prev]);
+    }
     setIsWriting(false);
     setNewTitle('');
     setNewContent('');
+    setEditingPostId(null);
+    setIsAnonymous(true);
     setNewCategory('free');
   }
 
@@ -345,10 +363,15 @@ export function CommunityScreen({
         {isWriting && (
           <div className="cm-write-fullscreen">
             <header className="cm-write-fs-header">
-              <button type="button" onClick={() => setIsWriting(false)} className="cm-icon-btn">
+              <button type="button" onClick={() => {
+                setIsWriting(false);
+                setEditingPostId(null);
+                setNewTitle('');
+                setNewContent('');
+              }} className="cm-icon-btn">
                 <X size={22} />
               </button>
-              <span className="cm-write-fs-title">Tạo bài viết</span>
+              <span className="cm-write-fs-title">{editingPostId ? 'Sửa bài viết' : 'Tạo bài viết'}</span>
               <button
                 type="button"
                 className="cm-write-fs-submit"
@@ -397,10 +420,26 @@ export function CommunityScreen({
 
               {/* Footer info */}
               <div className="cm-write-fs-footer">
-                <div className="cm-write-fs-anon">
+                <button 
+                  type="button"
+                  className={`cm-write-fs-anon ${!isAnonymous ? 'active' : ''}`}
+                  onClick={() => {
+                    if (!session?.user.email) {
+                      alert('Bạn cần đăng nhập để đăng bài với tên thật!');
+                      return;
+                    }
+                    setIsAnonymous(!isAnonymous);
+                  }}
+                  style={{
+                    background: 'none', border: 'none', cursor: 'pointer', 
+                    display: 'flex', alignItems: 'center', gap: '4px',
+                    color: isAnonymous ? 'var(--text-soft)' : 'var(--blue-500)',
+                    fontFamily: 'inherit', padding: '4px'
+                  }}
+                >
                   <User size={15} />
-                  <span>Đăng ẩn danh</span>
-                </div>
+                  <span>{isAnonymous ? 'Đăng ẩn danh' : (profile?.displayName || 'Tên thật')}</span>
+                </button>
                 <span className="cm-write-fs-count">{newContent.length}/2000</span>
               </div>
             </div>
@@ -422,9 +461,35 @@ export function CommunityScreen({
             <ArrowLeft size={22} />
           </button>
           <span className="cm-detail-cat">{cat?.label}</span>
-          <button type="button" className="cm-icon-btn">
-            <MoreHorizontal size={22} />
-          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {selectedPost.user_id === (session?.user.id || 'me') && (
+              <>
+                <button type="button" className="cm-icon-btn" onClick={() => {
+                  setEditingPostId(selectedPost.id);
+                  setNewTitle(selectedPost.title);
+                  setNewContent(selectedPost.content);
+                  setNewCategory(selectedPost.category as CommunityCategory);
+                  setIsAnonymous(selectedPost.is_anonymous);
+                  setIsWriting(true);
+                }}>
+                  <PenLine size={18} />
+                </button>
+                <button type="button" className="cm-icon-btn" style={{ color: 'var(--coral-500)' }} onClick={() => {
+                  if (confirm('Bạn có chắc chắn muốn xoá bài viết này?')) {
+                    setPosts((prev) => prev.filter((p) => p.id !== selectedPost.id));
+                    goBack();
+                  }
+                }}>
+                  <X size={22} />
+                </button>
+              </>
+            )}
+            {!selectedPost.user_id && (
+              <button type="button" className="cm-icon-btn">
+                <MoreHorizontal size={22} />
+              </button>
+            )}
+          </div>
         </header>
 
         {/* Detail Content */}
@@ -546,14 +611,35 @@ export function CommunityScreen({
 
         {/* Comment Input */}
         <div className="cm-comment-input-bar">
-          {replyTo && (
-            <div className="cm-replying-to">
-              <span>Đang trả lời bình luận</span>
-              <button type="button" onClick={() => setReplyTo(null)}>
-                <X size={14} />
-              </button>
-            </div>
-          )}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 12px 6px' }}>
+            <button 
+              type="button"
+              onClick={() => {
+                if (!session?.user.email) {
+                  alert('Bạn cần đăng nhập để bình luận với tên thật!');
+                  return;
+                }
+                setIsAnonymous(!isAnonymous);
+              }}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer', 
+                display: 'flex', alignItems: 'center', gap: '4px',
+                color: isAnonymous ? 'var(--text-soft)' : 'var(--blue-500)',
+                fontFamily: 'inherit', fontSize: '11px', fontWeight: 600
+              }}
+            >
+              <User size={12} />
+              <span>{isAnonymous ? 'Ẩn danh' : (profile?.displayName || 'Tên thật')}</span>
+            </button>
+            {replyTo && (
+              <div className="cm-replying-to">
+                <span>Đang trả lời bình luận</span>
+                <button type="button" onClick={() => setReplyTo(null)}>
+                  <X size={14} />
+                </button>
+              </div>
+            )}
+          </div>
           <div className="cm-comment-input-row">
             <input
               ref={commentInputRef}

@@ -523,7 +523,7 @@ export default function App() {
               onSetTarget={setIncomeTarget}
             />
           ) : null}
-          {tab === 'friends' ? <CommunityScreen companions={companions} requested={requested} onRequest={(id) => void requestConnection(id)} session={session} /> : null}
+          {tab === 'friends' ? <CommunityScreen profile={profile} companions={companions} requested={requested} onRequest={(id) => void requestConnection(id)} session={session} /> : null}
           {tab === 'profile' ? (
             <ProfileScreen 
               profile={profile} 
