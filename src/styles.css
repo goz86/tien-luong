@@ -4846,6 +4846,13 @@ select {
 }
 
 /* Notification Popover */
+.cm-notif-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2999;
+  background: transparent;
+}
+
 .cm-notif-popover {
   position: absolute;
   top: 70px;

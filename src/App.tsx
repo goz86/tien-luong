@@ -568,12 +568,20 @@ export default function App() {
         {/* Global Notification Popover */}
         <AnimatePresence>
           {showNotifications && (
-            <motion.div 
-              className="cm-notif-popover"
-              initial={{ opacity: 0, scale: 0.9, y: -20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: -20 }}
-            >
+            <>
+              <motion.div 
+                className="cm-notif-backdrop"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setShowNotifications(false)}
+              />
+              <motion.div 
+                className="cm-notif-popover"
+                initial={{ opacity: 0, scale: 0.9, y: -20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: -20 }}
+              >
               <div className="cm-notif-popover-head">
                 <strong>Thông báo & Hoạt động</strong>
                 <button onClick={() => setShowNotifications(false)}><X size={16} /></button>
@@ -613,8 +621,9 @@ export default function App() {
                 </div>
               </div>
             </motion.div>
-          )}
-        </AnimatePresence>
+          </>
+        )}
+      </AnimatePresence>
       </div>
     </div>
   );
