@@ -292,7 +292,9 @@ export function CommunityScreen({
             <h3 className="cm-trending-post-title">{trendingPost.title}</h3>
             <p className="cm-trending-preview">{trendingPost.content.slice(0, 100)}...</p>
             <div className="cm-trending-footer">
-              <span className="cm-time">{timeAgo(trendingPost.created_at)}</span>
+              <span className="cm-time">
+                <strong style={{color: 'var(--text-main)'}}>{trendingPost.display_name}</strong> • {timeAgo(trendingPost.created_at)}
+              </span>
               <div className="cm-post-stats">
                 <span><ThumbsUp size={14} /> {trendingPost.likes_count}</span>
                 <span><MessageCircle size={14} /> {trendingPost.comments_count}</span>
@@ -338,7 +340,9 @@ export function CommunityScreen({
               <h3 className="cm-post-title">{post.title}</h3>
               <p className="cm-post-preview">{post.content.slice(0, 80)}...</p>
               <div className="cm-post-footer">
-                <span className="cm-time">{timeAgo(post.created_at)}</span>
+                <span className="cm-time">
+                  <strong style={{color: 'var(--text-main)'}}>{post.display_name}</strong> • {timeAgo(post.created_at)}
+                </span>
                 <div className="cm-post-stats">
                   <span><ThumbsUp size={14} /> {post.likes_count}</span>
                   <span><MessageCircle size={14} /> {post.comments_count}</span>
@@ -495,6 +499,9 @@ export function CommunityScreen({
         {/* Detail Content */}
         <div className="cm-detail-body">
           <div className="cm-detail-meta">
+            <strong style={{marginRight: '8px', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '4px'}}>
+              <User size={14} /> {selectedPost.display_name}
+            </strong>
             <span>{new Date(selectedPost.created_at).toLocaleDateString('vi-VN')} {new Date(selectedPost.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</span>
             <span>|</span>
             <span><Eye size={13} /> {selectedPost.views_count}</span>
