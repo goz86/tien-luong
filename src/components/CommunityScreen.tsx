@@ -3,15 +3,18 @@ import {
   ArrowLeft,
   Bell,
   Bookmark,
+  BookmarkCheck,
   ChevronRight,
   Flame,
   MessageCircle,
   MoreHorizontal,
+  PenLine,
   Plus,
   Search,
   Send,
   ThumbsDown,
   ThumbsUp,
+  User,
   X,
   Eye,
 } from 'lucide-react';
@@ -30,6 +33,7 @@ import {
 
 type CommunityView = 'feed' | 'detail';
 type CategoryFilter = CommunityCategory | 'all';
+type FeedFilter = 'all' | 'mine' | 'saved';
 
 export function CommunityScreen({
   companions,
@@ -51,6 +55,7 @@ export function CommunityScreen({
   const [newTitle, setNewTitle] = useState('');
   const [newContent, setNewContent] = useState('');
   const [newCategory, setNewCategory] = useState<CommunityCategory>('free');
+  const [feedFilter, setFeedFilter] = useState<FeedFilter>('all');
   const [newComment, setNewComment] = useState('');
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
@@ -220,6 +225,12 @@ export function CommunityScreen({
             <button type="button" className="cm-icon-btn" aria-label="Tìm kiếm">
               <Search size={20} />
             </button>
+            <button type="button" className={`cm-icon-btn ${feedFilter === 'mine' ? 'active' : ''}`} aria-label="Bài của tôi" onClick={() => setFeedFilter(feedFilter === 'mine' ? 'all' : 'mine')}>
+              <PenLine size={19} />
+            </button>
+            <button type="button" className={`cm-icon-btn ${feedFilter === 'saved' ? 'active' : ''}`} aria-label="Đã lưu" onClick={() => setFeedFilter(feedFilter === 'saved' ? 'all' : 'saved')}>
+              <BookmarkCheck size={19} />
+            </button>
             <button type="button" className="cm-icon-btn" aria-label="Thông báo">
               <Bell size={20} />
               <span className="cm-notification-dot" />
@@ -319,69 +330,78 @@ export function CommunityScreen({
           ))}
         </div>
 
-        {/* FAB Write Button */}
-        <button type="button" className="cm-fab" onClick={() => {
-          setIsWriting(true);
-          history.pushState({ communityModal: 'write' }, '');
-        }}>
-          <Plus size={20} />
-          Viết bài
-        </button>
+        {/* Pinned Write Button */}
+        <div className="cm-write-bar">
+          <button type="button" className="cm-write-bar-btn" onClick={() => {
+            setIsWriting(true);
+            history.pushState({ communityModal: 'write' }, '');
+          }}>
+            <Plus size={18} />
+            Viết bài
+          </button>
+        </div>
 
-        {/* Write Modal */}
+        {/* Write Modal — Full Screen */}
         {isWriting && (
-          <div className="cm-modal-backdrop" onClick={() => setIsWriting(false)}>
-            <div className="cm-write-modal" onClick={(e) => e.stopPropagation()}>
-              <div className="cm-write-header">
-                <h2>Tạo bài viết mới</h2>
-                <button type="button" onClick={() => setIsWriting(false)} className="cm-icon-btn">
-                  <X size={20} />
-                </button>
+          <div className="cm-write-fullscreen">
+            <header className="cm-write-fs-header">
+              <button type="button" onClick={() => setIsWriting(false)} className="cm-icon-btn">
+                <X size={22} />
+              </button>
+              <span className="cm-write-fs-title">Tạo bài viết</span>
+              <button
+                type="button"
+                className="cm-write-fs-submit"
+                onClick={addPost}
+                disabled={!newTitle.trim() || !newContent.trim()}
+              >
+                Đăng
+              </button>
+            </header>
+
+            <div className="cm-write-fs-body">
+              {/* Category Picker */}
+              <div className="cm-write-fs-cats">
+                {(Object.keys(CATEGORIES) as CommunityCategory[]).map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    className={newCategory === cat ? 'active' : ''}
+                    onClick={() => setNewCategory(cat)}
+                    style={{ '--cat-color': CATEGORIES[cat].color, '--cat-bg': CATEGORIES[cat].bg } as React.CSSProperties}
+                  >
+                    {CATEGORIES[cat].label}
+                  </button>
+                ))}
               </div>
-              <div className="cm-write-body">
-                <div className="cm-write-field">
-                  <label>Danh mục</label>
-                  <div className="cm-write-cats">
-                    {(Object.keys(CATEGORIES) as CommunityCategory[]).map((cat) => (
-                      <button
-                        key={cat}
-                        type="button"
-                        className={newCategory === cat ? 'active' : ''}
-                        onClick={() => setNewCategory(cat)}
-                        style={{ '--cat-color': CATEGORIES[cat].color, '--cat-bg': CATEGORIES[cat].bg } as React.CSSProperties}
-                      >
-                        {CATEGORIES[cat].label}
-                      </button>
-                    ))}
-                  </div>
+
+              {/* Title Input */}
+              <input
+                className="cm-write-fs-title-input"
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                placeholder="Tiêu đề bài viết"
+                maxLength={100}
+              />
+
+              {/* Divider */}
+              <div className="cm-write-fs-divider" />
+
+              {/* Content */}
+              <textarea
+                className="cm-write-fs-content"
+                value={newContent}
+                onChange={(e) => setNewContent(e.target.value)}
+                placeholder="Chia sẻ suy nghĩ, kinh nghiệm, hoặc câu hỏi của bạn với cộng đồng du học sinh..."
+              />
+
+              {/* Footer info */}
+              <div className="cm-write-fs-footer">
+                <div className="cm-write-fs-anon">
+                  <User size={15} />
+                  <span>Đăng ẩn danh</span>
                 </div>
-                <div className="cm-write-field">
-                  <label>Tiêu đề</label>
-                  <input
-                    className="cm-input"
-                    value={newTitle}
-                    onChange={(e) => setNewTitle(e.target.value)}
-                    placeholder="Nhập tiêu đề..."
-                  />
-                </div>
-                <div className="cm-write-field">
-                  <label>Nội dung</label>
-                  <textarea
-                    className="cm-input cm-textarea"
-                    value={newContent}
-                    onChange={(e) => setNewContent(e.target.value)}
-                    placeholder="Chia sẻ với cộng đồng..."
-                    rows={6}
-                  />
-                </div>
-                <button
-                  type="button"
-                  className="cm-submit-btn"
-                  onClick={addPost}
-                  disabled={!newTitle.trim() || !newContent.trim()}
-                >
-                  Đăng bài
-                </button>
+                <span className="cm-write-fs-count">{newContent.length}/2000</span>
               </div>
             </div>
           </div>
