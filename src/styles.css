@@ -5473,20 +5473,20 @@ select {
   padding: 15px;
   border-radius: 16px;
   border: none;
-  background: var(--blue-600);
+  background: var(--blue-700);
   color: white;
   font-size: 15px;
   font-weight: 800;
   cursor: pointer;
   transition: all 0.2s;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+  box-shadow: 0 4px 12px rgba(39, 82, 255, 0.2);
   margin-top: 8px;
 }
 
 .pf-submit-btn:hover {
-  background: var(--blue-700);
+  background: #1a44e6;
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.25);
+  box-shadow: 0 6px 20px rgba(39, 82, 255, 0.25);
 }
 
 .pf-submit-btn:active {
