@@ -169,12 +169,12 @@ export default function App() {
           try {
             const d = new Date(`${s.date}T00:00:00`);
             if (d.getDate() === 15 && d.getMonth() === 3) return true;
-          } catch {}
+          } catch { }
           if (s.date.includes('15/04') || s.date.includes('-4-15') || s.date.includes('-04-15')) return true;
         }
         return false;
       }).map(s => s.id);
-      
+
       if (buggedIds.length > 0) {
         if (supabase && session) {
           buggedIds.forEach(id => {
@@ -240,7 +240,8 @@ export default function App() {
           displayName: profileRes.data.display_name || '',
           school: profileRes.data.school || '',
           region: profileRes.data.region || '',
-          note: profileRes.data.note || ''
+          note: profileRes.data.note || '',
+          avatarUrl: profileRes.data.avatar_url || ''
         });
       }
       if (expensesRes.data) {
@@ -260,7 +261,7 @@ export default function App() {
   const monthShifts = useMemo(() => shifts.filter((shift) => shift.date.startsWith(monthKey)), [monthKey, shifts]);
   const monthlyTotal = useMemo(() => monthShifts.reduce((sum, shift) => sum + calculateShiftPay(shift).total, 0), [monthShifts]);
   const monthlyHours = useMemo(() => monthShifts.reduce((sum, shift) => sum + shiftHours(shift), 0), [monthShifts]);
-  const averageHourly = monthlyHours ? monthlyTotal / monthlyHours : MINIMUM_WAGE_2026;
+  const averageHourly = monthlyHours ? monthlyTotal / monthlyHours : 0;
   const workplaceSummary = useMemo(() => {
     const map = new Map<string, { label: string; total: number; count: number; hours: number }>();
     monthShifts.forEach((shift) => {
@@ -273,7 +274,7 @@ export default function App() {
     });
     return [...map.values()].sort((a, b) => b.total - a.total);
   }, [monthShifts]);
-  
+
   const recentShifts = useMemo(
     () => [...shifts].sort((a, b) => {
       const strA = `${a.date}T${a.startTime || '00:00'}`;
@@ -306,16 +307,19 @@ export default function App() {
     setAuthMessage(error ? 'Chưa gửi được link đăng nhập.' : 'Mình đã gửi magic link vào email của bạn.');
   }
 
-  async function saveProfile() {
+  async function saveProfile(updatedProfile?: ProfileDraft) {
+    const toSave = updatedProfile || profile;
     setSavingProfile(true);
     if (supabase && session) {
-      await supabase!.from('profiles').upsert({
+      const { error } = await supabase!.from('profiles').upsert({
         id: session.user.id,
-        display_name: profile.displayName,
-        school: profile.school,
-        region: profile.region,
-        note: profile.note
+        display_name: toSave.displayName,
+        school: toSave.school,
+        region: toSave.region,
+        note: toSave.note,
+        avatar_url: toSave.avatarUrl
       });
+      if (error) console.error('Lỗi lưu hồ sơ:', error);
     }
     setSavingProfile(false);
   }
@@ -486,17 +490,17 @@ export default function App() {
     <div className="app-stage">
       <div className="phone-shell" style={wallpaperStyle}>
         <main key={tab} className="screen-shell">
-              {tab === 'home' ? (
-            <HomeScreen 
-              monthlyTotal={monthlyTotal} 
-              monthlyHours={monthlyHours} 
-              averageHourly={averageHourly} 
-              rate={rate} 
-              workplaces={workplaceSummary} 
-              recentShifts={recentShifts} 
+          {tab === 'home' ? (
+            <HomeScreen
+              monthlyTotal={monthlyTotal}
+              monthlyHours={monthlyHours}
+              averageHourly={averageHourly}
+              rate={rate}
+              workplaces={workplaceSummary}
+              recentShifts={recentShifts}
               allShifts={monthShifts}
-              onRefresh={() => void refreshRate()} 
-              onOpenAdd={openAddToday} 
+              onRefresh={() => void refreshRate()}
+              onOpenAdd={openAddToday}
               onEditShift={handleEditShift}
               onDeleteShift={(id) => void deleteShift(id)}
               venueColors={venueColors}
@@ -507,14 +511,14 @@ export default function App() {
           ) : null}
           {tab === 'calendar' ? <CalendarScreen shifts={shifts} selectedDate={selectedDate} month={calendarMonth} venueSuggestions={[...new Set(workplaceSummary.map((item) => item.label))].slice(0, 4)} draft={draft} setDraft={setDraft} editingShiftId={editingShiftId} setEditingShiftId={setEditingShiftId} isSheetOpen={isDaySheetOpen} onCloseSheet={() => setIsDaySheetOpen(false)} onPrevMonth={() => { const nextMonth = shiftMonth(calendarMonth, -1); setCalendarMonth(nextMonth); setSelectedDate(nextMonth); setDraft((current) => ({ ...current, date: nextMonth })); }} onNextMonth={() => { const nextMonth = shiftMonth(calendarMonth, 1); setCalendarMonth(nextMonth); setSelectedDate(nextMonth); setDraft((current) => ({ ...current, date: nextMonth })); }} onSetMonth={(nextMonth) => { setCalendarMonth(nextMonth); setSelectedDate(nextMonth); setDraft((current) => ({ ...current, date: nextMonth })); }} onSelectDate={(date) => { setEditingShiftId(null); setSelectedDate(date); setDraft((current) => ({ ...current, date, note: '' })); setIsDaySheetOpen(true); }} onQuickSave={() => void addShift('calendar')} onUpdateShift={(shift) => void updateShift(shift)} onDeleteShift={(id) => void deleteShift(id)} venueColors={venueColors} onSetVenueColor={setVenueColor} /> : null}
           {tab === 'income' ? (
-            <IncomeScreen 
-              minimumWage={MINIMUM_WAGE_2026} 
-              monthlyTotal={monthlyTotal} 
-              monthlyHours={monthlyHours} 
-              averageHourly={averageHourly} 
-              workplaces={workplaceSummary} 
-              rate={rate} 
-              shifts={monthShifts} 
+            <IncomeScreen
+              minimumWage={MINIMUM_WAGE_2026}
+              monthlyTotal={monthlyTotal}
+              monthlyHours={monthlyHours}
+              averageHourly={averageHourly}
+              workplaces={workplaceSummary}
+              rate={rate}
+              shifts={monthShifts}
               venueColors={venueColors}
               expenses={expenses}
               onAddExpense={addExpense}
@@ -525,12 +529,12 @@ export default function App() {
           ) : null}
           {tab === 'friends' ? <CommunityScreen profile={profile} companions={companions} requested={requested} onRequest={(id) => void requestConnection(id)} session={session} /> : null}
           {tab === 'profile' ? (
-            <ProfileScreen 
-              profile={profile} 
-              setProfile={setProfile} 
-              saveProfile={() => void saveProfile()} 
-              savingProfile={savingProfile} 
-              session={session} 
+            <ProfileScreen
+              profile={profile}
+              setProfile={setProfile}
+              saveProfile={(draft) => void saveProfile(draft)}
+              savingProfile={savingProfile}
+              session={session}
               isDarkMode={isDarkMode}
               onToggleDarkMode={() => setIsDarkMode(!isDarkMode)}
               wallpaper={wallpaper}

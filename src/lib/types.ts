@@ -2,10 +2,10 @@ import { Shift } from './salary';
 
 export type Tab = 'home' | 'calendar' | 'income' | 'friends' | 'profile';
 
-export type RateState = { 
-  value: number; 
-  source: 'live' | 'cached'; 
-  updatedAt: string; 
+export type RateState = {
+  value: number;
+  source: 'live' | 'cached';
+  updatedAt: string;
 };
 
 export type VenueColors = Record<string, string>;
