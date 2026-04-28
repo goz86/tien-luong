@@ -1,8 +1,26 @@
 import { FormEvent, useState } from 'react';
-import { LogIn, UserPlus, KeyRound, LogOut } from 'lucide-react';
+import {
+  LogIn,
+  UserPlus,
+  KeyRound,
+  LogOut,
+  ChevronRight,
+  Moon,
+  Sun,
+  MapPin,
+  GraduationCap,
+  PenLine,
+  Shield,
+  Bell,
+  Globe,
+  Info,
+  Settings,
+  BookmarkCheck,
+  MessageCircle,
+  Heart,
+} from 'lucide-react';
 import { Session } from '@supabase/supabase-js';
 import { ProfileDraft } from '../lib/types';
-import { Field } from './shared/ui';
 import { regions } from '../data';
 import { supabase } from '../lib/supabase';
 
@@ -15,7 +33,7 @@ export function ProfileScreen({
   savingProfile,
   session,
   isDarkMode,
-  onToggleDarkMode
+  onToggleDarkMode,
 }: {
   profile: ProfileDraft;
   setProfile: (draft: ProfileDraft) => void;
@@ -30,13 +48,13 @@ export function ProfileScreen({
   const [password, setPassword] = useState('');
   const [authMessage, setAuthMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
   async function handleAuth(event: FormEvent) {
     event.preventDefault();
     if (!supabase) return;
     setLoading(true);
     setAuthMessage('');
-
     try {
       const client = supabase;
       if (authMode === 'login') {
@@ -61,142 +79,263 @@ export function ProfileScreen({
 
   async function handleSignOut() {
     if (!supabase) return;
-    await supabase!.auth.signOut();
+    await supabase.auth.signOut();
   }
+
+  const displayName = profile.displayName || 'Du học sinh';
+  const initials = displayName.slice(0, 2).toUpperCase();
 
   return (
     <>
-      <header className="appbar compact">
-        <span className="appbar-title" style={{ fontSize: '18px', fontWeight: 900 }}>Hồ sơ</span>
-      </header>
+      {/* ===== HERO CARD ===== */}
+      <div className="pf-hero">
+        <div className="pf-hero-bg" />
+        <div className="pf-avatar">
+          <span>{initials}</span>
+        </div>
+        <h2 className="pf-name">{displayName}</h2>
+        {profile.school && (
+          <div className="pf-subtitle">
+            <GraduationCap size={14} />
+            <span>{profile.school}</span>
+          </div>
+        )}
+        {profile.region && (
+          <div className="pf-subtitle">
+            <MapPin size={14} />
+            <span>{profile.region}</span>
+          </div>
+        )}
+        {profile.note && <p className="pf-bio">{profile.note}</p>}
 
-      <section className="surface-card card-section">
-        {session?.user.email ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <p className="card-title">Tài khoản</p>
-            <p className="helper-copy" style={{ color: '#0f172a', fontWeight: 600 }}>Đang đăng nhập bằng {session.user.email}</p>
-            <button type="button" onClick={handleSignOut} className="solid-button" style={{ background: '#fef2f2', color: '#ef4444' }}>
-              <LogOut size={16} />
-              Đăng xuất
+        {/* Stats Row */}
+        <div className="pf-stats-row">
+          <div className="pf-stat">
+            <PenLine size={16} />
+            <div>
+              <strong>12</strong>
+              <span>Bài viết</span>
+            </div>
+          </div>
+          <div className="pf-stat-divider" />
+          <div className="pf-stat">
+            <MessageCircle size={16} />
+            <div>
+              <strong>48</strong>
+              <span>Bình luận</span>
+            </div>
+          </div>
+          <div className="pf-stat-divider" />
+          <div className="pf-stat">
+            <BookmarkCheck size={16} />
+            <div>
+              <strong>7</strong>
+              <span>Đã lưu</span>
+            </div>
+          </div>
+          <div className="pf-stat-divider" />
+          <div className="pf-stat">
+            <Heart size={16} />
+            <div>
+              <strong>156</strong>
+              <span>Lượt thích</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ===== AUTH SECTION ===== */}
+      {!session?.user.email ? (
+        <section className="pf-card">
+          <div className="pf-card-header">
+            <Shield size={18} />
+            <span>Đăng nhập / Đăng ký</span>
+          </div>
+          <div className="pf-auth-tabs">
+            <button
+              className={authMode === 'login' ? 'active' : ''}
+              onClick={() => { setAuthMode('login'); setAuthMessage(''); }}
+            >
+              Đăng nhập
+            </button>
+            <button
+              className={authMode === 'register' ? 'active' : ''}
+              onClick={() => { setAuthMode('register'); setAuthMessage(''); }}
+            >
+              Đăng ký
+            </button>
+            <button
+              className={authMode === 'forgot' ? 'active' : ''}
+              onClick={() => { setAuthMode('forgot'); setAuthMessage(''); }}
+            >
+              Quên MK
             </button>
           </div>
-        ) : (
-          <>
-            <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
-              <button 
-                className={`tab-pill ${authMode === 'login' ? 'active' : ''}`} 
-                onClick={() => { setAuthMode('login'); setAuthMessage(''); }}
-              >Đăng nhập</button>
-              <button 
-                className={`tab-pill ${authMode === 'register' ? 'active' : ''}`} 
-                onClick={() => { setAuthMode('register'); setAuthMessage(''); }}
-              >Đăng ký</button>
-              <button 
-                className={`tab-pill ${authMode === 'forgot' ? 'active' : ''}`} 
-                onClick={() => { setAuthMode('forgot'); setAuthMessage(''); }}
-              >Quên mật khẩu</button>
+          <form onSubmit={handleAuth} className="pf-auth-form">
+            <input
+              className="pf-input"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Email"
+              required
+            />
+            {authMode !== 'forgot' && (
+              <input
+                className="pf-input"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Mật khẩu"
+                required
+                minLength={6}
+              />
+            )}
+            <button type="submit" className="pf-submit-btn" disabled={loading}>
+              {authMode === 'login' ? <LogIn size={16} /> : authMode === 'register' ? <UserPlus size={16} /> : <KeyRound size={16} />}
+              {loading ? 'Đang xử lý...' : authMode === 'login' ? 'Đăng nhập' : authMode === 'register' ? 'Đăng ký' : 'Lấy lại mật khẩu'}
+            </button>
+          </form>
+          {authMessage && <p className="pf-auth-msg">{authMessage}</p>}
+        </section>
+      ) : (
+        <section className="pf-card">
+          <div className="pf-card-header">
+            <Shield size={18} />
+            <span>Tài khoản</span>
+          </div>
+          <p className="pf-account-email">{session.user.email}</p>
+          <button type="button" onClick={handleSignOut} className="pf-signout-btn">
+            <LogOut size={16} />
+            Đăng xuất
+          </button>
+        </section>
+      )}
+
+      {/* ===== EDIT PROFILE ===== */}
+      <section className="pf-card">
+        <div className="pf-card-header" style={{ cursor: 'pointer' }} onClick={() => setIsEditing(!isEditing)}>
+          <Settings size={18} />
+          <span>Thông tin cá nhân</span>
+          <ChevronRight size={18} style={{ marginLeft: 'auto', transform: isEditing ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }} />
+        </div>
+        {isEditing && (
+          <div className="pf-edit-form">
+            <div className="pf-field">
+              <label>Tên hiển thị</label>
+              <input
+                className="pf-input"
+                value={profile.displayName}
+                onChange={(e) => setProfile({ ...profile, displayName: e.target.value })}
+                placeholder="Nhập tên..."
+              />
             </div>
-            
-            <form onSubmit={handleAuth} className="form-stack">
-              <input className="solid-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" required />
-              {authMode !== 'forgot' && (
-                <input className="solid-input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mật khẩu" required minLength={6} />
-              )}
-              <button type="submit" className="solid-button" disabled={loading}>
-                {authMode === 'login' ? <LogIn size={16} /> : authMode === 'register' ? <UserPlus size={16} /> : <KeyRound size={16} />}
-                {loading ? 'Đang xử lý...' : authMode === 'login' ? 'Đăng nhập' : authMode === 'register' ? 'Đăng ký' : 'Lấy lại mật khẩu'}
-              </button>
-            </form>
-            {authMessage && <p className="helper-copy" style={{ marginTop: '12px', color: '#3b82f6' }}>{authMessage}</p>}
-          </>
+            <div className="pf-field">
+              <label>Trường / 어학당</label>
+              <input
+                className="pf-input"
+                value={profile.school}
+                onChange={(e) => setProfile({ ...profile, school: e.target.value })}
+                placeholder="Nhập tên trường..."
+              />
+            </div>
+            <div className="pf-field">
+              <label>Khu vực</label>
+              <select
+                className="pf-input"
+                value={profile.region}
+                onChange={(e) => setProfile({ ...profile, region: e.target.value })}
+              >
+                {regions.map((r) => (
+                  <option key={r}>{r}</option>
+                ))}
+              </select>
+            </div>
+            <div className="pf-field">
+              <label>Giới thiệu</label>
+              <textarea
+                className="pf-input pf-textarea"
+                rows={3}
+                value={profile.note}
+                onChange={(e) => setProfile({ ...profile, note: e.target.value })}
+                placeholder="Viết gì đó về bạn..."
+              />
+            </div>
+            <button type="button" className="pf-save-btn" onClick={saveProfile} disabled={savingProfile}>
+              {savingProfile ? 'Đang lưu...' : 'Lưu thay đổi'}
+            </button>
+          </div>
         )}
       </section>
 
-      <section className="surface-card card-section">
-        <p className="card-title">Thông tin cá nhân</p>
-        <div className="form-stack">
-          <Field label="Tên hiển thị">
-            <input className="solid-input" value={profile.displayName} onChange={(event) => setProfile({ ...profile, displayName: event.target.value })} />
-          </Field>
-          <Field label="Trường / 어학당">
-            <input className="solid-input" value={profile.school} onChange={(event) => setProfile({ ...profile, school: event.target.value })} />
-          </Field>
-          <Field label="Khu vực">
-            <select className="solid-input" value={profile.region} onChange={(event) => setProfile({ ...profile, region: event.target.value })}>
-              {regions.map((region) => (
-                <option key={region}>{region}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Giới thiệu ngắn">
-            <textarea className="solid-input area" rows={4} value={profile.note} onChange={(event) => setProfile({ ...profile, note: event.target.value })} />
-          </Field>
-          <button type="button" className="solid-button bright" onClick={saveProfile}>
-            {savingProfile ? 'Đang lưu...' : 'Lưu hồ sơ'}
-          </button>
+      {/* ===== SETTINGS ===== */}
+      <section className="pf-card">
+        <div className="pf-card-header">
+          <Settings size={18} />
+          <span>Cài đặt</span>
         </div>
-      </section>
 
-      <section className="surface-card card-section">
-        <p className="card-title">Giao diện</p>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <strong style={{ display: 'block', fontSize: '15px' }}>Chế độ tối (Dark Mode)</strong>
-            <span style={{ fontSize: '12px', color: 'var(--text-soft)' }}>Bảo vệ mắt khi sử dụng ban đêm</span>
+        {/* Dark Mode Toggle */}
+        <div className="pf-setting-row">
+          <div className="pf-setting-icon">{isDarkMode ? <Moon size={18} /> : <Sun size={18} />}</div>
+          <div className="pf-setting-info">
+            <strong>Chế độ tối</strong>
+            <span>Bảo vệ mắt khi sử dụng ban đêm</span>
           </div>
-          <button 
-            onClick={onToggleDarkMode}
-            style={{ 
-              width: '52px', 
-              height: '30px', 
-              borderRadius: '99px', 
-              background: isDarkMode ? '#2752ff' : '#e2e8f0', 
-              border: 'none', 
-              position: 'relative',
-              transition: 'all 0.3s'
-            }}
-          >
-            <div style={{ 
-              width: '24px', 
-              height: '24px', 
-              borderRadius: '50%', 
-              background: 'white', 
-              position: 'absolute', 
-              top: '3px', 
-              left: isDarkMode ? '25px' : '3px',
-              transition: 'all 0.3s',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-            }} />
+          <button className="pf-toggle" data-active={isDarkMode} onClick={onToggleDarkMode}>
+            <div className="pf-toggle-knob" />
           </button>
+        </div>
+
+        <div className="pf-setting-row">
+          <div className="pf-setting-icon"><Bell size={18} /></div>
+          <div className="pf-setting-info">
+            <strong>Thông báo</strong>
+            <span>Nhận thông báo bài viết mới</span>
+          </div>
+          <ChevronRight size={18} color="#94a3b8" />
+        </div>
+
+        <div className="pf-setting-row">
+          <div className="pf-setting-icon"><Globe size={18} /></div>
+          <div className="pf-setting-info">
+            <strong>Ngôn ngữ</strong>
+            <span>Tiếng Việt</span>
+          </div>
+          <ChevronRight size={18} color="#94a3b8" />
+        </div>
+
+        <div className="pf-setting-row">
+          <div className="pf-setting-icon"><Info size={18} /></div>
+          <div className="pf-setting-info">
+            <strong>Về ứng dụng</strong>
+            <span>Duhoc Mate v1.0</span>
+          </div>
+          <ChevronRight size={18} color="#94a3b8" />
         </div>
       </section>
 
-      <section className="surface-card card-section" style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
-        <p className="card-title" style={{ display: 'flex', justifyContent: 'space-between' }}>
-          Huy hiệu thành tích
-          <span style={{ fontSize: '11px', color: '#2752ff' }}>Xem tất cả</span>
-        </p>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginTop: '16px' }}>
+      {/* ===== BADGES ===== */}
+      <section className="pf-card">
+        <div className="pf-card-header">
+          <span style={{ fontSize: '18px' }}>🏆</span>
+          <span>Huy hiệu thành tích</span>
+          <span className="pf-see-all">Xem tất cả</span>
+        </div>
+        <div className="pf-badges-grid">
           {[
-            { label: 'Chăm chỉ', icon: '🔥', color: '#ffedd5', border: '#f97316' },
-            { label: 'Tiết kiệm', icon: '💰', color: '#dcfce7', border: '#22c55e' },
-            { label: 'Chi tiêu giỏi', icon: '💎', color: '#f1f5f9', border: '#94a3b8' },
+            { label: 'Chăm chỉ', icon: '🔥', color: '#ffedd5', border: '#f97316', earned: true },
+            { label: 'Tiết kiệm', icon: '💰', color: '#dcfce7', border: '#22c55e', earned: true },
+            { label: 'Cộng đồng', icon: '💬', color: '#dbeafe', border: '#3b82f6', earned: true },
+            { label: 'Chi tiêu giỏi', icon: '💎', color: '#f1f5f9', border: '#94a3b8', earned: false },
+            { label: 'Thủ lĩnh', icon: '👑', color: '#fef9c3', border: '#eab308', earned: false },
+            { label: 'Bí ẩn', icon: '🔮', color: '#f3e8ff', border: '#a855f7', earned: false },
           ].map((badge, i) => (
-            <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-              <div style={{ 
-                width: '60px', 
-                height: '60px', 
-                borderRadius: '50%', 
-                background: badge.color, 
-                border: `2px dashed ${badge.border}`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '24px'
-              }}>
+            <div key={i} className={`pf-badge ${badge.earned ? 'earned' : 'locked'}`}>
+              <div className="pf-badge-icon" style={{ background: badge.color, borderColor: badge.border }}>
                 {badge.icon}
               </div>
-              <span style={{ fontSize: '11px', fontWeight: 700, textAlign: 'center' }}>{badge.label}</span>
+              <span>{badge.label}</span>
             </div>
           ))}
         </div>
