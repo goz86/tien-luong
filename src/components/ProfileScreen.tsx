@@ -195,8 +195,13 @@ export function ProfileScreen({
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
-        ctx?.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', 0.7)); // Nén chất lượng xuống 70%
+        // Fill white background for JPEG to avoid black transparency
+        if (ctx) {
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+        }
+        resolve(canvas.toDataURL('image/jpeg', 0.8)); // 80% quality JPEG with white bg
       };
     });
   };
