@@ -65,6 +65,7 @@
 .dark .bottom-tabs {
   background: rgba(15, 23, 42, 0.9);
   border-top-color: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.05);
 }
 
 .dark .tab-link {
@@ -73,6 +74,213 @@
 
 .dark .tab-link.active {
   color: #2752ff;
+}
+
+/* ===== COMPREHENSIVE DARK MODE ===== */
+
+/* Phone shell background */
+.dark .phone-shell {
+  background: linear-gradient(180deg, #0f172a 0%, #1e293b 48%, #0f172a 100%) !important;
+}
+
+.dark .phone-shell::before {
+  background: radial-gradient(circle, rgba(38, 217, 164, 0.08), transparent 68%);
+}
+
+.dark .phone-shell::after {
+  background: radial-gradient(circle, rgba(255, 107, 122, 0.06), transparent 70%);
+}
+
+/* Global text - catch-all for any hardcoded dark text */
+.dark h1, .dark h2, .dark h3, .dark h4, .dark h5, .dark h6 {
+  color: var(--text-main);
+}
+
+.dark p, .dark span, .dark label, .dark td, .dark th {
+  color: var(--text-main);
+}
+
+.dark a {
+  color: var(--blue-500);
+}
+
+/* Tab items */
+.dark .tab-item {
+  color: #64748b;
+}
+
+.dark .tab-item.active {
+  color: var(--blue-500);
+  background: rgba(39, 82, 255, 0.15);
+}
+
+/* Appbar */
+.dark .appbar-title {
+  color: var(--text-main);
+}
+
+/* Home screen */
+.dark .hero-card {
+  background: linear-gradient(135deg, #1e3a5f 0%, #1a2744 100%);
+}
+
+.dark .work-card,
+.dark .rank-card,
+.dark .shift-row {
+  background: var(--surface);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+.dark .shift-row span,
+.dark .shift-row strong {
+  color: var(--text-main);
+}
+
+.dark .venue-dot + span,
+.dark .shift-meta {
+  color: var(--text-soft);
+}
+
+.dark .shift-amount {
+  color: var(--text-main);
+}
+
+.dark .section-label,
+.dark .helper-copy {
+  color: var(--text-soft);
+}
+
+/* Calendar */
+.dark .calendar-surface {
+  background: var(--surface);
+}
+
+.dark .cal-day {
+  color: var(--text-main);
+}
+
+.dark .cal-day.other-month {
+  color: var(--text-faint);
+}
+
+.dark .cal-weekday {
+  color: var(--text-soft);
+}
+
+.dark .cal-header,
+.dark .cal-month-label {
+  color: var(--text-main);
+}
+
+.dark .day-sheet {
+  background: var(--surface);
+}
+
+.dark .day-sheet-header,
+.dark .day-sheet h3,
+.dark .day-sheet p {
+  color: var(--text-main);
+}
+
+/* Income screen */
+.dark .income-goal-panel,
+.dark .income-chart-panel,
+.dark .income-expense-panel {
+  background: var(--surface);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+.dark .income-goal-panel h3,
+.dark .income-chart-panel h3,
+.dark .income-expense-panel h3 {
+  color: var(--text-main);
+}
+
+.dark .income-goal-panel p,
+.dark .income-chart-panel p {
+  color: var(--text-soft);
+}
+
+/* Community posts */
+.dark .cm-post-card {
+  background: var(--surface);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+.dark .cm-post-title {
+  color: var(--text-main);
+}
+
+.dark .cm-post-body {
+  color: var(--text-soft);
+}
+
+.dark .cm-post-meta {
+  color: var(--text-faint);
+}
+
+.dark .cm-category-pill {
+  color: var(--text-main);
+}
+
+.dark .cm-trending-card {
+  background: var(--surface);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+.dark .cm-trending-card h2 {
+  color: var(--text-main);
+}
+
+.dark .cm-notice-box {
+  background: var(--surface);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+.dark .cm-notice-box h3 {
+  color: var(--text-main);
+}
+
+/* Community filter pills */
+.dark .cm-filter-pill {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-soft);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.dark .cm-filter-pill.active {
+  background: var(--blue-700);
+  color: white;
+}
+
+/* Community header icons */
+.dark .cm-header-icon {
+  color: var(--text-soft);
+}
+
+/* Detail screen */
+.dark .cm-detail-screen {
+  background: var(--bg-shell);
+}
+
+.dark .cm-detail-header {
+  background: var(--bg-shell);
+  color: var(--text-main);
+}
+
+/* Buttons and misc */
+.dark .solid-button {
+  color: white;
+}
+
+.dark select {
+  color: var(--text-main);
+  background-color: var(--surface);
+}
+
+.dark textarea {
+  color: var(--text-main);
+  background-color: var(--surface);
 }
 
 * {
@@ -4371,8 +4579,7 @@ select {
 .pf-stats-row {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 0;
+  justify-content: space-around;
   margin-top: 20px;
   padding-top: 18px;
   border-top: 1px solid var(--line);
@@ -4380,19 +4587,21 @@ select {
 
 .pf-stat {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 0 12px;
+  gap: 4px;
   color: var(--text-soft);
+  flex: 1;
 }
 
 .pf-stat div {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 4px;
 }
 
 .pf-stat strong {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 900;
   color: var(--text-main);
   line-height: 1;
@@ -4402,12 +4611,11 @@ select {
   font-size: 10px;
   font-weight: 600;
   color: var(--text-faint);
-  margin-top: 2px;
 }
 
 .pf-stat-divider {
   width: 1px;
-  height: 28px;
+  height: 32px;
   background: var(--line);
   flex-shrink: 0;
 }

@@ -134,7 +134,8 @@ export function ProfileScreen({
 
   return (
     <>
-      {/* ===== HERO CARD ===== */}
+      {/* ===== HERO CARD (only when logged in) ===== */}
+      {session?.user.email ? (
       <div className="pf-hero">
         <div className="pf-hero-bg" />
         <div className="pf-avatar">
@@ -189,6 +190,11 @@ export function ProfileScreen({
           </div>
         </div>
       </div>
+      ) : (
+        <header className="appbar compact" style={{ margin: '12px 6px 8px' }}>
+          <span className="appbar-title" style={{ fontSize: '20px', fontWeight: 900 }}>{isKo ? '프로필' : 'Hồ sơ'}</span>
+        </header>
+      )}
 
       {/* ===== AUTH SECTION ===== */}
       {!session?.user.email ? (
