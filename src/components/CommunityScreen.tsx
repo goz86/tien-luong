@@ -1,298 +1,562 @@
-import { useState, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
-  BadgeCheck,
+  ArrowLeft,
   Bell,
-  BookmarkCheck,
+  Bookmark,
   ChevronRight,
-  ClipboardList,
-  Clock3,
   Flame,
-  HelpCircle,
-  MapPin,
   MessageCircle,
-  Megaphone,
-  PenLine,
+  MoreHorizontal,
   Plus,
   Search,
   Send,
-  ShoppingBag,
-  Star,
-  Store,
-  Tag,
+  ThumbsDown,
   ThumbsUp,
-  Users,
-  type LucideIcon,
-  X
+  X,
+  Eye,
 } from 'lucide-react';
 import { Session } from '@supabase/supabase-js';
 import { CompanionProfile } from '../lib/types';
 import { Logo } from './shared/Logo';
-import { supabase } from '../lib/supabase';
+import {
+  CATEGORIES,
+  CommunityCategory,
+  CommunityComment,
+  CommunityPost,
+  demoComments,
+  demoPosts,
+  timeAgo,
+} from '../data/communityData';
 
-type CommunityTab = 'feed' | 'friends' | 'market' | 'reviews' | 'qa';
-type IconComponent = LucideIcon;
-
-const communityTabs: Array<{ id: CommunityTab; label: string; icon: IconComponent }> = [
-  { id: 'feed', label: 'Bảng tin', icon: MessageCircle },
-  { id: 'friends', label: 'Bạn bè', icon: Users },
-  { id: 'market', label: 'Chợ cũ', icon: ShoppingBag },
-  { id: 'reviews', label: 'Review', icon: Star },
-  { id: 'qa', label: 'Hỏi đáp', icon: HelpCircle }
-];
-
-const shortcuts: Array<{ label: string; icon: IconComponent; tone: string }> = [
-  { label: 'Bài của tôi', icon: PenLine, tone: 'ink' },
-  { label: 'Bình luận', icon: MessageCircle, tone: 'green' },
-  { label: 'Đã lưu', icon: BookmarkCheck, tone: 'blue' },
-  { label: 'Đang hot', icon: Flame, tone: 'amber' }
-];
-
-interface Post {
-  id: string;
-  user_id: string;
-  title: string;
-  content: string;
-  board: string;
-  is_anonymous: boolean;
-  likes_count: number;
-  comments_count: number;
-  created_at: string;
-}
+type CommunityView = 'feed' | 'detail';
+type CategoryFilter = CommunityCategory | 'all';
 
 export function CommunityScreen({
   companions,
   requested,
   onRequest,
-  session
+  session,
 }: {
   companions: CompanionProfile[];
   requested: string[];
   onRequest: (id: string) => void;
   session: Session | null;
 }) {
-  const [activeTab, setActiveTab] = useState<CommunityTab>('feed');
-  const [posts, setPosts] = useState<Post[]>([]);
+  const [view, setView] = useState<CommunityView>('feed');
+  const [activeCategory, setActiveCategory] = useState<CategoryFilter>('all');
+  const [selectedPost, setSelectedPost] = useState<CommunityPost | null>(null);
+  const [posts, setPosts] = useState<CommunityPost[]>(demoPosts);
+  const [comments, setComments] = useState<CommunityComment[]>(demoComments);
   const [isWriting, setIsWriting] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newContent, setNewContent] = useState('');
-  const [isAnonymous, setIsAnonymous] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [authError, setAuthError] = useState('');
+  const [newCategory, setNewCategory] = useState<CommunityCategory>('free');
+  const [newComment, setNewComment] = useState('');
+  const [replyTo, setReplyTo] = useState<string | null>(null);
+  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
+  const [dislikedPosts, setDislikedPosts] = useState<Set<string>>(new Set());
+  const [bookmarkedPosts, setBookmarkedPosts] = useState<Set<string>>(new Set());
+  const [likedComments, setLikedComments] = useState<Set<string>>(new Set());
+  const commentInputRef = useRef<HTMLInputElement>(null);
+  const detailRef = useRef<HTMLDivElement>(null);
 
+  // Back button support
   useEffect(() => {
-    fetchPosts();
-  }, []);
+    function handlePopstate() {
+      if (isWriting) {
+        setIsWriting(false);
+        return;
+      }
+      if (view === 'detail') {
+        setView('feed');
+        setSelectedPost(null);
+        return;
+      }
+    }
+    window.addEventListener('popstate', handlePopstate);
+    return () => window.removeEventListener('popstate', handlePopstate);
+  }, [view, isWriting]);
 
-  async function fetchPosts() {
-    if (!supabase) return;
-    const client = supabase;
-    const { data } = await client.from('community_posts').select('*').order('created_at', { ascending: false });
-    if (data) setPosts(data);
+  function openPost(post: CommunityPost) {
+    setSelectedPost({
+      ...post,
+      views_count: post.views_count + 1,
+    });
+    setPosts((prev) =>
+      prev.map((p) => (p.id === post.id ? { ...p, views_count: p.views_count + 1 } : p))
+    );
+    setView('detail');
+    setReplyTo(null);
+    history.pushState({ communityView: 'detail' }, '');
   }
 
-  async function handleCreatePost() {
-    if (!session || !supabase) {
-      setAuthError('Vui lòng đăng nhập ở tab Hồ sơ để viết bài.');
-      return;
+  function goBack() {
+    setView('feed');
+    setSelectedPost(null);
+    setReplyTo(null);
+  }
+
+  function toggleLike(postId: string) {
+    if (likedPosts.has(postId)) {
+      setLikedPosts((prev) => { const n = new Set(prev); n.delete(postId); return n; });
+      setPosts((prev) => prev.map((p) => (p.id === postId ? { ...p, likes_count: p.likes_count - 1 } : p)));
+      if (selectedPost?.id === postId) setSelectedPost((p) => p ? { ...p, likes_count: p.likes_count - 1 } : p);
+    } else {
+      // Remove dislike if exists
+      if (dislikedPosts.has(postId)) {
+        setDislikedPosts((prev) => { const n = new Set(prev); n.delete(postId); return n; });
+        setPosts((prev) => prev.map((p) => (p.id === postId ? { ...p, dislikes_count: p.dislikes_count - 1 } : p)));
+        if (selectedPost?.id === postId) setSelectedPost((p) => p ? { ...p, dislikes_count: p.dislikes_count - 1 } : p);
+      }
+      setLikedPosts((prev) => new Set(prev).add(postId));
+      setPosts((prev) => prev.map((p) => (p.id === postId ? { ...p, likes_count: p.likes_count + 1 } : p)));
+      if (selectedPost?.id === postId) setSelectedPost((p) => p ? { ...p, likes_count: p.likes_count + 1 } : p);
     }
+  }
+
+  function toggleDislike(postId: string) {
+    if (dislikedPosts.has(postId)) {
+      setDislikedPosts((prev) => { const n = new Set(prev); n.delete(postId); return n; });
+      setPosts((prev) => prev.map((p) => (p.id === postId ? { ...p, dislikes_count: p.dislikes_count - 1 } : p)));
+      if (selectedPost?.id === postId) setSelectedPost((p) => p ? { ...p, dislikes_count: p.dislikes_count - 1 } : p);
+    } else {
+      if (likedPosts.has(postId)) {
+        setLikedPosts((prev) => { const n = new Set(prev); n.delete(postId); return n; });
+        setPosts((prev) => prev.map((p) => (p.id === postId ? { ...p, likes_count: p.likes_count - 1 } : p)));
+        if (selectedPost?.id === postId) setSelectedPost((p) => p ? { ...p, likes_count: p.likes_count - 1 } : p);
+      }
+      setDislikedPosts((prev) => new Set(prev).add(postId));
+      setPosts((prev) => prev.map((p) => (p.id === postId ? { ...p, dislikes_count: p.dislikes_count + 1 } : p)));
+      if (selectedPost?.id === postId) setSelectedPost((p) => p ? { ...p, dislikes_count: p.dislikes_count + 1 } : p);
+    }
+  }
+
+  function toggleBookmark(postId: string) {
+    setBookmarkedPosts((prev) => {
+      const n = new Set(prev);
+      if (n.has(postId)) n.delete(postId);
+      else n.add(postId);
+      return n;
+    });
+  }
+
+  function toggleCommentLike(commentId: string) {
+    if (likedComments.has(commentId)) {
+      setLikedComments((prev) => { const n = new Set(prev); n.delete(commentId); return n; });
+      setComments((prev) => prev.map((c) => (c.id === commentId ? { ...c, likes_count: c.likes_count - 1 } : c)));
+    } else {
+      setLikedComments((prev) => new Set(prev).add(commentId));
+      setComments((prev) => prev.map((c) => (c.id === commentId ? { ...c, likes_count: c.likes_count + 1 } : c)));
+    }
+  }
+
+  function addComment() {
+    if (!newComment.trim() || !selectedPost) return;
+    const comment: CommunityComment = {
+      id: `cmt-new-${Date.now()}`,
+      post_id: selectedPost.id,
+      parent_id: replyTo,
+      user_id: session?.user.id || 'me',
+      content: newComment.trim(),
+      is_anonymous: true,
+      display_name: 'Bạn',
+      is_author: false,
+      likes_count: 0,
+      created_at: new Date().toISOString(),
+    };
+    setComments((prev) => [...prev, comment]);
+    setPosts((prev) =>
+      prev.map((p) => (p.id === selectedPost.id ? { ...p, comments_count: p.comments_count + 1 } : p))
+    );
+    setSelectedPost((p) => (p ? { ...p, comments_count: p.comments_count + 1 } : p));
+    setNewComment('');
+    setReplyTo(null);
+  }
+
+  function addPost() {
     if (!newTitle.trim() || !newContent.trim()) return;
-
-    setSubmitting(true);
-    const client = supabase;
-    const { data, error } = await client.from('community_posts').insert({
-      user_id: session.user.id,
-      title: newTitle,
-      content: newContent,
-      board: activeTab,
-      is_anonymous: isAnonymous
-    }).select().single();
-
-    setSubmitting(false);
-    if (!error && data) {
-      setPosts([data, ...posts]);
-      setIsWriting(false);
-      setNewTitle('');
-      setNewContent('');
-      setIsAnonymous(false);
-      setAuthError('');
-    }
+    const post: CommunityPost = {
+      id: `post-new-${Date.now()}`,
+      user_id: session?.user.id || 'me',
+      category: newCategory,
+      title: newTitle.trim(),
+      content: newContent.trim(),
+      is_anonymous: true,
+      display_name: 'Bạn',
+      likes_count: 0,
+      dislikes_count: 0,
+      comments_count: 0,
+      views_count: 0,
+      created_at: new Date().toISOString(),
+    };
+    setPosts((prev) => [post, ...prev]);
+    setIsWriting(false);
+    setNewTitle('');
+    setNewContent('');
+    setNewCategory('free');
   }
 
-  function renderPostStats(likes: number, comments: number) {
+  // Filtered posts
+  const filteredPosts = activeCategory === 'all' ? posts : posts.filter((p) => p.category === activeCategory);
+  const hotPosts = [...posts].sort((a, b) => b.likes_count - a.likes_count).slice(0, 2);
+  const trendingPost = [...posts].sort((a, b) => b.comments_count - a.comments_count)[0];
+
+  // Comments for selected post
+  const postComments = selectedPost ? comments.filter((c) => c.post_id === selectedPost.id) : [];
+  const rootComments = postComments.filter((c) => !c.parent_id);
+
+  function getReplies(parentId: string) {
+    return postComments.filter((c) => c.parent_id === parentId);
+  }
+
+  // ==================== FEED VIEW ====================
+  if (view === 'feed') {
     return (
-      <div className="community-post-stats">
-        <span>
-          <ThumbsUp size={15} />
-          {likes}
-        </span>
-        <span>
-          <MessageCircle size={15} />
-          {comments}
-        </span>
+      <>
+        {/* Header */}
+        <header className="cm-header">
+          <Logo />
+          <div className="cm-header-actions">
+            <button type="button" className="cm-icon-btn" aria-label="Tìm kiếm">
+              <Search size={20} />
+            </button>
+            <button type="button" className="cm-icon-btn" aria-label="Thông báo">
+              <Bell size={20} />
+              <span className="cm-notification-dot" />
+            </button>
+          </div>
+        </header>
+
+        {/* Notification Card */}
+        <section className="cm-notif-card">
+          <div className="cm-notif-head">
+            <div className="cm-notif-title">
+              <Bell size={18} />
+              <strong>Thông báo</strong>
+            </div>
+            <ChevronRight size={18} color="#94a3b8" />
+          </div>
+          {hotPosts.map((post) => (
+            <div key={post.id} className="cm-notif-row" onClick={() => openPost(post)}>
+              <p className="cm-notif-text">{post.title}</p>
+              <div className="cm-notif-stats">
+                <span><ThumbsUp size={13} /> {post.likes_count}</span>
+                <span><MessageCircle size={13} /> {post.comments_count}</span>
+              </div>
+            </div>
+          ))}
+        </section>
+
+        {/* Trending Post */}
+        {trendingPost && (
+          <section className="cm-trending" onClick={() => openPost(trendingPost)}>
+            <div className="cm-trending-head">
+              <div>
+                <p className="cm-trending-kicker">ĐANG HOT</p>
+                <h2 className="cm-trending-title">Bài đang nổi</h2>
+              </div>
+              <Flame size={24} color="#64748b" />
+            </div>
+            <span className="cm-cat-badge" style={{ color: CATEGORIES[trendingPost.category as CommunityCategory]?.color, background: CATEGORIES[trendingPost.category as CommunityCategory]?.bg }}>
+              {CATEGORIES[trendingPost.category as CommunityCategory]?.label}
+            </span>
+            <h3 className="cm-trending-post-title">{trendingPost.title}</h3>
+            <p className="cm-trending-preview">{trendingPost.content.slice(0, 100)}...</p>
+            <div className="cm-trending-footer">
+              <span className="cm-time">{timeAgo(trendingPost.created_at)}</span>
+              <div className="cm-post-stats">
+                <span><ThumbsUp size={14} /> {trendingPost.likes_count}</span>
+                <span><MessageCircle size={14} /> {trendingPost.comments_count}</span>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Category Filter Tabs */}
+        <div className="cm-category-tabs">
+          <button
+            type="button"
+            className={activeCategory === 'all' ? 'active' : ''}
+            onClick={() => setActiveCategory('all')}
+          >
+            Tất cả
+          </button>
+          {(Object.keys(CATEGORIES) as CommunityCategory[]).map((cat) => (
+            <button
+              key={cat}
+              type="button"
+              className={activeCategory === cat ? 'active' : ''}
+              onClick={() => setActiveCategory(cat)}
+            >
+              {CATEGORIES[cat].label}
+            </button>
+          ))}
+        </div>
+
+        {/* Post List */}
+        <div className="cm-post-list">
+          {filteredPosts.map((post) => (
+            <article key={post.id} className="cm-post-card" onClick={() => openPost(post)}>
+              <span
+                className="cm-cat-badge"
+                style={{
+                  color: CATEGORIES[post.category]?.color,
+                  background: CATEGORIES[post.category]?.bg,
+                }}
+              >
+                {CATEGORIES[post.category]?.label}
+              </span>
+              <h3 className="cm-post-title">{post.title}</h3>
+              <p className="cm-post-preview">{post.content.slice(0, 80)}...</p>
+              <div className="cm-post-footer">
+                <span className="cm-time">{timeAgo(post.created_at)}</span>
+                <div className="cm-post-stats">
+                  <span><ThumbsUp size={14} /> {post.likes_count}</span>
+                  <span><MessageCircle size={14} /> {post.comments_count}</span>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+
+        {/* FAB Write Button */}
+        <button type="button" className="cm-fab" onClick={() => {
+          setIsWriting(true);
+          history.pushState({ communityModal: 'write' }, '');
+        }}>
+          <Plus size={20} />
+          Viết bài
+        </button>
+
+        {/* Write Modal */}
+        {isWriting && (
+          <div className="cm-modal-backdrop" onClick={() => setIsWriting(false)}>
+            <div className="cm-write-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="cm-write-header">
+                <h2>Tạo bài viết mới</h2>
+                <button type="button" onClick={() => setIsWriting(false)} className="cm-icon-btn">
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="cm-write-body">
+                <div className="cm-write-field">
+                  <label>Danh mục</label>
+                  <div className="cm-write-cats">
+                    {(Object.keys(CATEGORIES) as CommunityCategory[]).map((cat) => (
+                      <button
+                        key={cat}
+                        type="button"
+                        className={newCategory === cat ? 'active' : ''}
+                        onClick={() => setNewCategory(cat)}
+                        style={{ '--cat-color': CATEGORIES[cat].color, '--cat-bg': CATEGORIES[cat].bg } as React.CSSProperties}
+                      >
+                        {CATEGORIES[cat].label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="cm-write-field">
+                  <label>Tiêu đề</label>
+                  <input
+                    className="cm-input"
+                    value={newTitle}
+                    onChange={(e) => setNewTitle(e.target.value)}
+                    placeholder="Nhập tiêu đề..."
+                  />
+                </div>
+                <div className="cm-write-field">
+                  <label>Nội dung</label>
+                  <textarea
+                    className="cm-input cm-textarea"
+                    value={newContent}
+                    onChange={(e) => setNewContent(e.target.value)}
+                    placeholder="Chia sẻ với cộng đồng..."
+                    rows={6}
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="cm-submit-btn"
+                  onClick={addPost}
+                  disabled={!newTitle.trim() || !newContent.trim()}
+                >
+                  Đăng bài
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
+    );
+  }
+
+  // ==================== DETAIL VIEW ====================
+  if (view === 'detail' && selectedPost) {
+    const cat = CATEGORIES[selectedPost.category as CommunityCategory];
+
+    return (
+      <div className="cm-detail-screen" ref={detailRef}>
+        {/* Detail Header */}
+        <header className="cm-detail-header">
+          <button type="button" onClick={goBack} className="cm-icon-btn">
+            <ArrowLeft size={22} />
+          </button>
+          <span className="cm-detail-cat">{cat?.label}</span>
+          <button type="button" className="cm-icon-btn">
+            <MoreHorizontal size={22} />
+          </button>
+        </header>
+
+        {/* Detail Content */}
+        <div className="cm-detail-body">
+          <div className="cm-detail-meta">
+            <span>{new Date(selectedPost.created_at).toLocaleDateString('vi-VN')} {new Date(selectedPost.created_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</span>
+            <span>|</span>
+            <span><Eye size={13} /> {selectedPost.views_count}</span>
+          </div>
+
+          <h1 className="cm-detail-title">{selectedPost.title}</h1>
+
+          <div className="cm-detail-content">
+            {selectedPost.content.split('\n').map((para, i) => (
+              <p key={i}>{para}</p>
+            ))}
+          </div>
+
+          {/* Action Bar */}
+          <div className="cm-action-bar">
+            <button
+              type="button"
+              className={`cm-action-btn ${likedPosts.has(selectedPost.id) ? 'active' : ''}`}
+              onClick={() => toggleLike(selectedPost.id)}
+            >
+              <ThumbsUp size={16} /> {selectedPost.likes_count}
+            </button>
+            <button
+              type="button"
+              className={`cm-action-btn ${dislikedPosts.has(selectedPost.id) ? 'active dislike' : ''}`}
+              onClick={() => toggleDislike(selectedPost.id)}
+            >
+              <ThumbsDown size={16} /> {selectedPost.dislikes_count}
+            </button>
+            <button
+              type="button"
+              className={`cm-action-btn bookmark ${bookmarkedPosts.has(selectedPost.id) ? 'active' : ''}`}
+              onClick={() => toggleBookmark(selectedPost.id)}
+            >
+              <Bookmark size={16} /> Lưu
+            </button>
+          </div>
+
+          {/* Comments Section */}
+          <div className="cm-comments-section">
+            <div className="cm-comments-header">
+              <strong>Bình luận {selectedPost.comments_count}</strong>
+            </div>
+
+            {rootComments.length === 0 ? (
+              <p className="cm-no-comments">Chưa có bình luận nào. Hãy là người đầu tiên!</p>
+            ) : (
+              rootComments.map((comment) => {
+                const replies = getReplies(comment.id);
+                return (
+                  <div key={comment.id} className="cm-comment-thread">
+                    {/* Root comment */}
+                    <div className="cm-comment">
+                      <div className="cm-comment-head">
+                        <strong className={comment.is_author ? 'cm-comment-author' : ''}>
+                          {comment.display_name}
+                        </strong>
+                        <span className="cm-comment-time">{timeAgo(comment.created_at)}</span>
+                      </div>
+                      <p className="cm-comment-body">{comment.content}</p>
+                      <div className="cm-comment-actions">
+                        <button type="button" className="cm-reply-btn" onClick={() => {
+                          setReplyTo(comment.id);
+                          commentInputRef.current?.focus();
+                        }}>
+                          Trả lời
+                        </button>
+                        <button
+                          type="button"
+                          className={`cm-like-btn ${likedComments.has(comment.id) ? 'active' : ''}`}
+                          onClick={() => toggleCommentLike(comment.id)}
+                        >
+                          <ThumbsUp size={13} /> {comment.likes_count}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Replies */}
+                    {replies.map((reply) => (
+                      <div key={reply.id} className="cm-comment cm-reply">
+                        <div className="cm-reply-indicator">↳</div>
+                        <div className="cm-reply-body">
+                          <div className="cm-comment-head">
+                            <strong className={reply.is_author ? 'cm-comment-author' : ''}>
+                              {reply.display_name}
+                            </strong>
+                            <span className="cm-comment-time">{timeAgo(reply.created_at)}</span>
+                          </div>
+                          <p className="cm-comment-body">{reply.content}</p>
+                          <div className="cm-comment-actions">
+                            <button type="button" className="cm-reply-btn" onClick={() => {
+                              setReplyTo(comment.id);
+                              commentInputRef.current?.focus();
+                            }}>
+                              Trả lời
+                            </button>
+                            <button
+                              type="button"
+                              className={`cm-like-btn ${likedComments.has(reply.id) ? 'active' : ''}`}
+                              onClick={() => toggleCommentLike(reply.id)}
+                            >
+                              <ThumbsUp size={13} /> {reply.likes_count}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* Comment Input */}
+        <div className="cm-comment-input-bar">
+          {replyTo && (
+            <div className="cm-replying-to">
+              <span>Đang trả lời bình luận</span>
+              <button type="button" onClick={() => setReplyTo(null)}>
+                <X size={14} />
+              </button>
+            </div>
+          )}
+          <div className="cm-comment-input-row">
+            <input
+              ref={commentInputRef}
+              type="text"
+              className="cm-comment-input"
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+              placeholder="Viết bình luận..."
+              onKeyDown={(e) => { if (e.key === 'Enter') addComment(); }}
+            />
+            <button
+              type="button"
+              className="cm-send-btn"
+              onClick={addComment}
+              disabled={!newComment.trim()}
+            >
+              <Send size={18} />
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
 
-  // Filter posts based on active tab
-  const tabPosts = posts.filter(post => post.board === activeTab);
-
-  return (
-    <>
-      <header className="community-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Logo />
-        <div className="community-header-actions">
-          <button type="button" className="community-icon-button" aria-label="Tìm kiếm">
-            <Search size={21} />
-          </button>
-          <button type="button" className="community-icon-button muted" aria-label="Thông báo">
-            <Bell size={21} />
-          </button>
-        </div>
-      </header>
-
-      {/* Write Post Modal */}
-      {isWriting && (
-        <div className="sheet-backdrop" onClick={() => setIsWriting(false)}>
-          <div className="bottom-sheet" onClick={(e) => e.stopPropagation()}>
-            <header className="sheet-header">
-              <h2>Tạo bài viết mới</h2>
-              <button type="button" className="icon-button" onClick={() => setIsWriting(false)}>
-                <X size={20} />
-              </button>
-            </header>
-            <div className="sheet-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {authError && <div style={{ color: '#ef4444', background: '#fef2f2', padding: '12px', borderRadius: '8px' }}>{authError}</div>}
-              <div className="field-group">
-                <label>Tiêu đề</label>
-                <input className="solid-input" value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="Nhập tiêu đề..." />
-              </div>
-              <div className="field-group">
-                <label>Nội dung</label>
-                <textarea className="solid-input" value={newContent} onChange={e => setNewContent(e.target.value)} placeholder="Nhập nội dung bài viết..." rows={4} />
-              </div>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '8px 0' }}>
-                <input type="checkbox" checked={isAnonymous} onChange={e => setIsAnonymous(e.target.checked)} style={{ width: '18px', height: '18px' }} />
-                <span>Chế độ ẩn danh</span>
-              </label>
-              <button type="button" className="solid-button" onClick={handleCreatePost} disabled={submitting}>
-                {submitting ? 'Đang đăng...' : 'Đăng bài'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <section className="community-shortcuts" aria-label="Lối tắt cộng đồng">
-        {shortcuts.map(({ label, icon: Icon, tone }) => (
-          <button key={label} type="button" className="community-shortcut">
-            <span className={`community-shortcut-icon ${tone}`}>
-              <Icon size={23} />
-            </span>
-            <strong>{label}</strong>
-          </button>
-        ))}
-      </section>
-
-      <div className="community-subtabs" role="tablist" aria-label="Mục cộng đồng">
-        {communityTabs.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === id}
-            className={activeTab === id ? 'active' : ''}
-            onClick={() => setActiveTab(id)}
-          >
-            <Icon size={16} />
-            {label}
-          </button>
-        ))}
-      </div>
-
-      <div className="community-tab-body">
-        {activeTab !== 'friends' && (
-          <div className="community-board-stack">
-            <section className="community-board-section">
-              <div className="community-thread-list">
-                {tabPosts.length === 0 ? (
-                  <p style={{ textAlign: 'center', color: '#64748b', padding: '32px 0' }}>Chưa có bài viết nào.</p>
-                ) : (
-                  tabPosts.map((post) => (
-                    <article key={post.id} className="community-thread-row" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span className="community-new-badge" style={{ background: post.is_anonymous ? '#f1f5f9' : '#e0e7ff', color: post.is_anonymous ? '#64748b' : '#3730a3' }}>
-                          {post.is_anonymous ? 'Ẩn danh' : 'Thành viên'}
-                        </span>
-                        <small style={{ color: '#94a3b8' }}>{new Date(post.created_at).toLocaleDateString('vi-VN')}</small>
-                      </div>
-                      <p style={{ fontWeight: 600, fontSize: '15px' }}>{post.title}</p>
-                      <p style={{ color: '#475569', fontSize: '14px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{post.content}</p>
-                      {renderPostStats(post.likes_count, post.comments_count)}
-                    </article>
-                  ))
-                )}
-              </div>
-            </section>
-          </div>
-        )}
-
-        {activeTab === 'friends' && (
-          <div className="community-friend-list">
-            {companions.map((companion) => {
-              const sent = requested.includes(companion.id);
-              return (
-                <article key={companion.id} className="community-friend-row">
-                  <div className="community-avatar">{companion.displayName.slice(0, 1)}</div>
-                  <div className="community-friend-main">
-                    <div>
-                      <strong>{companion.displayName}</strong>
-                      <span>{companion.school}</span>
-                    </div>
-                    <p>{companion.focus}</p>
-                    <div className="community-chip-row">
-                      <span>
-                        <MapPin size={13} />
-                        {companion.region}
-                      </span>
-                      <span>
-                        <Clock3 size={13} />
-                        {companion.availability ?? 'Sau giờ học'}
-                      </span>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    className={sent ? 'community-request sent' : 'community-request'}
-                    onClick={() => onRequest(companion.id)}
-                    aria-label={sent ? `Đã gửi lời mời cho ${companion.displayName}` : `Kết nối với ${companion.displayName}`}
-                  >
-                    {sent ? <BadgeCheck size={18} /> : <Send size={18} />}
-                  </button>
-                </article>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      <button type="button" className="community-compose-button" onClick={() => {
-        if (!session) {
-          alert('Vui lòng đăng nhập ở tab Hồ sơ để viết bài.');
-          return;
-        }
-        setIsWriting(true);
-      }}>
-        <Plus size={22} />
-        {activeTab === 'market'
-          ? 'Đăng bán'
-          : activeTab === 'reviews'
-            ? 'Viết review'
-            : activeTab === 'friends'
-              ? 'Tìm bạn'
-              : activeTab === 'qa'
-                ? 'Đặt câu hỏi'
-                : 'Viết bài'}
-      </button>
-    </>
-  );
+  return null;
 }
