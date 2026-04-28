@@ -302,14 +302,16 @@ export function ProfileScreen({
               onChange={handleFileChange} 
             />
 
-            <div className="pf-avatar" onClick={handleAvatarClick}>
-              {profile.avatarUrl ? (
-                <img src={profile.avatarUrl} alt="Avatar" className="pf-avatar-img" />
-              ) : (
-                <span className="pf-avatar-initials">{initials}</span>
-              )}
+            <div className="pf-avatar-container" onClick={handleAvatarClick}>
+              <div className="pf-avatar">
+                {profile.avatarUrl ? (
+                  <img src={profile.avatarUrl} alt="Avatar" className="pf-avatar-img" />
+                ) : (
+                  <span className="pf-avatar-initials">{initials}</span>
+                )}
+              </div>
               <div className="avatar-edit-badge">
-                <Camera size={12} color="white" />
+                <Camera size={14} color="white" />
               </div>
             </div>
             
