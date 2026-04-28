@@ -25,6 +25,7 @@ export interface ProfileDraft {
   school: string;
   region: string;
   note: string;
+  avatarUrl?: string;
 }
 
 export interface Expense {

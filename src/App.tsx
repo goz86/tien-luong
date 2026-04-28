@@ -5,7 +5,7 @@ import { CalendarDays, House, MessageCircleMore, UserRound, WalletCards, Cloud, 
 import { demoCompanions, demoProfile, demoShifts } from './data';
 import { DEFAULT_KRW_TO_VND, MINIMUM_WAGE_2026, calculateShiftPay, shiftHours, Shift } from './lib/salary';
 import { hasSupabaseConfig, supabase } from './lib/supabase';
-import { Tab, StoredState, ShiftDraft, VenueColors, Expense } from './lib/types';
+import { Tab, StoredState, ShiftDraft, VenueColors, Expense, ProfileDraft } from './lib/types';
 import { startOfMonth, shiftMonth, formatMonthHeader } from './utils/helpers';
 import { HomeScreen } from './components/HomeScreen';
 import { CalendarScreen } from './components/CalendarScreen';

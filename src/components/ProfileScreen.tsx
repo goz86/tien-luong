@@ -129,6 +129,7 @@ export function ProfileScreen({
   const handleSocialLogin = async (provider: string) => {
     try {
       setLoading(true);
+      if (!supabase) throw new Error('Supabase client not initialized');
       const { error } = await supabase.auth.signInWithOAuth({
         provider: provider as any,
         options: {
@@ -441,7 +442,7 @@ export function ProfileScreen({
                 <label>{isKo ? '자기소개' : 'Giới thiệu'}</label>
                 <textarea className="pf-input pf-textarea" rows={3} value={profile.note} onChange={(e) => setProfile({ ...profile, note: e.target.value })} />
               </div>
-              <button type="button" className="pf-save-btn" onClick={saveProfile} disabled={savingProfile}>
+              <button type="button" className="pf-save-btn" onClick={() => saveProfile()} disabled={savingProfile}>
                 {savingProfile ? (isKo ? '저장 중...' : 'Đang lưu...') : (isKo ? '저장' : 'Lưu thay đổi')}
               </button>
             </div>
