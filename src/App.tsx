@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, FormEvent } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { AnimatePresence, motion } from 'framer-motion';
 import { CalendarDays, House, MessageCircleMore, UserRound, WalletCards, Cloud, CloudOff } from 'lucide-react';
@@ -72,9 +72,16 @@ function loadState(): StoredState {
   }
 }
 
+const VALID_TABS: Tab[] = ['home', 'calendar', 'income', 'friends', 'profile'];
+
+function getTabFromHash(): Tab {
+  const hash = window.location.hash.replace('#', '');
+  return VALID_TABS.includes(hash as Tab) ? (hash as Tab) : 'home';
+}
+
 export default function App() {
   const initial = loadState();
-  const [tab, setTab] = useState<Tab>('home');
+  const [tab, setTab] = useState<Tab>(() => getTabFromHash());
   const [session, setSession] = useState<Session | null>(null);
   const [online, setOnline] = useState(() => navigator.onLine);
   const [authEmail, setAuthEmail] = useState('');
@@ -94,6 +101,7 @@ export default function App() {
   const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(todayIso));
   const [selectedDate, setSelectedDate] = useState(todayIso);
   const [isDaySheetOpen, setIsDaySheetOpen] = useState(false);
+  const suppressPopstate = useRef(false);
   const [isDarkMode, setIsDarkMode] = useState(() => {
     if (typeof window === 'undefined') return false;
     return window.localStorage.getItem('duhoc-mate-dark') === 'true';
@@ -396,19 +404,57 @@ export default function App() {
   function navigateToDate(date: string) {
     setSelectedDate(date);
     setCalendarMonth(startOfMonth(date));
-    setDraft((current) => ({ ...current, date }));
+    setDraft((current) => ({ ...current, date, note: '' }));
     setIsDaySheetOpen(true);
     setTab('calendar');
+    window.location.hash = 'calendar';
+    // Push extra entry for the day sheet so back can close it
+    suppressPopstate.current = true;
+    history.pushState({ modal: 'daysheet' }, '');
   }
 
   function setVenueColor(venue: string, color: string) {
     setVenueColors((current) => ({ ...current, [venue]: color }));
   }
 
-  function changeTab(nextTab: Tab) {
+  const changeTab = useCallback((nextTab: Tab) => {
     if (nextTab !== 'calendar') setIsDaySheetOpen(false);
     setTab(nextTab);
-  }
+    window.location.hash = nextTab === 'home' ? '' : nextTab;
+    // Push history entry so back button returns to previous tab
+    suppressPopstate.current = true;
+    history.pushState({ tab: nextTab }, '');
+  }, []);
+
+  // Sync tab from hash on popstate (back/forward button)
+  useEffect(() => {
+    function handlePopstate(e: PopStateEvent) {
+      if (suppressPopstate.current) {
+        suppressPopstate.current = false;
+        return;
+      }
+      // If a day sheet is open, close it first
+      if (isDaySheetOpen) {
+        setIsDaySheetOpen(false);
+        return;
+      }
+      // Otherwise navigate to the tab from state or hash
+      if (e.state?.tab) {
+        setTab(e.state.tab);
+      } else {
+        const hashTab = getTabFromHash();
+        setTab(hashTab);
+      }
+    }
+    window.addEventListener('popstate', handlePopstate);
+    return () => window.removeEventListener('popstate', handlePopstate);
+  }, [isDaySheetOpen]);
+
+  // Set initial history entry
+  useEffect(() => {
+    const initialTab = getTabFromHash();
+    history.replaceState({ tab: initialTab }, '');
+  }, []);
 
   return (
     <div className="app-stage">
@@ -433,7 +479,7 @@ export default function App() {
               onNextMonth={() => { const nextMonth = shiftMonth(calendarMonth, 1); setCalendarMonth(nextMonth); }}
             />
           ) : null}
-          {tab === 'calendar' ? <CalendarScreen shifts={shifts} selectedDate={selectedDate} month={calendarMonth} venueSuggestions={[...new Set([...workplaceSummary.map((item) => item.label), 'Việc làm thêm', 'Cafe'])].slice(0, 4)} draft={draft} setDraft={setDraft} editingShiftId={editingShiftId} setEditingShiftId={setEditingShiftId} isSheetOpen={isDaySheetOpen} onCloseSheet={() => setIsDaySheetOpen(false)} onPrevMonth={() => { const nextMonth = shiftMonth(calendarMonth, -1); setCalendarMonth(nextMonth); setSelectedDate(nextMonth); setDraft((current) => ({ ...current, date: nextMonth })); }} onNextMonth={() => { const nextMonth = shiftMonth(calendarMonth, 1); setCalendarMonth(nextMonth); setSelectedDate(nextMonth); setDraft((current) => ({ ...current, date: nextMonth })); }} onSetMonth={(nextMonth) => { setCalendarMonth(nextMonth); setSelectedDate(nextMonth); setDraft((current) => ({ ...current, date: nextMonth })); }} onSelectDate={(date) => { setEditingShiftId(null); setSelectedDate(date); setDraft((current) => ({ ...current, date })); setIsDaySheetOpen(true); }} onQuickSave={() => void addShift('calendar')} onUpdateShift={(shift) => void updateShift(shift)} onDeleteShift={(id) => void deleteShift(id)} venueColors={venueColors} onSetVenueColor={setVenueColor} /> : null}
+          {tab === 'calendar' ? <CalendarScreen shifts={shifts} selectedDate={selectedDate} month={calendarMonth} venueSuggestions={[...new Set(workplaceSummary.map((item) => item.label))].slice(0, 4)} draft={draft} setDraft={setDraft} editingShiftId={editingShiftId} setEditingShiftId={setEditingShiftId} isSheetOpen={isDaySheetOpen} onCloseSheet={() => setIsDaySheetOpen(false)} onPrevMonth={() => { const nextMonth = shiftMonth(calendarMonth, -1); setCalendarMonth(nextMonth); setSelectedDate(nextMonth); setDraft((current) => ({ ...current, date: nextMonth })); }} onNextMonth={() => { const nextMonth = shiftMonth(calendarMonth, 1); setCalendarMonth(nextMonth); setSelectedDate(nextMonth); setDraft((current) => ({ ...current, date: nextMonth })); }} onSetMonth={(nextMonth) => { setCalendarMonth(nextMonth); setSelectedDate(nextMonth); setDraft((current) => ({ ...current, date: nextMonth })); }} onSelectDate={(date) => { setEditingShiftId(null); setSelectedDate(date); setDraft((current) => ({ ...current, date, note: '' })); setIsDaySheetOpen(true); }} onQuickSave={() => void addShift('calendar')} onUpdateShift={(shift) => void updateShift(shift)} onDeleteShift={(id) => void deleteShift(id)} venueColors={venueColors} onSetVenueColor={setVenueColor} /> : null}
           {tab === 'income' ? (
             <IncomeScreen 
               minimumWage={MINIMUM_WAGE_2026} 

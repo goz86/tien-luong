@@ -1,20 +1,23 @@
 import { useEffect, useState, useRef } from 'react';
 import { toPng } from 'html-to-image';
-import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Download, Settings2, Plus } from 'lucide-react';
+import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Download, Settings2, Plus, Clock } from 'lucide-react';
 import { calculateShiftPay, shiftHours, formatKrw } from '../lib/salary';
 import { Shift, ShiftDraft, VenueColors } from '../lib/types';
-import { 
-  buildCalendar, 
-  formatCalendarKrw, 
-  formatCalendarMonthTitle, 
-  formatDateChip, 
-  formatHoursCompact, 
-  formatSelectedDate, 
+import {
+  buildCalendar,
+  formatCalendarKrw,
+  formatCalendarMonthTitle,
+  formatDateChip,
+  formatHoursCompact,
+  formatSelectedDate,
   shiftMonth,
   getVenueColor,
   isKoreanHoliday
 } from '../utils/helpers';
 import { Logo } from './shared/Logo';
+import { TimeWheelModal } from './shared/TimeWheelModal';
+import { MinuteWheelModal } from './shared/MinuteWheelModal';
+import { DateWheelModal } from './shared/DateWheelModal';
 
 export function CalendarScreen({
   shifts,
@@ -58,11 +61,18 @@ export function CalendarScreen({
   onSetVenueColor: (venue: string, color: string) => void;
 }) {
   const VENUE_PALETTE = ['#2752ff', '#0d9b72', '#ff6b7a', '#f59e0b', '#9333ea', '#0891b2', '#e11d48', '#16a34a'];
-  const grid = buildCalendar(month, shifts);
   const monthShifts = shifts.filter((shift) => shift.date.startsWith(month.slice(0, 7)));
-  const monthTotal = monthShifts.reduce((sum, shift) => sum + calculateShiftPay(shift).total, 0);
-  const monthHours = monthShifts.reduce((sum, shift) => sum + shiftHours(shift), 0);
   const [selectedVenue, setSelectedVenue] = useState('all');
+  const monthWorkplaces = [...new Set(monthShifts.map((shift) => shift.label))];
+  const effectiveVenue = selectedVenue === 'all' ? 'all' : (monthWorkplaces.includes(selectedVenue) ? selectedVenue : 'all');
+
+  const filteredMonthShifts = effectiveVenue === 'all' ? monthShifts : monthShifts.filter((shift) => shift.label === effectiveVenue);
+  const gridShifts = effectiveVenue === 'all' ? shifts : shifts.filter((shift) => shift.label === effectiveVenue);
+
+  const grid = buildCalendar(month, gridShifts);
+  const monthTotal = filteredMonthShifts.reduce((sum, shift) => sum + calculateShiftPay(shift).total, 0);
+  const monthHours = filteredMonthShifts.reduce((sum, shift) => sum + shiftHours(shift), 0);
+  
   const [calendarDisplay, setCalendarDisplay] = useState<'duration' | 'range'>('duration');
   const [isMonthPickerOpen, setIsMonthPickerOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -71,22 +81,19 @@ export function CalendarScreen({
   const [pickerMonth, setPickerMonth] = useState(() => new Date(`${month}T00:00:00`).getMonth() + 1);
   const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
   const calendarRef = useRef<HTMLDivElement>(null);
-  
+
   const todayStr = new Date().toLocaleDateString('sv-SE');
   const currentMonthISO = todayStr.slice(0, 7) + '-01';
   const isNotCurrentMonth = month.slice(0, 7) !== currentMonthISO.slice(0, 7);
-  
-  const monthWorkplaces = [...new Set(monthShifts.map((shift) => shift.label))];
-  const monthWorkplaceKey = monthWorkplaces.join('|');
-  const effectiveVenue = monthWorkplaces.includes(selectedVenue) ? selectedVenue : monthWorkplaces[0] ?? '';
-  const filteredLedger = (effectiveVenue ? monthShifts.filter((shift) => shift.label === effectiveVenue) : []).sort((a, b) =>
+
+  const filteredLedger = filteredMonthShifts.sort((a, b) =>
     `${b.date}T${b.startTime}`.localeCompare(`${a.date}T${a.startTime}`)
   );
-  
+
   const calendarYear = new Date(`${month}T00:00:00`).getFullYear();
   const yearOptions = Array.from({ length: 9 }, (_, index) => calendarYear - 4 + index);
   const monthOptions = Array.from({ length: 12 }, (_, index) => index + 1);
-  
+
   const quickPreview = calculateShiftPay({
     id: 'quick-preview',
     date: draft.date,
@@ -100,7 +107,7 @@ export function CalendarScreen({
     taxDeduction: draft.taxDeduction,
     holidayAllowance: draft.holidayAllowance
   }).total;
-  
+
   // Custom Select State
   const [activeSelect, setActiveSelect] = useState<string | null>(null);
 
@@ -109,6 +116,11 @@ export function CalendarScreen({
 
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [sheetMode, setSheetMode] = useState<'history' | 'form'>('form');
+
+  const [isStartTimeOpen, setIsStartTimeOpen] = useState(false);
+  const [isEndTimeOpen, setIsEndTimeOpen] = useState(false);
+  const [isBreakTimeOpen, setIsBreakTimeOpen] = useState(false);
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -139,7 +151,35 @@ export function CalendarScreen({
 
   useEffect(() => {
     if (effectiveVenue !== selectedVenue) setSelectedVenue(effectiveVenue);
-  }, [effectiveVenue, monthWorkplaceKey, selectedVenue]);
+  }, [effectiveVenue, selectedVenue]);
+
+  // Back button support: close modals when pressing back
+  useEffect(() => {
+    function handlePopstate() {
+      if (isSettingsOpen) {
+        setIsSettingsOpen(false);
+        setActiveSelect(null);
+        return;
+      }
+      if (isHistoryOpen) {
+        setIsHistoryOpen(false);
+        return;
+      }
+      if (isMonthPickerOpen) {
+        setIsMonthPickerOpen(false);
+        return;
+      }
+    }
+    window.addEventListener('popstate', handlePopstate);
+    return () => window.removeEventListener('popstate', handlePopstate);
+  }, [isSettingsOpen, isHistoryOpen, isMonthPickerOpen]);
+
+  // Push history entry when opening modals
+  useEffect(() => {
+    if (isSettingsOpen || isHistoryOpen || isMonthPickerOpen) {
+      history.pushState({ calendarModal: true }, '');
+    }
+  }, [isSettingsOpen, isHistoryOpen, isMonthPickerOpen]);
 
   function getCalendarShiftLine(shift: Shift) {
     const trim = (value: string) => value.replace(':00', '');
@@ -233,10 +273,10 @@ export function CalendarScreen({
 
   async function downloadCalendarImage() {
     if (!calendarRef.current) return;
-    
+
     try {
       const el = calendarRef.current;
-      const width = el.offsetWidth + 20; 
+      const width = el.offsetWidth + 20;
       const height = el.offsetHeight + 20;
 
       const dataUrl = await toPng(el, {
@@ -251,9 +291,18 @@ export function CalendarScreen({
           width: `${width}px`,
           height: `${height}px`
         },
-        pixelRatio: 3
+        pixelRatio: 3,
+        filter: (node) => {
+          // Ẩn 2 nút điều hướng tháng
+          if (node.classList && typeof node.classList.contains === 'function') {
+            if (node.classList.contains('calendar-month-nav')) return false;
+            // Chỉ ẩn các chip không được chọn (giữ lại chip đang active để hiển thị tiêu đề nơi làm việc)
+            if (node.classList.contains('calendar-summary-chip') && !node.classList.contains('active')) return false;
+          }
+          return true;
+        }
       });
-      
+
       const link = document.createElement('a');
       link.download = `lich-lam-viec-${formatCalendarMonthTitle(month)}.png`;
       link.href = dataUrl;
@@ -273,9 +322,9 @@ export function CalendarScreen({
               <ChevronDown size={20} />
             </button>
             {isNotCurrentMonth && (
-              <button 
-                type="button" 
-                className="today-pill-btn" 
+              <button
+                type="button"
+                className="today-pill-btn"
                 onClick={() => onSetMonth(currentMonthISO)}
                 style={{
                   background: '#eff6ff',
@@ -325,11 +374,10 @@ export function CalendarScreen({
                   type="button"
                   className={isActive ? 'calendar-summary-chip active' : 'calendar-summary-chip'}
                   onClick={() => {
-                    setSelectedVenue(venue);
-                    setIsHistoryOpen(true);
+                    setSelectedVenue(isActive ? 'all' : venue);
                   }}
-                  style={{ 
-                    background: isActive ? venueColor : `${venueColor}15`, 
+                  style={{
+                    background: isActive ? venueColor : `${venueColor}15`,
                     color: isActive ? 'white' : venueColor,
                     boxShadow: isActive ? `0 10px 22px ${venueColor}40` : 'none',
                     border: `1px solid ${venueColor}${isActive ? '00' : '40'}`,
@@ -419,14 +467,14 @@ export function CalendarScreen({
 
       {isSettingsOpen ? (
         <section className="calendar-modal-backdrop" onClick={() => { setIsSettingsOpen(false); setActiveSelect(null); }}>
-          <div className="calendar-modal settings-modal" onClick={(event) => event.stopPropagation()}>
+          <div className="calendar-modal settings-modal" onClick={(event) => event.stopPropagation()} style={{ paddingBottom: 'calc(100px + env(safe-area-inset-bottom))' }}>
             <div className="sheet-handle" />
             <h3 className="settings-title">Cài đặt lịch</h3>
 
             <div className="settings-group">
               <label className="settings-label">Kiểu hiển thị giờ làm</label>
               <div className="settings-select-wrap">
-                <button 
+                <button
                   type="button"
                   className="settings-select-trigger"
                   onClick={() => setActiveSelect(activeSelect === 'display' ? null : 'display')}
@@ -449,32 +497,32 @@ export function CalendarScreen({
                 <div className="venue-color-list">
                   {monthWorkplaces.map((venue) => {
                     const currentColor = getVenueColor(venue, venueColors);
+                    const isOpen = activeSelect === venue;
                     return (
-                      <div key={venue} className="venue-color-row">
-                        <div className="venue-color-preview" style={{ background: currentColor }} />
-                        <span className="venue-color-name">{venue}</span>
-                        <div className="settings-select-wrap mini">
-                          <button 
-                            type="button"
-                            className="settings-select-trigger"
-                            onClick={() => setActiveSelect(activeSelect === venue ? null : venue)}
-                            style={{ color: currentColor }}
-                          >
-                            <div className="venue-color-dot" style={{ background: currentColor }} />
-                            {currentColor === '#2752ff' ? 'Xanh dương' : currentColor === '#0d9b72' ? 'Xanh lá' : currentColor === '#ff6b7a' ? 'Hồng' : currentColor === '#f59e0b' ? 'Vàng' : currentColor === '#9333ea' ? 'Tím' : currentColor === '#0891b2' ? 'Cyan' : currentColor === '#e11d48' ? 'Đỏ' : 'Lục'}
-                            <ChevronDown size={14} className={`select-chevron ${activeSelect === venue ? 'open' : ''}`} />
-                          </button>
-                          {activeSelect === venue && (
-                            <div className="settings-dropdown">
-                              {VENUE_PALETTE.map((color) => (
-                                <button key={color} type="button" onClick={() => { onSetVenueColor(venue, color); setActiveSelect(null); }} style={{ color }}>
-                                  <div className="venue-color-dot" style={{ background: color }} />
-                                  {color === '#2752ff' ? 'Xanh dương' : color === '#0d9b72' ? 'Xanh lá' : color === '#ff6b7a' ? 'Hồng' : color === '#f59e0b' ? 'Vàng' : color === '#9333ea' ? 'Tím' : color === '#0891b2' ? 'Cyan' : color === '#e11d48' ? 'Đỏ' : 'Lục'}
-                                </button>
-                              ))}
-                            </div>
-                          )}
+                      <div key={venue} className="venue-color-item">
+                        <div className="venue-color-row" onClick={() => setActiveSelect(isOpen ? null : venue)} style={{ cursor: 'pointer' }}>
+                          <span style={{ flex: 1, minWidth: 0, fontSize: '15px', fontWeight: 'bold', color: '#000', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {venue || 'Không có tên'}
+                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                            <div className="venue-color-dot" style={{ background: currentColor, width: '18px', height: '18px' }} />
+                            <ChevronDown size={14} style={{ color: '#657080', transition: 'transform 0.2s', transform: isOpen ? 'rotate(180deg)' : 'none' }} />
+                          </div>
                         </div>
+                        {isOpen && (
+                          <div className="venue-color-palette">
+                            {VENUE_PALETTE.map((color) => (
+                              <button
+                                key={color}
+                                type="button"
+                                className={`venue-palette-dot${color === currentColor ? ' active' : ''}`}
+                                style={{ background: color }}
+                                onClick={() => { onSetVenueColor(venue, color); setActiveSelect(null); }}
+                                title={color === '#2752ff' ? 'Xanh dương' : color === '#0d9b72' ? 'Xanh lá' : color === '#ff6b7a' ? 'Hồng' : color === '#f59e0b' ? 'Vàng' : color === '#9333ea' ? 'Tím' : color === '#0891b2' ? 'Cyan' : color === '#e11d48' ? 'Đỏ' : 'Lục'}
+                              />
+                            ))}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -518,16 +566,36 @@ export function CalendarScreen({
         <section className="day-sheet-backdrop" onClick={() => { onCloseSheet(); setActiveSelect(null); }}>
           <div className="day-sheet" onClick={(event) => event.stopPropagation()}>
             <div className="sheet-handle" />
-            <div className="sheet-head">
+            <div className="sheet-head" style={{ alignItems: 'flex-end' }}>
               <div>
                 <p className="section-kicker">
                   {sheetMode === 'history' ? 'Lịch sử ca làm' : (editingShiftId ? 'Sửa giờ làm' : 'Thêm giờ làm thêm')}
                 </p>
-                <h3>{formatSelectedDate(selectedDate)}</h3>
+                {sheetMode === 'form' ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsDatePickerOpen(true)}
+                    style={{
+                      background: 'none', border: 'none', padding: 0, margin: 0,
+                      textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px'
+                    }}
+                  >
+                    <h3 style={{ fontSize: '24px', fontWeight: 900, color: '#08162b', margin: 0 }}>
+                      {formatSelectedDate(draft.date)}
+                    </h3>
+                    <ChevronDown size={20} color="#64748b" />
+                  </button>
+                ) : (
+                  <h3 style={{ fontSize: '24px', fontWeight: 900, color: '#08162b', margin: 0 }}>
+                    {formatSelectedDate(selectedDate)}
+                  </h3>
+                )}
               </div>
               <div className="sheet-preview">
-                <span>{sheetMode === 'history' ? 'Tổng ngày' : 'Ước tính'}</span>
-                <strong>{formatKrw(sheetMode === 'history' ? shifts.filter(s => s.date === selectedDate).reduce((sum, s) => sum + calculateShiftPay(s).total, 0) : quickPreview)}</strong>
+                {sheetMode === 'history' && <span>Tổng ngày</span>}
+                <strong style={{ marginTop: 0 }}>
+                  {formatKrw(sheetMode === 'history' ? shifts.filter(s => s.date === selectedDate).reduce((sum, s) => sum + calculateShiftPay(s).total, 0) : quickPreview)}
+                </strong>
               </div>
             </div>
 
@@ -549,12 +617,15 @@ export function CalendarScreen({
                       </article>
                     ))}
                 </div>
-                
-                <button 
-                  type="button" 
-                  className="quick-save-button" 
+
+                <button
+                  type="button"
+                  className="quick-save-button"
                   style={{ marginTop: '20px' }}
-                  onClick={() => setSheetMode('form')}
+                  onClick={() => {
+                    setSheetMode('form');
+                    setDraft({ ...draft, note: '' });
+                  }}
                 >
                   <Plus size={16} />
                   Thêm ca làm mới cho ngày này
@@ -599,10 +670,10 @@ export function CalendarScreen({
                   </label>
                   <label className="micro-field wide">
                     <span>Ghi chú nhanh</span>
-                    <input 
-                      className="premium-input" 
-                      value={draft.note} 
-                      onChange={(event) => setDraft({ ...draft, note: event.target.value })} 
+                    <input
+                      className="premium-input"
+                      value={draft.note}
+                      onChange={(event) => setDraft({ ...draft, note: event.target.value })}
                       placeholder="Nhập ghi chú..."
                     />
                   </label>
@@ -611,21 +682,27 @@ export function CalendarScreen({
                 <div className="sheet-row">
                   <label className="micro-field">
                     <span className="field-label">Bắt đầu</span>
-                    <input 
-                      type="time" 
-                      className="premium-input" 
-                      value={draft.startTime} 
-                      onChange={(event) => setDraft({ ...draft, startTime: event.target.value })} 
-                    />
+                    <button
+                      type="button"
+                      className="premium-input"
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 12px' }}
+                      onClick={() => setIsStartTimeOpen(true)}
+                    >
+                      <span style={{ fontSize: '15px', fontWeight: 700, color: '#08162b' }}>{draft.startTime}</span>
+                      <Clock size={16} color="#657080" />
+                    </button>
                   </label>
                   <label className="micro-field">
                     <span className="field-label">Kết thúc</span>
-                    <input 
-                      type="time" 
-                      className="premium-input" 
-                      value={draft.endTime} 
-                      onChange={(event) => setDraft({ ...draft, endTime: event.target.value })} 
-                    />
+                    <button
+                      type="button"
+                      className="premium-input"
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 12px' }}
+                      onClick={() => setIsEndTimeOpen(true)}
+                    >
+                      <span style={{ fontSize: '15px', fontWeight: 700, color: '#08162b' }}>{draft.endTime}</span>
+                      <Clock size={16} color="#657080" />
+                    </button>
                   </label>
                 </div>
 
@@ -633,17 +710,17 @@ export function CalendarScreen({
                   <label className="micro-field">
                     <span className="field-label">Lương giờ</span>
                     <div className="settings-select-wrap">
-                      <input 
-                        type="number" 
-                        className="premium-input" 
-                        value={draft.hourlyWage} 
-                        onChange={(event) => setDraft({ ...draft, hourlyWage: Number(event.target.value) })} 
+                      <input
+                        type="number"
+                        className="premium-input"
+                        value={draft.hourlyWage}
+                        onChange={(event) => setDraft({ ...draft, hourlyWage: Number(event.target.value) })}
                       />
                       <span className="input-unit">KRW</span>
                     </div>
-                    <button 
-                      type="button" 
-                      className="min-wage-badge-v2" 
+                    <button
+                      type="button"
+                      className="min-wage-badge-v2"
                       onClick={() => setDraft({ ...draft, hourlyWage: 10320 })}
                       style={{ marginTop: '2px' }}
                     >
@@ -653,29 +730,31 @@ export function CalendarScreen({
                   <label className="micro-field">
                     <span className="field-label">Thời gian nghỉ</span>
                     <div className="settings-select-wrap">
-                      <input 
-                        type="number" 
-                        className="premium-input" 
-                        value={draft.breakMinutes} 
-                        onChange={(event) => setDraft({ ...draft, breakMinutes: Number(event.target.value) })} 
-                      />
-                      <span className="input-unit">phút</span>
+                      <button
+                        type="button"
+                        className="premium-input"
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 12px' }}
+                        onClick={() => setIsBreakTimeOpen(true)}
+                      >
+                        <span style={{ fontSize: '15px', fontWeight: 700, color: '#08162b' }}>{draft.breakMinutes}</span>
+                        <span className="input-unit" style={{ position: 'static', transform: 'none' }}>phút</span>
+                      </button>
                     </div>
                   </label>
                 </div>
 
                 <div className="korean-law-fields" style={{ marginTop: '16px', background: '#f5f7fa', padding: '16px', borderRadius: '16px' }}>
                   <p style={{ fontSize: '13px', fontWeight: 800, color: '#08162b', marginBottom: '12px' }}>Cài đặt tính lương (Luật HQ)</p>
-                  
+
                   <label className="korean-law-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                       <strong style={{ fontSize: '14px', color: '#08162b' }}>Thuế 3.3%</strong>
                       <span style={{ fontSize: '12px', color: '#657080' }}>Dành cho freelancer/Alba</span>
                     </div>
-                    <input 
-                      type="checkbox" 
-                      checked={draft.taxDeduction || false} 
-                      onChange={(event) => setDraft({ ...draft, taxDeduction: event.target.checked })} 
+                    <input
+                      type="checkbox"
+                      checked={draft.taxDeduction || false}
+                      onChange={(event) => setDraft({ ...draft, taxDeduction: event.target.checked })}
                       style={{ width: '20px', height: '20px', accentColor: '#2752ff' }}
                     />
                   </label>
@@ -685,10 +764,10 @@ export function CalendarScreen({
                       <strong style={{ fontSize: '14px', color: '#08162b' }}>Phụ cấp ca đêm (x1.5)</strong>
                       <span style={{ fontSize: '12px', color: '#657080' }}>Thường áp dụng sau 22:00</span>
                     </div>
-                    <input 
-                      type="checkbox" 
-                      checked={draft.nightShift || false} 
-                      onChange={(event) => setDraft({ ...draft, nightShift: event.target.checked })} 
+                    <input
+                      type="checkbox"
+                      checked={draft.nightShift || false}
+                      onChange={(event) => setDraft({ ...draft, nightShift: event.target.checked })}
                       style={{ width: '20px', height: '20px', accentColor: '#2752ff' }}
                     />
                   </label>
@@ -696,12 +775,12 @@ export function CalendarScreen({
                   <label className="korean-law-row" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     <strong style={{ fontSize: '14px', color: '#08162b' }}>Phụ cấp nghỉ / Cuối tuần (주휴수당)</strong>
                     <div className="settings-select-wrap">
-                      <input 
-                        type="number" 
+                      <input
+                        type="number"
                         className="premium-input"
-                        value={draft.holidayAllowance || ''} 
-                        onChange={(event) => setDraft({ ...draft, holidayAllowance: Number(event.target.value) })} 
-                        placeholder="Nhập số tiền phụ cấp (nếu có)" 
+                        value={draft.holidayAllowance || ''}
+                        onChange={(event) => setDraft({ ...draft, holidayAllowance: Number(event.target.value) })}
+                        placeholder="Nhập số tiền phụ cấp (nếu có)"
                       />
                       <span style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', color: '#657080', fontSize: '13px', fontWeight: 700 }}>KRW</span>
                     </div>
@@ -727,9 +806,9 @@ export function CalendarScreen({
             </div>
             <div className="confirm-footer">
               <button type="button" className="confirm-btn cancel" onClick={() => setDeleteConfirmId(null)}>Hủy bỏ</button>
-              <button 
-                type="button" 
-                className="confirm-btn danger" 
+              <button
+                type="button"
+                className="confirm-btn danger"
                 onClick={() => {
                   deleteShift(deleteConfirmId);
                   setDeleteConfirmId(null);
@@ -740,6 +819,51 @@ export function CalendarScreen({
             </div>
           </div>
         </section>
+      )}
+
+      {isStartTimeOpen && (
+        <TimeWheelModal
+          initialTime={draft.startTime}
+          title="Bắt đầu"
+          onClose={() => setIsStartTimeOpen(false)}
+          onConfirm={(time) => {
+            setDraft({ ...draft, startTime: time });
+            setIsStartTimeOpen(false);
+          }}
+        />
+      )}
+      {isEndTimeOpen && (
+        <TimeWheelModal
+          initialTime={draft.endTime}
+          title="Kết thúc"
+          onClose={() => setIsEndTimeOpen(false)}
+          onConfirm={(time) => {
+            setDraft({ ...draft, endTime: time });
+            setIsEndTimeOpen(false);
+          }}
+        />
+      )}
+      {isBreakTimeOpen && (
+        <MinuteWheelModal
+          initialMinutes={draft.breakMinutes}
+          title="Thời gian nghỉ"
+          onClose={() => setIsBreakTimeOpen(false)}
+          onConfirm={(minutes) => {
+            setDraft({ ...draft, breakMinutes: minutes });
+            setIsBreakTimeOpen(false);
+          }}
+        />
+      )}
+      {isDatePickerOpen && (
+        <DateWheelModal
+          title="Chọn ngày"
+          initialDate={draft.date}
+          onClose={() => setIsDatePickerOpen(false)}
+          onConfirm={(date) => {
+            setDraft({ ...draft, date });
+            setIsDatePickerOpen(false);
+          }}
+        />
       )}
     </>
   );

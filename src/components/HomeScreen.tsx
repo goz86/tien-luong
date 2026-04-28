@@ -304,6 +304,21 @@ export function HomeScreen({
                 </div>
               ))}
             </div>
+
+            <div style={{ padding: '0 24px calc(100px + env(safe-area-inset-bottom)) 24px' }}>
+              <button 
+                type="button" 
+                className="quick-save-button" 
+                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '14px', background: '#2752ff', color: 'white', borderRadius: '16px', fontWeight: 800, border: 'none', cursor: 'pointer' }}
+                onClick={() => {
+                  onOpenAdd();
+                  setSelectedWorkplace(null);
+                }}
+              >
+                <Plus size={18} />
+                Thêm ca làm mới
+              </button>
+            </div>
           </div>
         </div>
       )}
