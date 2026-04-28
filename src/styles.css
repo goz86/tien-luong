@@ -1709,6 +1709,21 @@ select {
     width: 430px;
     margin: 0 auto;
   }
+
+  .cm-write-fullscreen,
+  .cm-detail-screen {
+    max-width: 430px;
+    margin: 0 auto;
+    border-radius: 38px;
+    overflow: hidden;
+  }
+
+  .cm-comment-input-bar {
+    left: 50%;
+    right: auto;
+    width: 430px;
+    transform: translateX(-50%);
+  }
 }
 
 /* Settings Modal - Dropdown Design */
@@ -4063,6 +4078,19 @@ select {
   bottom: calc(95px + env(safe-area-inset-bottom, 0px));
   right: 16px;
   z-index: 100;
+}
+
+@media (min-width: 600px) {
+  .cm-write-bar {
+    /* phone-shell is 430px centered. Place button near right edge: 
+       50% puts us at center, then +215px goes to right edge, -16px for padding, 
+       but we need to offset by half the button width too. 
+       Use right-edge approach: calculate from center */
+    right: auto;
+    left: 50%;
+    /* 215px = half of 430px phone shell, minus 16px right padding */
+    transform: translateX(calc(215px - 100% - 16px));
+  }
 }
 
 .cm-write-bar-btn {
