@@ -4058,7 +4058,7 @@ select {
 /* Pinned Write Bar */
 .cm-write-bar {
   position: fixed;
-  bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(95px + env(safe-area-inset-bottom, 0px));
   right: 16px;
   z-index: 100;
 }
