@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, FormEvent } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { AnimatePresence, motion } from 'framer-motion';
-import { CalendarDays, House, MessageCircleMore, UserRound, WalletCards, Cloud, CloudOff } from 'lucide-react';
+import { CalendarDays, House, MessageCircleMore, UserRound, WalletCards, Cloud, CloudOff, Bell, ThumbsUp, MessageCircle, X, Flame, ShieldCheck } from 'lucide-react';
 import { demoCompanions, demoProfile, demoShifts } from './data';
 import { DEFAULT_KRW_TO_VND, MINIMUM_WAGE_2026, calculateShiftPay, shiftHours, Shift } from './lib/salary';
 import { hasSupabaseConfig, supabase } from './lib/supabase';
@@ -98,6 +98,14 @@ export default function App() {
   const [profile, setProfile] = useState(initial.profile);
   const [companions] = useState(initial.companions);
   const [requested, setRequested] = useState(initial.requested);
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  // Demo notifications data
+  const demoNotifications = [
+    { id: 1, type: 'like', user: 'Linh', post: 'Kinh nghiệm leo núi...', time: '2 phút trước' },
+    { id: 2, type: 'comment', user: 'Tuấn', post: 'Tìm bạn cùng phòng', content: 'Mình quan tâm ạ!', time: '15 phút trước' },
+    { id: 3, type: 'like', user: 'Ẩn danh', post: 'Sinchon có gì vui?', time: '1 giờ trước' },
+  ];
   const [rate, setRate] = useState(initial.rate);
   const [venueColors, setVenueColors] = useState<VenueColors>(initial.venueColors);
   const [incomeTarget, setIncomeTarget] = useState(initial.incomeTarget ?? 2000000);
@@ -507,6 +515,7 @@ export default function App() {
               currentMonth={calendarMonth}
               onPrevMonth={() => { const nextMonth = shiftMonth(calendarMonth, -1); setCalendarMonth(nextMonth); }}
               onNextMonth={() => { const nextMonth = shiftMonth(calendarMonth, 1); setCalendarMonth(nextMonth); }}
+              onOpenNotifications={() => setShowNotifications(true)}
             />
           ) : null}
           {tab === 'calendar' ? <CalendarScreen shifts={shifts} selectedDate={selectedDate} month={calendarMonth} venueSuggestions={[...new Set(workplaceSummary.map((item) => item.label))].slice(0, 4)} draft={draft} setDraft={setDraft} editingShiftId={editingShiftId} setEditingShiftId={setEditingShiftId} isSheetOpen={isDaySheetOpen} onCloseSheet={() => setIsDaySheetOpen(false)} onPrevMonth={() => { const nextMonth = shiftMonth(calendarMonth, -1); setCalendarMonth(nextMonth); setSelectedDate(nextMonth); setDraft((current) => ({ ...current, date: nextMonth })); }} onNextMonth={() => { const nextMonth = shiftMonth(calendarMonth, 1); setCalendarMonth(nextMonth); setSelectedDate(nextMonth); setDraft((current) => ({ ...current, date: nextMonth })); }} onSetMonth={(nextMonth) => { setCalendarMonth(nextMonth); setSelectedDate(nextMonth); setDraft((current) => ({ ...current, date: nextMonth })); }} onSelectDate={(date) => { setEditingShiftId(null); setSelectedDate(date); setDraft((current) => ({ ...current, date, note: '' })); setIsDaySheetOpen(true); }} onQuickSave={() => void addShift('calendar')} onUpdateShift={(shift) => void updateShift(shift)} onDeleteShift={(id) => void deleteShift(id)} venueColors={venueColors} onSetVenueColor={setVenueColor} /> : null}
@@ -527,7 +536,7 @@ export default function App() {
               onSetTarget={setIncomeTarget}
             />
           ) : null}
-          {tab === 'friends' ? <CommunityScreen profile={profile} companions={companions} requested={requested} onRequest={(id) => void requestConnection(id)} session={session} /> : null}
+          {tab === 'friends' ? <CommunityScreen profile={profile} companions={companions} requested={requested} onRequest={(id) => void requestConnection(id)} session={session} onOpenNotifications={() => setShowNotifications(true)} /> : null}
           {tab === 'profile' ? (
             <ProfileScreen
               profile={profile}
@@ -555,6 +564,57 @@ export default function App() {
             </button>
           ))}
         </nav>
+
+        {/* Global Notification Popover */}
+        <AnimatePresence>
+          {showNotifications && (
+            <motion.div 
+              className="cm-notif-popover"
+              initial={{ opacity: 0, scale: 0.9, y: -20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: -20 }}
+            >
+              <div className="cm-notif-popover-head">
+                <strong>Thông báo & Hoạt động</strong>
+                <button onClick={() => setShowNotifications(false)}><X size={16} /></button>
+              </div>
+              <div className="cm-notif-popover-body">
+                {demoNotifications.map(n => (
+                  <div key={`global-act-${n.id}`} className="cm-notif-item">
+                    <div className={`cm-notif-icon-circle ${n.type}`}>
+                      {n.type === 'like' ? <ThumbsUp size={12} /> : <MessageCircle size={12} />}
+                    </div>
+                    <div className="cm-notif-item-content">
+                      <p><strong>{n.user}</strong> {n.type === 'like' ? 'đã thích' : 'đã bình luận vào'} bài viết <span>"{n.post}"</span></p>
+                      {n.content && <p className="cm-notif-comment-snippet">"{n.content}"</p>}
+                      <span className="cm-notif-time">{n.time}</span>
+                    </div>
+                  </div>
+                ))}
+                
+                {/* Community News */}
+                <div className="cm-notif-item">
+                  <div className="cm-notif-icon-circle" style={{ background: 'rgba(255, 171, 0, 0.1)', color: '#ffab00' }}>
+                    <Flame size={14} />
+                  </div>
+                  <div className="cm-notif-item-content">
+                    <p><strong>Cộng đồng:</strong> Bài viết <span>"Mẹo tiết kiệm chi phí..."</span> đang rất Hot!</p>
+                    <span className="cm-notif-time">1 ngày trước</span>
+                  </div>
+                </div>
+                <div className="cm-notif-item">
+                  <div className="cm-notif-icon-circle" style={{ background: 'rgba(13, 155, 114, 0.1)', color: 'var(--green-600)' }}>
+                    <ShieldCheck size={14} />
+                  </div>
+                  <div className="cm-notif-item-content">
+                    <p><strong>Quy định:</strong> Cập nhật điều khoản cộng đồng mới nhất.</p>
+                    <span className="cm-notif-time">3 ngày trước</span>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

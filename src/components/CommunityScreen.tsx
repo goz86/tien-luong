@@ -17,6 +17,7 @@ import {
   User,
   X,
   Eye,
+  ShieldCheck,
 } from 'lucide-react';
 import { Session } from '@supabase/supabase-js';
 import { CompanionProfile } from '../lib/types';
@@ -41,12 +42,14 @@ export function CommunityScreen({
   onRequest,
   session,
   profile,
+  onOpenNotifications,
 }: {
   companions: CompanionProfile[];
   requested: string[];
   onRequest: (id: string) => void;
   session: Session | null;
   profile?: any;
+  onOpenNotifications: () => void;
 }) {
   const [view, setView] = useState<CommunityView>('feed');
   const [activeCategory, setActiveCategory] = useState<CategoryFilter>('all');
@@ -62,6 +65,8 @@ export function CommunityScreen({
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [isAnonymous, setIsAnonymous] = useState(true);
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
   const [dislikedPosts, setDislikedPosts] = useState<Set<string>>(new Set());
   const [bookmarkedPosts, setBookmarkedPosts] = useState<Set<string>>(new Set());
@@ -102,10 +107,20 @@ export function CommunityScreen({
     history.pushState({ communityView: 'detail' }, '');
   }
 
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+
   function goBack() {
     setView('feed');
     setSelectedPost(null);
     setReplyTo(null);
+  }
+
+  function handleConfirmDelete() {
+    if (showDeleteConfirm) {
+      setPosts((prev) => prev.filter((p) => p.id !== showDeleteConfirm));
+      setShowDeleteConfirm(null);
+      if (view === 'detail') goBack();
+    }
   }
 
   function toggleLike(postId: string) {
@@ -219,8 +234,24 @@ export function CommunityScreen({
     setNewCategory('free');
   }
 
-  // Filtered posts
-  const filteredPosts = activeCategory === 'all' ? posts : posts.filter((p) => p.category === activeCategory);
+  // Filtered posts logic
+  const filteredPosts = posts.filter((p) => {
+    // Category filter
+    if (activeCategory !== 'all' && p.category !== activeCategory) return false;
+    
+    // Feed filter (Mine / Saved)
+    if (feedFilter === 'mine' && p.user_id !== session?.user.id) return false;
+    if (feedFilter === 'saved' && !bookmarkedPosts.has(p.id)) return false;
+    
+    // Search query
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      return p.title.toLowerCase().includes(q) || p.content.toLowerCase().includes(q);
+    }
+    
+    return true;
+  });
+
   const hotPosts = [...posts].sort((a, b) => b.likes_count - a.likes_count).slice(0, 2);
   const trendingPost = [...posts].sort((a, b) => b.comments_count - a.comments_count)[0];
 
@@ -237,23 +268,61 @@ export function CommunityScreen({
     return (
       <>
         {/* Header */}
+        {/* Header */}
         <header className="cm-header">
-          <Logo />
-          <div className="cm-header-actions">
-            <button type="button" className="cm-icon-btn" aria-label="Tìm kiếm">
-              <Search size={20} />
-            </button>
-            <button type="button" className={`cm-icon-btn ${feedFilter === 'mine' ? 'active' : ''}`} aria-label="Bài của tôi" onClick={() => setFeedFilter(feedFilter === 'mine' ? 'all' : 'mine')}>
-              <PenLine size={19} />
-            </button>
-            <button type="button" className={`cm-icon-btn ${feedFilter === 'saved' ? 'active' : ''}`} aria-label="Đã lưu" onClick={() => setFeedFilter(feedFilter === 'saved' ? 'all' : 'saved')}>
-              <BookmarkCheck size={19} />
-            </button>
-            <button type="button" className="cm-icon-btn" aria-label="Thông báo">
-              <Bell size={20} />
-              <span className="cm-notification-dot" />
-            </button>
-          </div>
+          {!showSearch ? (
+            <>
+              <Logo />
+              <div className="cm-header-actions">
+                <button type="button" className="cm-icon-btn" onClick={() => setShowSearch(true)} aria-label="Tìm kiếm">
+                  <Search size={20} />
+                </button>
+                <button 
+                  type="button" 
+                  className={`cm-icon-btn ${feedFilter === 'mine' ? 'active' : ''}`}
+                  aria-label="Bài của tôi" 
+                  onClick={() => {
+                    setFeedFilter(feedFilter === 'mine' ? 'all' : 'mine');
+                  }}
+                >
+                  <PenLine size={19} />
+                </button>
+                <button type="button" className={`cm-icon-btn ${feedFilter === 'saved' ? 'active' : ''}`} aria-label="Đã lưu" onClick={() => setFeedFilter(feedFilter === 'saved' ? 'all' : 'saved')}>
+                  <BookmarkCheck size={19} />
+                </button>
+                <button 
+                  type="button" 
+                  className="cm-icon-btn"
+                  aria-label="Thông báo"
+                  onClick={onOpenNotifications}
+                >
+                  <Bell size={20} />
+                  <span className="cm-notification-dot" />
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="cm-search-bar">
+              <Search size={18} className="cm-search-icon" />
+              <input 
+                autoFocus
+                type="text" 
+                className="cm-search-input"
+                placeholder="Tìm kiếm bài viết..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onBlur={() => {
+                  if (!searchQuery) setShowSearch(false);
+                }}
+              />
+              <button type="button" className="cm-search-close" onClick={() => {
+                setShowSearch(false);
+                setSearchQuery('');
+              }}>
+                <X size={18} />
+              </button>
+            </div>
+          )}
         </header>
 
         {/* Notification Card */}
@@ -424,9 +493,8 @@ export function CommunityScreen({
 
               {/* Footer info */}
               <div className="cm-write-fs-footer">
-                <button 
-                  type="button"
-                  className={`cm-write-fs-anon ${!isAnonymous ? 'active' : ''}`}
+                <div 
+                  className={`cm-write-fs-anon-toggle ${isAnonymous ? 'active' : ''}`}
                   onClick={() => {
                     if (!session?.user.email) {
                       alert('Bạn cần đăng nhập để đăng bài với tên thật!');
@@ -434,17 +502,37 @@ export function CommunityScreen({
                     }
                     setIsAnonymous(!isAnonymous);
                   }}
-                  style={{
-                    background: 'none', border: 'none', cursor: 'pointer', 
-                    display: 'flex', alignItems: 'center', gap: '4px',
-                    color: isAnonymous ? 'var(--text-soft)' : 'var(--blue-500)',
-                    fontFamily: 'inherit', padding: '4px'
-                  }}
                 >
-                  <User size={15} />
-                  <span>{isAnonymous ? 'Đăng ẩn danh' : (profile?.displayName || 'Tên thật')}</span>
-                </button>
+                  <div className="cm-write-fs-switch" />
+                  <div className="cm-write-fs-anon-label">
+                    <span className="cm-write-fs-anon-title">
+                      {isAnonymous ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--blue-500)' }}>
+                          <ShieldCheck size={14} /> Đăng ẩn danh
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <User size={14} /> {profile?.displayName || 'Tên thật'}
+                        </div>
+                      )}
+                    </span>
+                    {isAnonymous && <span className="cm-write-fs-anon-subtitle">Danh tính của bạn sẽ được giữ kín</span>}
+                  </div>
+                </div>
                 <span className="cm-write-fs-count">{newContent.length}/2000</span>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Custom Delete Confirm Modal */}
+        {showDeleteConfirm && (
+          <div className="custom-confirm-overlay" onClick={() => setShowDeleteConfirm(null)}>
+            <div className="custom-confirm-card" onClick={(e) => e.stopPropagation()}>
+              <h3>Xác nhận xoá</h3>
+              <p>Bạn có chắc chắn muốn xoá bài viết này không? Hành động này không thể hoàn tác.</p>
+              <div className="custom-confirm-actions">
+                <button type="button" className="confirm-btn-cancel" onClick={() => setShowDeleteConfirm(null)}>Huỷ</button>
+                <button type="button" className="confirm-btn-delete" onClick={handleConfirmDelete}>Xoá ngay</button>
               </div>
             </div>
           </div>
@@ -479,10 +567,7 @@ export function CommunityScreen({
                   <PenLine size={18} />
                 </button>
                 <button type="button" className="cm-icon-btn" style={{ color: 'var(--coral-500)' }} onClick={() => {
-                  if (confirm('Bạn có chắc chắn muốn xoá bài viết này?')) {
-                    setPosts((prev) => prev.filter((p) => p.id !== selectedPost.id));
-                    goBack();
-                  }
+                  setShowDeleteConfirm(selectedPost.id);
                 }}>
                   <X size={22} />
                 </button>
@@ -618,9 +703,9 @@ export function CommunityScreen({
 
         {/* Comment Input */}
         <div className="cm-comment-input-bar">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 12px 6px' }}>
-            <button 
-              type="button"
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 12px 10px' }}>
+            <div 
+              className={`cm-comment-anon-toggle ${isAnonymous ? 'active' : ''}`}
               onClick={() => {
                 if (!session?.user.email) {
                   alert('Bạn cần đăng nhập để bình luận với tên thật!');
@@ -628,20 +713,24 @@ export function CommunityScreen({
                 }
                 setIsAnonymous(!isAnonymous);
               }}
-              style={{
-                background: 'none', border: 'none', cursor: 'pointer', 
-                display: 'flex', alignItems: 'center', gap: '4px',
-                color: isAnonymous ? 'var(--text-soft)' : 'var(--blue-500)',
-                fontFamily: 'inherit', fontSize: '11px', fontWeight: 600
-              }}
             >
-              <User size={12} />
-              <span>{isAnonymous ? 'Ẩn danh' : (profile?.displayName || 'Tên thật')}</span>
-            </button>
+              <div className="cm-comment-switch" />
+              <span className="cm-comment-anon-text">
+                {isAnonymous ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <ShieldCheck size={12} /> Ẩn danh
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <User size={12} /> {profile?.displayName || 'Tên thật'}
+                  </div>
+                )}
+              </span>
+            </div>
             {replyTo && (
               <div className="cm-replying-to">
-                <span>Đang trả lời bình luận</span>
-                <button type="button" onClick={() => setReplyTo(null)}>
+                <span style={{ fontSize: '11px', color: 'var(--blue-500)', fontWeight: 600 }}>Đang trả lời...</span>
+                <button type="button" onClick={() => setReplyTo(null)} style={{ background: 'none', border: 'none', color: 'var(--text-soft)', padding: '2px' }}>
                   <X size={14} />
                 </button>
               </div>
@@ -667,6 +756,112 @@ export function CommunityScreen({
             </button>
           </div>
         </div>
+        {/* Write Modal — Full Screen */}
+        {isWriting && (
+          <div className="cm-write-fullscreen">
+            <header className="cm-write-fs-header">
+              <button type="button" onClick={() => {
+                setIsWriting(false);
+                setEditingPostId(null);
+                setNewTitle('');
+                setNewContent('');
+              }} className="cm-icon-btn">
+                <X size={22} />
+              </button>
+              <span className="cm-write-fs-title">{editingPostId ? 'Sửa bài viết' : 'Tạo bài viết'}</span>
+              <button
+                type="button"
+                className="cm-write-fs-submit"
+                onClick={addPost}
+                disabled={!newTitle.trim() || !newContent.trim()}
+              >
+                Đăng
+              </button>
+            </header>
+
+            <div className="cm-write-fs-body">
+              {/* Category Picker */}
+              <div className="cm-write-fs-cats">
+                {(Object.keys(CATEGORIES) as CommunityCategory[]).map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    className={newCategory === cat ? 'active' : ''}
+                    onClick={() => setNewCategory(cat)}
+                    style={{ '--cat-color': CATEGORIES[cat].color, '--cat-bg': CATEGORIES[cat].bg } as React.CSSProperties}
+                  >
+                    {CATEGORIES[cat].label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Title Input */}
+              <input
+                className="cm-write-fs-title-input"
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                placeholder="Tiêu đề bài viết"
+                maxLength={100}
+              />
+
+              {/* Divider */}
+              <div className="cm-write-fs-divider" />
+
+              {/* Content */}
+              <textarea
+                className="cm-write-fs-content"
+                value={newContent}
+                onChange={(e) => setNewContent(e.target.value)}
+                placeholder="Chia sẻ suy nghĩ, kinh nghiệm, hoặc câu hỏi của bạn với cộng đồng du học sinh..."
+              />
+
+              {/* Footer info */}
+              <div className="cm-write-fs-footer">
+                <div 
+                  className={`cm-write-fs-anon-toggle ${isAnonymous ? 'active' : ''}`}
+                  onClick={() => {
+                    if (!session?.user.email) {
+                      alert('Bạn cần đăng nhập để đăng bài với tên thật!');
+                      return;
+                    }
+                    setIsAnonymous(!isAnonymous);
+                  }}
+                >
+                  <div className="cm-write-fs-switch" />
+                  <div className="cm-write-fs-anon-label">
+                    <span className="cm-write-fs-anon-title">
+                      {isAnonymous ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--blue-500)' }}>
+                          <ShieldCheck size={14} /> Đăng ẩn danh
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <User size={14} /> {profile?.displayName || 'Tên thật'}
+                        </div>
+                      )}
+                    </span>
+                    {isAnonymous && <span className="cm-write-fs-anon-subtitle">Danh tính của bạn sẽ được giữ kín</span>}
+                  </div>
+                </div>
+                <span className="cm-write-fs-count">{newContent.length}/2000</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Custom Delete Confirm Modal */}
+        {showDeleteConfirm && (
+          <div className="custom-confirm-overlay" onClick={() => setShowDeleteConfirm(null)}>
+            <div className="custom-confirm-card" onClick={(e) => e.stopPropagation()}>
+              <h3>Xác nhận xoá</h3>
+              <p>Bạn có chắc chắn muốn xoá bài viết này không? Hành động này không thể hoàn tác.</p>
+              <div className="custom-confirm-actions">
+                <button type="button" className="confirm-btn-cancel" onClick={() => setShowDeleteConfirm(null)}>Huỷ</button>
+                <button type="button" className="confirm-btn-delete" onClick={handleConfirmDelete}>Xoá ngay</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }

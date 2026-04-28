@@ -21,7 +21,8 @@ export function HomeScreen({
   onDeleteShift,
   currentMonth,
   onPrevMonth,
-  onNextMonth
+  onNextMonth,
+  onOpenNotifications
 }: {
   monthlyTotal: number;
   monthlyHours: number;
@@ -38,6 +39,7 @@ export function HomeScreen({
   currentMonth: string;
   onPrevMonth: () => void;
   onNextMonth: () => void;
+  onOpenNotifications: () => void;
 }) {
   const [selectedWorkplace, setSelectedWorkplace] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -58,6 +60,7 @@ export function HomeScreen({
         <button 
           type="button" 
           aria-label="Thông báo"
+          onClick={onOpenNotifications}
           style={{
             background: 'white',
             border: 'none',

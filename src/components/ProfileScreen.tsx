@@ -10,6 +10,8 @@ import {
   MapPin,
   GraduationCap,
   PenLine,
+  MessageSquare,
+  Bookmark,
   Shield,
   Bell,
   Globe,
@@ -23,11 +25,15 @@ import {
   EyeOff,
   Facebook,
   Camera,
+  Settings,
+  X,
 } from 'lucide-react';
 import { Session } from '@supabase/supabase-js';
 import { ProfileDraft } from '../lib/types';
 import { regions } from '../data';
 import { supabase } from '../lib/supabase';
+import { schools, School } from '../schools';
+import { koreanRegions, Region } from '../regions';
 
 type AuthMode = 'login' | 'register' | 'forgot';
 
@@ -82,6 +88,10 @@ export function ProfileScreen({
   const [isEditing, setIsEditing] = useState(false);
   const [showWallpaperPicker, setShowWallpaperPicker] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+  const [schoolSuggestions, setSchoolSuggestions] = useState<School[]>([]);
+  const [regionSuggestions, setRegionSuggestions] = useState<Region[]>([]);
+  const [regRegionSuggestions, setRegRegionSuggestions] = useState<Region[]>([]);
 
   const isKo = lang === 'ko';
 
@@ -197,7 +207,6 @@ export function ProfileScreen({
       const compressed = await resizeImage(reader.result as string);
       const updated = { ...profile, avatarUrl: compressed };
       setProfile(updated);
-      // Lưu ngay lập tức với dữ liệu mới để tránh mất ảnh
       saveProfile(updated);
     };
     reader.readAsDataURL(file);
@@ -206,102 +215,180 @@ export function ProfileScreen({
   const displayName = profile.displayName || (isKo ? '유학생' : 'Du học sinh');
   const initials = displayName.slice(0, 2).toUpperCase();
 
+  const handleSchoolChange = (val: string) => {
+    setProfile({ ...profile, school: val });
+    if (val.trim().length > 1) {
+      const filtered = schools.filter(s => 
+        s.ko.toLowerCase().includes(val.toLowerCase()) || 
+        s.en.toLowerCase().includes(val.toLowerCase())
+      ).slice(0, 5); // Hiển thị tối đa 5 gợi ý
+      setSchoolSuggestions(filtered);
+    } else {
+      setSchoolSuggestions([]);
+    }
+  };
+
+  const selectSchool = (s: School) => {
+    setProfile({ ...profile, school: s.en });
+    setSchoolSuggestions([]);
+  };
+
+  const handleRegionChange = (val: string) => {
+    setProfile({ ...profile, region: val });
+    if (val.trim().length > 1) {
+      const filtered = koreanRegions.filter(r => 
+        r.ko.toLowerCase().includes(val.toLowerCase()) || 
+        r.en.toLowerCase().includes(val.toLowerCase())
+      ).slice(0, 5);
+      setRegionSuggestions(filtered);
+    } else {
+      setRegionSuggestions([]);
+    }
+  };
+
+  const selectRegion = (r: Region) => {
+    setProfile({ ...profile, region: r.ko }); // Lưu tên tiếng Hàn cho khu vực
+    setRegionSuggestions([]);
+  };
+
+  const handleRegRegionChange = (val: string) => {
+    setRegRegion(val);
+    if (val.trim().length > 1) {
+      const filtered = koreanRegions.filter(r => 
+        r.ko.toLowerCase().includes(val.toLowerCase()) || 
+        r.en.toLowerCase().includes(val.toLowerCase())
+      ).slice(0, 5);
+      setRegRegionSuggestions(filtered);
+    } else {
+      setRegRegionSuggestions([]);
+    }
+  };
+
+  const selectRegRegion = (r: Region) => {
+    setRegRegion(r.ko);
+    setRegRegionSuggestions([]);
+  };
+
   return (
-    <>
-      {/* ===== HERO CARD (only when logged in) ===== */}
+    <div className="profile-wrapper">
+      {/* ===== HEADER / HERO SECTION (Only when logged in) ===== */}
       {session?.user.email ? (
-        <div className="pf-hero">
-          <div className="pf-hero-bg" />
-          
-          <input 
-            type="file" 
-            ref={fileInputRef} 
-            style={{ display: 'none' }} 
-            accept="image/*" 
-            onChange={handleFileChange} 
-          />
+        <>
+          <div className="pf-hero">
+            <div className="pf-hero-bg" />
+            
+            {/* Settings Trigger Button */}
+            <button 
+              type="button" 
+              className="pf-settings-trigger" 
+              onClick={() => setShowSettingsMenu(true)}
+            >
+              <Settings size={20} />
+            </button>
+            
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              style={{ display: 'none' }} 
+              accept="image/*" 
+              onChange={handleFileChange} 
+            />
 
-          <div className="pf-avatar" onClick={handleAvatarClick} style={{ cursor: 'pointer', position: 'relative' }}>
-            {profile.avatarUrl ? (
-              <img src={profile.avatarUrl} alt="Avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
-            ) : (
-              <span>{initials}</span>
-            )}
-            <div className="avatar-edit-badge">
-              <Camera size={12} color="white" />
+            <div className="pf-avatar" onClick={handleAvatarClick}>
+              {profile.avatarUrl ? (
+                <img src={profile.avatarUrl} alt="Avatar" className="pf-avatar-img" />
+              ) : (
+                <span className="pf-avatar-initials">{initials}</span>
+              )}
+              <div className="avatar-edit-badge">
+                <Camera size={12} color="white" />
+              </div>
             </div>
-          </div>
-          <h2 className="pf-name">{displayName}</h2>
-          {profile.school && (
-            <div className="pf-subtitle">
-              <GraduationCap size={14} />
-              <span>{profile.school}</span>
+            
+            <h2 className="pf-name">{displayName}</h2>
+            
+            <div className="pf-subtitle-group">
+              {profile.school && (
+                <div className="pf-subtitle">
+                  <GraduationCap size={14} />
+                  <span>{profile.school}</span>
+                </div>
+              )}
+              {profile.region && (
+                <div className="pf-subtitle">
+                  <MapPin size={14} />
+                  <span>{profile.region}</span>
+                </div>
+              )}
             </div>
-          )}
-          {profile.region && (
-            <div className="pf-subtitle">
-              <MapPin size={14} />
-              <span>{profile.region}</span>
-            </div>
-          )}
-          {profile.note && <p className="pf-bio">{profile.note}</p>}
+            
+            {profile.note && <p className="pf-bio">{profile.note}</p>}
 
-        <div className="pf-stats-row">
-          <div className="pf-stat">
-            <PenLine size={18} />
-            <div className="pf-stat-content">
-              <strong>12</strong>
-              <span>{isKo ? '게시' : 'Bài viết'}</span>
+            <div className="pf-stats-row">
+              <div className="pf-stat">
+                <div className="pf-stat-icon"><PenLine size={14} /></div>
+                <strong>12</strong>
+                <span>{isKo ? '게시글' : 'Bài viết'}</span>
+              </div>
+              <div className="pf-stat">
+                <div className="pf-stat-icon"><MessageSquare size={14} /></div>
+                <strong>48</strong>
+                <span>{isKo ? '댓글' : 'Bình luận'}</span>
+              </div>
+              <div className="pf-stat">
+                <div className="pf-stat-icon"><Bookmark size={14} /></div>
+                <strong>7</strong>
+                <span>{isKo ? '북마크' : 'Đã lưu'}</span>
+              </div>
+              <div className="pf-stat">
+                <div className="pf-stat-icon"><Heart size={14} /></div>
+                <strong>156</strong>
+                <span>{isKo ? '좋아요' : 'Thích'}</span>
+              </div>
             </div>
           </div>
-          <div className="pf-stat-divider" />
-          <div className="pf-stat">
-            <MessageCircle size={18} />
-            <div className="pf-stat-content">
-              <strong>48</strong>
-              <span>{isKo ? '댓글' : 'Bình luận'}</span>
+
+          {/* ===== BADGES SECTION ===== */}
+          <section className="pf-card">
+            <div className="pf-card-header">
+              <span style={{ fontSize: '18px' }}>🏆</span>
+              <span>{isKo ? '업적 배지' : 'Huy hiệu thành tích'}</span>
+              <span className="pf-see-all">{isKo ? '모두 보기' : 'Xem tất cả'}</span>
             </div>
-          </div>
-          <div className="pf-stat-divider" />
-          <div className="pf-stat">
-            <BookmarkCheck size={18} />
-            <div className="pf-stat-content">
-              <strong>7</strong>
-              <span>{isKo ? '저장' : 'Đã lưu'}</span>
+            <div className="pf-badges-grid">
+              {[
+                { label_vi: 'Chăm chỉ', label_ko: '열심히', icon: '🔥', color: '#ffedd5', border: '#f97316', earned: true },
+                { label_vi: 'Tiết kiệm', label_ko: '절약왕', icon: '💰', color: '#dcfce7', border: '#22c55e', earned: true },
+                { label_vi: 'Cộng đồng', label_ko: '커뮤니티', icon: '💬', color: '#dbeafe', border: '#3b82f6', earned: true },
+                { label_vi: 'Chi tiêu giỏi', label_ko: '소비왕', icon: '💎', color: '#f1f5f9', border: '#94a3b8', earned: false },
+                { label_vi: 'Thủ lĩnh', label_ko: '리더', icon: '👑', color: '#fef9c3', border: '#eab308', earned: false },
+                { label_vi: 'Bí ẩn', label_ko: '미스터리', icon: '🔮', color: '#f3e8ff', border: '#a855f7', earned: false },
+              ].map((badge, i) => (
+                <div key={i} className={`pf-badge ${badge.earned ? 'earned' : 'locked'}`}>
+                  <div className="pf-badge-icon" style={{ background: badge.color, borderColor: badge.border }}>
+                    {badge.icon}
+                  </div>
+                  <span>{isKo ? badge.label_ko : badge.label_vi}</span>
+                </div>
+              ))}
             </div>
-          </div>
-          <div className="pf-stat-divider" />
-          <div className="pf-stat">
-            <Heart size={18} />
-            <div className="pf-stat-content">
-              <strong>156</strong>
-              <span>{isKo ? '좋아요' : 'Thích'}</span>
-            </div>
-          </div>
-        </div>
-        </div>
+          </section>
+        </>
       ) : (
-        <header className="appbar compact" style={{ margin: '12px 6px 8px' }}>
-          <span className="appbar-title" style={{ fontSize: '20px', fontWeight: 900 }}>{isKo ? '프로필' : 'Hồ sơ'}</span>
-        </header>
-      )}
-
-      {/* ===== AUTH SECTION ===== */}
-      {!session?.user.email ? (
-        <section className="pf-card">
-          <div className="pf-card-header">
-            <Shield size={18} />
-            <span>{authMode === 'login' ? (isKo ? '로그인' : 'Đăng nhập') : authMode === 'register' ? (isKo ? '회원가입' : 'Đăng ký') : (isKo ? '비밀번호 찾기' : 'Quên mật khẩu')}</span>
+        /* ===== AUTH / LOGIN CARD (When not logged in) ===== */
+        <section className="pf-auth-card">
+          <div className="pf-auth-header">
+            <Shield size={32} color="var(--blue-500)" />
+            <h2>{isKo ? '환영합니다!' : 'Chào mừng bạn!'}</h2>
+            <p>{isKo ? '로그인하고 계속하세요' : 'Đăng nhập để tiếp tục'}</p>
           </div>
-
+          
           <form onSubmit={handleAuth} className="pf-auth-form">
-            {/* Email */}
             <div className="pf-field">
               <label>{isKo ? '이메일' : 'Email'}</label>
               <input className="pf-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="example@email.com" required />
             </div>
 
-            {/* Password - login & register */}
             {authMode !== 'forgot' && (
               <div className="pf-field">
                 <label>{isKo ? '비밀번호' : 'Mật khẩu'}</label>
@@ -330,11 +417,28 @@ export function ProfileScreen({
                   <label>{isKo ? '학교 ' : 'Trường đang theo học'}</label>
                   <input className="pf-input" value={regSchool} onChange={(e) => setRegSchool(e.target.value)} placeholder={isKo ? '학교 이름' : 'Tên trường...'} />
                 </div>
-                <div className="pf-field">
+                 <div className="pf-field" style={{ position: 'relative' }}>
                   <label>{isKo ? '지역' : 'Khu vực'}</label>
-                  <select className="pf-input" value={regRegion} onChange={(e) => setRegRegion(e.target.value)}>
-                    {regions.map((r) => (<option key={r}>{r}</option>))}
-                  </select>
+                  <input 
+                    className="pf-input" 
+                    placeholder={isKo ? '서울 노원구' : 'Ví dụ: Seoul Nowon-gu'} 
+                    value={regRegion} 
+                    onChange={(e) => handleRegRegionChange(e.target.value)} 
+                  />
+                  {regRegionSuggestions.length > 0 && (
+                    <div className="pf-autocomplete-list">
+                      {regRegionSuggestions.map((r, idx) => (
+                        <div 
+                          key={idx} 
+                          className="pf-autocomplete-item"
+                          onClick={() => selectRegRegion(r)}
+                        >
+                          <div className="pf-ac-en">{r.en}</div>
+                          <div className="pf-ac-ko">{r.ko}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </>
             )}
@@ -400,155 +504,130 @@ export function ProfileScreen({
             )}
           </div>
         </section>
-      ) : (
-        <section className="pf-card">
-          <div className="pf-card-header">
-            <Shield size={18} />
-            <span>{isKo ? '계정' : 'Tài khoản'}</span>
-          </div>
-          <p className="pf-account-email">{session.user.email}</p>
-          <button type="button" onClick={handleSignOut} className="pf-signout-btn">
-            <LogOut size={16} />
-            {isKo ? '로그아웃' : 'Đăng xuất'}
-          </button>
-        </section>
       )}
-
-      {/* ===== EDIT PROFILE (only when logged in) ===== */}
-      {session?.user.email && (
-        <section className="pf-card">
-          <div className="pf-card-header" style={{ cursor: 'pointer' }} onClick={() => setIsEditing(!isEditing)}>
-            <PenLine size={18} />
-            <span>{isKo ? '프로필 수정' : 'Chỉnh sửa hồ sơ'}</span>
-            <ChevronRight size={18} style={{ marginLeft: 'auto', transform: isEditing ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }} />
-          </div>
-          {isEditing && (
-            <div className="pf-edit-form">
-              <div className="pf-field">
-                <label>{isKo ? '닉네임' : 'Tên hiển thị'}</label>
-                <input className="pf-input" value={profile.displayName} onChange={(e) => setProfile({ ...profile, displayName: e.target.value })} />
-              </div>
-              <div className="pf-field">
-                <label>{isKo ? '학교 / 어학당' : 'Trường / 어학당'}</label>
-                <input className="pf-input" value={profile.school} onChange={(e) => setProfile({ ...profile, school: e.target.value })} />
-              </div>
-              <div className="pf-field">
-                <label>{isKo ? '지역' : 'Khu vực'}</label>
-                <select className="pf-input" value={profile.region} onChange={(e) => setProfile({ ...profile, region: e.target.value })}>
-                  {regions.map((r) => (<option key={r}>{r}</option>))}
-                </select>
-              </div>
-              <div className="pf-field">
-                <label>{isKo ? '자기소개' : 'Giới thiệu'}</label>
-                <textarea className="pf-input pf-textarea" rows={3} value={profile.note} onChange={(e) => setProfile({ ...profile, note: e.target.value })} />
-              </div>
-              <button type="button" className="pf-save-btn" onClick={() => saveProfile()} disabled={savingProfile}>
-                {savingProfile ? (isKo ? '저장 중...' : 'Đang lưu...') : (isKo ? '저장' : 'Lưu thay đổi')}
-              </button>
+      {/* ===== SETTINGS POPOVER ===== */}
+      {showSettingsMenu && session && (
+        <div className="pf-settings-overlay" onClick={() => setShowSettingsMenu(false)}>
+          <div className="pf-settings-popover" onClick={e => e.stopPropagation()}>
+            <div className="pf-popover-head">
+              <h3>{isKo ? '설정 및 관리' : 'Cài đặt & Quản lý'}</h3>
+              <button onClick={() => setShowSettingsMenu(false)}><X size={20} /></button>
             </div>
-          )}
-        </section>
+            <div className="pf-popover-body">
+              {/* Account */}
+              <div className="pf-pop-section">
+                <label>{isKo ? '계정' : 'Tài khoản'}</label>
+                <div className="pf-pop-info-row">
+                  <span>{session.user.email}</span>
+                  <button className="pf-pop-signout" onClick={handleSignOut}>
+                    <LogOut size={14} /> {isKo ? '로그아웃' : 'Đăng xuất'}
+                  </button>
+                </div>
+              </div>
+              {/* Edit Profile */}
+              <div className="pf-pop-section">
+                <label>{isKo ? '프로필 수정' : 'Chỉnh sửa hồ sơ'}</label>
+                <div className="pf-edit-form compact">
+                  <div className="pf-pop-field">
+                    <span>{isKo ? '닉네임' : 'Tên hiển thị'}</span>
+                    <input className="pf-input" placeholder={isKo ? '닉네임 입력' : 'Nhập tên...'} value={profile.displayName} onChange={(e) => setProfile({ ...profile, displayName: e.target.value })} />
+                  </div>
+                  <div className="pf-pop-field" style={{ position: 'relative' }}>
+                    <span>{isKo ? '학교' : 'Trường học'}</span>
+                    <input 
+                      className="pf-input" 
+                      placeholder={isKo ? '학교 이름' : 'Tên trường...'} 
+                      value={profile.school} 
+                      onChange={(e) => handleSchoolChange(e.target.value)} 
+                    />
+                    {schoolSuggestions.length > 0 && (
+                      <div className="pf-autocomplete-list">
+                        {schoolSuggestions.map((s, idx) => (
+                          <div 
+                            key={idx} 
+                            className="pf-autocomplete-item"
+                            onClick={() => selectSchool(s)}
+                          >
+                            <div className="pf-ac-en">{s.en}</div>
+                            <div className="pf-ac-ko">{s.ko}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="pf-pop-field" style={{ position: 'relative' }}>
+                    <span>{isKo ? '지역' : 'Khu vực'}</span>
+                    <input 
+                      className="pf-input" 
+                      placeholder={isKo ? '서울 노원구' : 'Ví dụ: Seoul Nowon-gu'} 
+                      value={profile.region} 
+                      onChange={(e) => handleRegionChange(e.target.value)} 
+                    />
+                    {regionSuggestions.length > 0 && (
+                      <div className="pf-autocomplete-list">
+                        {regionSuggestions.map((r, idx) => (
+                          <div 
+                            key={idx} 
+                            className="pf-autocomplete-item"
+                            onClick={() => selectRegion(r)}
+                          >
+                            <div className="pf-ac-en">{r.en}</div>
+                            <div className="pf-ac-ko">{r.ko}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="pf-pop-field">
+                    <span>{isKo ? '소개' : 'Giới thiệu bản thân'}</span>
+                    <textarea 
+                      className="pf-input pf-textarea" 
+                      placeholder={isKo ? '자신을 소개해주세요' : 'Viết vài dòng giới thiệu...'} 
+                      rows={2}
+                      value={profile.note || ''} 
+                      onChange={(e) => setProfile({ ...profile, note: e.target.value })} 
+                    />
+                  </div>
+                  <button type="button" className="pf-save-btn" onClick={() => { saveProfile(profile); setShowSettingsMenu(false); }} disabled={savingProfile}>
+                    {savingProfile ? '...' : (isKo ? '저장' : 'Lưu thay đổi')}
+                  </button>
+                </div>
+              </div>
+              {/* Preferences */}
+              <div className="pf-pop-section">
+                <label>{isKo ? '애플리케이션' : 'Ứng dụng'}</label>
+                <div className="pf-setting-row mini" onClick={onToggleDarkMode}>
+                  <div className="pf-setting-icon">{isDarkMode ? <Moon size={16} /> : <Sun size={16} />}</div>
+                  <span>{isKo ? '다크 모드' : 'Chế độ tối'}</span>
+                  <div className="pf-toggle" data-active={isDarkMode}><div className="pf-toggle-knob" /></div>
+                </div>
+                <div className="pf-setting-row mini" onClick={() => setShowWallpaperPicker(!showWallpaperPicker)}>
+                  <div className="pf-setting-icon"><Palette size={16} /></div>
+                  <span>{isKo ? '배경화면' : 'Hình nền'}</span>
+                  <ChevronRight size={16} style={{ marginLeft: 'auto', transform: showWallpaperPicker ? 'rotate(90deg)' : 'none' }} />
+                </div>
+                {showWallpaperPicker && (
+                  <div className="pf-wallpaper-grid compact">
+                    {WALLPAPERS.map((w) => (
+                      <button key={w.key} className={`pf-wallpaper-item ${wallpaper === w.key ? 'active' : ''}`} onClick={() => onChangeWallpaper(w.key)}>
+                        <div className="pf-wallpaper-preview" style={{ background: w.preview }} />
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="pf-setting-row mini">
+                  <div className="pf-setting-icon"><Globe size={16} /></div>
+                  <span>{isKo ? '언어' : 'Ngôn ngữ'}</span>
+                  <div className="pf-lang-toggle mini">
+                    <button className={lang === 'vi' ? 'active' : ''} onClick={() => onChangeLang('vi')}>VI</button>
+                    <button className={lang === 'ko' ? 'active' : ''} onClick={() => onChangeLang('ko')}>KO</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
-
-      {/* ===== SETTINGS ===== */}
-      <section className="pf-card">
-        <div className="pf-card-header">
-          <span style={{ fontSize: '18px' }}>⚙️</span>
-          <span>{isKo ? '설정' : 'Cài đặt'}</span>
-        </div>
-
-        {/* Dark Mode */}
-        <div className="pf-setting-row">
-          <div className="pf-setting-icon">{isDarkMode ? <Moon size={18} /> : <Sun size={18} />}</div>
-          <div className="pf-setting-info">
-            <strong>{isKo ? '다크 모드' : 'Chế độ tối'}</strong>
-            <span>{isKo ? '야간 사용 시 눈 보호' : 'Bảo vệ mắt khi sử dụng ban đêm'}</span>
-          </div>
-          <button className="pf-toggle" data-active={isDarkMode} onClick={onToggleDarkMode}>
-            <div className="pf-toggle-knob" />
-          </button>
-        </div>
-
-        {/* Wallpaper */}
-        <div className="pf-setting-row" style={{ cursor: 'pointer' }} onClick={() => setShowWallpaperPicker(!showWallpaperPicker)}>
-          <div className="pf-setting-icon"><Palette size={18} /></div>
-          <div className="pf-setting-info">
-            <strong>{isKo ? '배경화면' : 'Hình nền'}</strong>
-            <span>{WALLPAPERS.find((w) => w.key === wallpaper)?.[isKo ? 'label_ko' : 'label_vi']}</span>
-          </div>
-          <ChevronRight size={18} color="#94a3b8" style={{ transform: showWallpaperPicker ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }} />
-        </div>
-        {showWallpaperPicker && (
-          <div className="pf-wallpaper-grid">
-            {WALLPAPERS.map((w) => (
-              <button key={w.key} className={`pf-wallpaper-item ${wallpaper === w.key ? 'active' : ''}`} onClick={() => onChangeWallpaper(w.key)}>
-                <div className="pf-wallpaper-preview" style={{ background: w.preview }} />
-                <span>{isKo ? w.label_ko : w.label_vi}</span>
-                {wallpaper === w.key && <Check size={14} className="pf-wallpaper-check" />}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Language */}
-        <div className="pf-setting-row">
-          <div className="pf-setting-icon"><Globe size={18} /></div>
-          <div className="pf-setting-info">
-            <strong>{isKo ? '언어' : 'Ngôn ngữ'}</strong>
-            <span>{isKo ? '한국어' : 'Tiếng Việt'}</span>
-          </div>
-          <div className="pf-lang-toggle">
-            <button className={lang === 'vi' ? 'active' : ''} onClick={() => onChangeLang('vi')}>🇻🇳</button>
-            <button className={lang === 'ko' ? 'active' : ''} onClick={() => onChangeLang('ko')}>🇰🇷</button>
-          </div>
-        </div>
-
-        {/* Notifications */}
-        <div className="pf-setting-row">
-          <div className="pf-setting-icon"><Bell size={18} /></div>
-          <div className="pf-setting-info">
-            <strong>{isKo ? '알림' : 'Thông báo'}</strong>
-            <span>{isKo ? '새 글 알림 받기' : 'Nhận thông báo bài viết mới'}</span>
-          </div>
-          <ChevronRight size={18} color="#94a3b8" />
-        </div>
-
-        {/* About */}
-        <div className="pf-setting-row">
-          <div className="pf-setting-icon"><Info size={18} /></div>
-          <div className="pf-setting-info">
-            <strong>{isKo ? '앱 정보' : 'Về ứng dụng'}</strong>
-            <span>Duhoc Mate v1.0</span>
-          </div>
-          <ChevronRight size={18} color="#94a3b8" />
-        </div>
-      </section>
-
-      {/* ===== BADGES ===== */}
-      <section className="pf-card">
-        <div className="pf-card-header">
-          <span style={{ fontSize: '18px' }}>🏆</span>
-          <span>{isKo ? '업적 배지' : 'Huy hiệu thành tích'}</span>
-          <span className="pf-see-all">{isKo ? '모두 보기' : 'Xem tất cả'}</span>
-        </div>
-        <div className="pf-badges-grid">
-          {[
-            { label_vi: 'Chăm chỉ', label_ko: '열심히', icon: '🔥', color: '#ffedd5', border: '#f97316', earned: true },
-            { label_vi: 'Tiết kiệm', label_ko: '절약왕', icon: '💰', color: '#dcfce7', border: '#22c55e', earned: true },
-            { label_vi: 'Cộng đồng', label_ko: '커뮤니티', icon: '💬', color: '#dbeafe', border: '#3b82f6', earned: true },
-            { label_vi: 'Chi tiêu giỏi', label_ko: '소비왕', icon: '💎', color: '#f1f5f9', border: '#94a3b8', earned: false },
-            { label_vi: 'Thủ lĩnh', label_ko: '리더', icon: '👑', color: '#fef9c3', border: '#eab308', earned: false },
-            { label_vi: 'Bí ẩn', label_ko: '미스터리', icon: '🔮', color: '#f3e8ff', border: '#a855f7', earned: false },
-          ].map((badge, i) => (
-            <div key={i} className={`pf-badge ${badge.earned ? 'earned' : 'locked'}`}>
-              <div className="pf-badge-icon" style={{ background: badge.color, borderColor: badge.border }}>
-                {badge.icon}
-              </div>
-              <span>{isKo ? badge.label_ko : badge.label_vi}</span>
-            </div>
-          ))}
-        </div>
-      </section>
-    </>
+    </div>
   );
 }
