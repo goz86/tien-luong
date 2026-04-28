@@ -11,7 +11,7 @@ import { HomeScreen } from './components/HomeScreen';
 import { CalendarScreen } from './components/CalendarScreen';
 import { IncomeScreen } from './components/IncomeScreen';
 import { CommunityScreen } from './components/CommunityScreen';
-import { ProfileScreen } from './components/ProfileScreen';
+import { ProfileScreen, WALLPAPERS, type WallpaperKey, type AppLang } from './components/ProfileScreen';
 
 const STORAGE_KEY = 'duhoc-mate-redesign-state';
 const getLocalDateString = () => {
@@ -19,12 +19,18 @@ const getLocalDateString = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 const todayIso = getLocalDateString();
-const tabs: Array<{ id: Tab; label: string; icon: typeof House }> = [
-  { id: 'home', label: 'Trang chủ', icon: House },
-  { id: 'calendar', label: 'Lịch', icon: CalendarDays },
-  { id: 'income', label: 'Thu nhập', icon: WalletCards },
-  { id: 'friends', label: 'Cộng đồng', icon: MessageCircleMore },
-  { id: 'profile', label: 'Hồ sơ', icon: UserRound }
+
+const tabLabels: Record<AppLang, Record<Tab, string>> = {
+  vi: { home: 'Trang chủ', calendar: 'Lịch', income: 'Thu nhập', friends: 'Cộng đồng', profile: 'Hồ sơ' },
+  ko: { home: '홈', calendar: '캘린더', income: '수입', friends: '커뮤니티', profile: '프로필' },
+};
+
+const tabIcons: Array<{ id: Tab; icon: typeof House }> = [
+  { id: 'home', icon: House },
+  { id: 'calendar', icon: CalendarDays },
+  { id: 'income', icon: WalletCards },
+  { id: 'friends', icon: MessageCircleMore },
+  { id: 'profile', icon: UserRound }
 ];
 
 const defaultDraft: ShiftDraft = {
@@ -106,11 +112,27 @@ export default function App() {
     if (typeof window === 'undefined') return false;
     return window.localStorage.getItem('duhoc-mate-dark') === 'true';
   });
+  const [wallpaper, setWallpaper] = useState<WallpaperKey>(() => {
+    if (typeof window === 'undefined') return 'default';
+    return (window.localStorage.getItem('duhoc-mate-wallpaper') as WallpaperKey) || 'default';
+  });
+  const [lang, setLang] = useState<AppLang>(() => {
+    if (typeof window === 'undefined') return 'vi';
+    return (window.localStorage.getItem('duhoc-mate-lang') as AppLang) || 'vi';
+  });
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDarkMode);
     window.localStorage.setItem('duhoc-mate-dark', isDarkMode.toString());
   }, [isDarkMode]);
+
+  useEffect(() => {
+    window.localStorage.setItem('duhoc-mate-wallpaper', wallpaper);
+  }, [wallpaper]);
+
+  useEffect(() => {
+    window.localStorage.setItem('duhoc-mate-lang', lang);
+  }, [lang]);
 
   async function addExpense(expense: Omit<Expense, 'id'>) {
     const next: Expense = { ...expense, id: crypto.randomUUID() };
@@ -456,9 +478,13 @@ export default function App() {
     history.replaceState({ tab: initialTab }, '');
   }, []);
 
+  const wallpaperStyle = wallpaper !== 'default'
+    ? { background: WALLPAPERS.find(w => w.key === wallpaper)?.gradient }
+    : undefined;
+
   return (
     <div className="app-stage">
-      <div className="phone-shell">
+      <div className="phone-shell" style={wallpaperStyle}>
         <main key={tab} className="screen-shell">
               {tab === 'home' ? (
             <HomeScreen 
@@ -507,17 +533,21 @@ export default function App() {
               session={session} 
               isDarkMode={isDarkMode}
               onToggleDarkMode={() => setIsDarkMode(!isDarkMode)}
+              wallpaper={wallpaper}
+              onChangeWallpaper={setWallpaper}
+              lang={lang}
+              onChangeLang={setLang}
             />
           ) : null}
         </main>
 
         <nav className="bottom-tabs" aria-label="Điều hướng chính">
-          {tabs.map(({ id, label, icon: Icon }) => (
+          {tabIcons.map(({ id, icon: Icon }) => (
             <button key={id} type="button" onClick={() => changeTab(id)} className={tab === id ? 'tab-item active' : 'tab-item'}>
               <span className="tab-icon-wrap">
                 <Icon size={20} />
               </span>
-              <span>{label}</span>
+              <span>{tabLabels[lang][id]}</span>
             </button>
           ))}
         </nav>

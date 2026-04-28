@@ -4746,3 +4746,146 @@ select {
 .dark .pf-toggle {
   background: rgba(255, 255, 255, 0.1);
 }
+
+/* Auth switch links */
+.pf-auth-switch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.pf-auth-switch button {
+  background: none;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--blue-500);
+  cursor: pointer;
+  font-family: inherit;
+  padding: 4px;
+}
+
+.pf-auth-switch button:hover {
+  text-decoration: underline;
+}
+
+/* Password field */
+.pf-password-wrap {
+  position: relative;
+}
+
+.pf-password-wrap .pf-input {
+  padding-right: 44px;
+}
+
+.pf-eye-btn {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--text-faint);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+}
+
+/* Divider */
+.pf-divider {
+  height: 1px;
+  background: var(--line);
+  margin: 6px 0;
+}
+
+/* Wallpaper Picker */
+.pf-wallpaper-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  padding: 12px 0 4px;
+}
+
+.pf-wallpaper-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 2px solid transparent;
+  border-radius: 14px;
+  padding: 8px;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.pf-wallpaper-item.active {
+  border-color: var(--blue-500);
+  background: rgba(39, 82, 255, 0.06);
+}
+
+.pf-wallpaper-preview {
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.pf-wallpaper-item span {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.pf-wallpaper-check {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: var(--blue-500);
+  color: white;
+  border-radius: 50%;
+  padding: 2px;
+}
+
+/* Language Toggle */
+.pf-lang-toggle {
+  display: flex;
+  gap: 4px;
+  background: var(--surface);
+  border-radius: 10px;
+  padding: 3px;
+}
+
+.pf-lang-toggle button {
+  width: 36px;
+  height: 30px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pf-lang-toggle button.active {
+  background: var(--blue-700);
+  box-shadow: 0 2px 6px rgba(39, 82, 255, 0.3);
+}
+
+/* Dark mode overrides for new elements */
+.dark .pf-wallpaper-item.active {
+  background: rgba(39, 82, 255, 0.15);
+}
+
+.dark .pf-lang-toggle {
+  background: rgba(255, 255, 255, 0.06);
+}
