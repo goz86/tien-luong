@@ -5439,67 +5439,178 @@ select {
   border-color: var(--blue-700);
 }
 
-/* Auth Form & Input */
 .pf-auth-form {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
 }
 
 .pf-input {
   width: 100%;
-  padding: 13px 16px;
-  border-radius: 14px;
+  padding: 14px 18px;
+  border-radius: 16px;
   border: 1.5px solid var(--line);
-  background: var(--surface);
+  background: var(--bg-page);
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-main);
   outline: none;
-  font-family: inherit;
+  transition: all 0.2s;
   box-sizing: border-box;
-  transition: border-color 0.15s;
 }
 
 .pf-input:focus {
   border-color: var(--blue-500);
-}
-
-.pf-textarea {
-  resize: none;
-  line-height: 1.6;
+  background: white;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.08);
 }
 
 .pf-submit-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 14px;
-  border-radius: 14px;
+  gap: 10px;
+  padding: 15px;
+  border-radius: 16px;
   border: none;
-  background: var(--blue-700);
+  background: var(--blue-600);
   color: white;
   font-size: 15px;
   font-weight: 800;
   cursor: pointer;
-  font-family: inherit;
-  transition: all 0.15s;
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+  margin-top: 8px;
 }
 
-.pf-submit-btn:disabled {
-  opacity: 0.4;
+.pf-submit-btn:hover {
+  background: var(--blue-700);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.25);
 }
 
 .pf-submit-btn:active {
-  transform: scale(0.97);
+  transform: translateY(0) scale(0.98);
+}
+
+.pf-submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.pf-password-wrap {
+  position: relative;
+}
+
+.pf-eye-btn {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--text-soft);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+}
+.pf-auth-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.pf-auth-header h2 {
+  font-size: 24px;
+  font-weight: 900;
+  margin: 12px 0 4px;
+  color: var(--text-main);
+}
+
+.pf-auth-header p {
+  color: var(--text-soft);
+  font-size: 14px;
+}
+
+.pf-social-auth {
+  margin-top: 24px;
+}
+
+.pf-divider-text {
+  position: relative;
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.pf-divider-text::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--line);
+}
+
+.pf-divider-text span {
+  position: relative;
+  background: var(--bg-card);
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-faint);
+  text-transform: uppercase;
+}
+
+.pf-social-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.pf-social-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1.5px solid var(--line);
+  background: white;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.pf-social-btn:hover {
+  background: var(--bg-page);
+  border-color: var(--text-soft);
+}
+
+.pf-social-btn.fb {
+  color: #1877f2;
 }
 
 .pf-auth-msg {
-  margin: 12px 0 0;
+  margin-top: 20px;
+  padding: 12px 16px;
+  border-radius: 12px;
   font-size: 13px;
   font-weight: 600;
-  color: var(--blue-500);
+  text-align: center;
+  background: rgba(239, 68, 68, 0.08);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.15);
+  animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
+}
+
+@keyframes shake {
+  10%, 90% { transform: translate3d(-1px, 0, 0); }
+  20%, 80% { transform: translate3d(2px, 0, 0); }
+  30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+  40%, 60% { transform: translate3d(4px, 0, 0); }
 }
 
 /* Account */

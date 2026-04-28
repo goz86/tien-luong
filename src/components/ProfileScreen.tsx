@@ -97,7 +97,10 @@ export function ProfileScreen({
 
   async function handleAuth(event: FormEvent) {
     event.preventDefault();
-    if (!supabase) return;
+    if (!supabase) {
+      setAuthMessage(isKo ? 'Supabase 설정이 구성되지 않았습니다. .env 파일을 확인하세요.' : 'Cấu hình Supabase chưa hoàn tất. Vui lòng kiểm tra tệp .env của bạn!');
+      return;
+    }
     setLoading(true);
     setAuthMessage('');
     try {
@@ -139,7 +142,7 @@ export function ProfileScreen({
   const handleSocialLogin = async (provider: string) => {
     try {
       setLoading(true);
-      if (!supabase) throw new Error('Supabase client not initialized');
+      if (!supabase) throw new Error(isKo ? 'Supabase 설정이 구성되지 않았습니다. .env 파일을 확인하세요.' : 'Cấu hình Supabase chưa hoàn tất. Vui lòng kiểm tra tệp .env của bạn!');
       const { error } = await supabase.auth.signInWithOAuth({
         provider: provider as any,
         options: {
