@@ -6812,14 +6812,14 @@ select {
 }
 
 /* Write Review FAB */
-
+.rv-write-fab {
+  position: fixed;
+  bottom: 100px;
   right: 20px;
-
   z-index: 1001;
   width: 52px;
   height: 52px;
   border-radius: 50%;
-
   background: linear-gradient(135deg, #2752ff, #1a3dd4);
   color: white;
   border: none;
