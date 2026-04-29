@@ -1,4 +1,4 @@
-import { FormEvent, useState, useRef } from 'react';
+import { FormEvent, useState, useRef, useEffect } from 'react';
 import {
   LogIn,
   UserPlus,
@@ -92,6 +92,46 @@ export function ProfileScreen({
   const [schoolSuggestions, setSchoolSuggestions] = useState<School[]>([]);
   const [regionSuggestions, setRegionSuggestions] = useState<Region[]>([]);
   const [regRegionSuggestions, setRegRegionSuggestions] = useState<Region[]>([]);
+  const [stats, setStats] = useState({ posts: 0, comments: 0, bookmarks: 0, likes: 0 });
+
+  useEffect(() => {
+    if (!session || !supabase) return;
+    
+    const userId = session.user.id;
+    let isMounted = true;
+    
+    async function fetchStats() {
+      const { count: postsCount } = await supabase!.from('community_posts')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId);
+        
+      const { count: commentsCount } = await supabase!.from('community_comments')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId);
+        
+      const { count: bookmarksCount } = await supabase!.from('community_bookmarks')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId);
+        
+      const { data: postsData } = await supabase!.from('community_posts')
+        .select('likes_count')
+        .eq('user_id', userId);
+        
+      const likesSum = postsData?.reduce((acc, curr) => acc + Number(curr.likes_count || 0), 0) || 0;
+      
+      if (isMounted) {
+        setStats({
+          posts: postsCount || 0,
+          comments: commentsCount || 0,
+          bookmarks: bookmarksCount || 0,
+          likes: likesSum
+        });
+      }
+    }
+    
+    void fetchStats();
+    return () => { isMounted = false; };
+  }, [session]);
 
   const isKo = lang === 'ko';
 
@@ -334,25 +374,33 @@ export function ProfileScreen({
             
             {profile.note && <p className="pf-bio">{profile.note}</p>}
 
+            {profile.tags && profile.tags.length > 0 && (
+              <div className="pf-tags-row" style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap', marginBottom: '20px' }}>
+                {profile.tags.map(tag => (
+                  <span key={tag} style={{ background: 'rgba(39, 82, 255, 0.08)', color: '#2752ff', padding: '6px 12px', borderRadius: '14px', fontSize: '13px', fontWeight: 800 }}>{tag}</span>
+                ))}
+              </div>
+            )}
+
             <div className="pf-stats-row">
               <div className="pf-stat">
                 <div className="pf-stat-icon"><PenLine size={14} /></div>
-                <strong>12</strong>
+                <strong>{stats.posts}</strong>
                 <span>{isKo ? '게시글' : 'Bài viết'}</span>
               </div>
               <div className="pf-stat">
                 <div className="pf-stat-icon"><MessageSquare size={14} /></div>
-                <strong>48</strong>
+                <strong>{stats.comments}</strong>
                 <span>{isKo ? '댓글' : 'Bình luận'}</span>
               </div>
               <div className="pf-stat">
                 <div className="pf-stat-icon"><Bookmark size={14} /></div>
-                <strong>7</strong>
+                <strong>{stats.bookmarks}</strong>
                 <span>{isKo ? '북마크' : 'Đã lưu'}</span>
               </div>
               <div className="pf-stat">
                 <div className="pf-stat-icon"><Heart size={14} /></div>
-                <strong>156</strong>
+                <strong>{stats.likes}</strong>
                 <span>{isKo ? '좋아요' : 'Thích'}</span>
               </div>
             </div>
@@ -388,7 +436,6 @@ export function ProfileScreen({
         /* ===== AUTH / LOGIN CARD (When not logged in) ===== */
         <section className="pf-auth-card">
           <div className="pf-auth-header">
-            <Shield size={32} color="var(--blue-500)" />
             <h2>{isKo ? '환영합니다!' : 'Chào mừng bạn!'}</h2>
             <p>{isKo ? '로그인하고 계속하세요' : 'Đăng nhập để tiếp tục'}</p>
           </div>
@@ -597,6 +644,43 @@ export function ProfileScreen({
                       value={profile.note || ''} 
                       onChange={(e) => setProfile({ ...profile, note: e.target.value })} 
                     />
+                  </div>
+                  <div className="pf-pop-field">
+                    <span>{isKo ? '관심사 (태그)' : 'Sở thích / Mục tiêu (Thẻ)'}</span>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px' }}>
+                      {['TOPIK', 'Cafe', 'Học nhóm', 'Budget', 'Ăn uống', 'Mới sang', 'Tiếng Hàn', 'Du lịch', 'Chụp ảnh', 'Thể thao', 'Nấu ăn', 'Âm nhạc', 'Dạo phố'].map(tag => {
+                        const isSelected = profile.tags?.includes(tag);
+                        return (
+                          <button
+                            key={tag}
+                            type="button"
+                            onClick={() => {
+                              const currentTags = profile.tags || [];
+                              const newTags = isSelected
+                                ? currentTags.filter(t => t !== tag)
+                                : [...currentTags, tag];
+                              if (newTags.length <= 4) {
+                                setProfile({ ...profile, tags: newTags });
+                              }
+                            }}
+                            style={{
+                              padding: '6px 12px',
+                              borderRadius: '16px',
+                              border: `1px solid ${isSelected ? '#2752ff' : '#e2e8f0'}`,
+                              background: isSelected ? 'rgba(39, 82, 255, 0.08)' : 'transparent',
+                              color: isSelected ? '#2752ff' : '#64748b',
+                              fontSize: '13px',
+                              fontWeight: 800,
+                              cursor: 'pointer',
+                              transition: 'all 0.2s'
+                            }}
+                          >
+                            {tag}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <span style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>{isKo ? '최대 4개 선택 가능' : 'Chọn tối đa 4 thẻ'}</span>
                   </div>
                   <button type="button" className="pf-save-btn" onClick={() => { saveProfile(profile); setShowSettingsMenu(false); }} disabled={savingProfile}>
                     {savingProfile ? '...' : (isKo ? '저장' : 'Lưu thay đổi')}

@@ -26,6 +26,7 @@ export interface ProfileDraft {
   region: string;
   note: string;
   avatarUrl?: string;
+  tags?: string[];
 }
 
 export interface Expense {

@@ -9,6 +9,8 @@ import {
   Coins,
   Edit2,
   Home,
+  Landmark,
+  LineChart,
   Phone,
   PiggyBank,
   Plus,
@@ -19,32 +21,36 @@ import {
   TrendingUp,
   Utensils,
   WalletCards,
-  type LucideIcon
+  type LucideIcon,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { calculateShiftPay, formatKrw } from '../lib/salary';
-import { Expense, RateState, Shift, VenueColors } from '../lib/types';
+import type { Expense, RateState, Shift, VenueColors } from '../lib/types';
 import { getVenueColor } from '../utils/helpers';
-import { Logo } from './shared/Logo';
 
-type IncomeTab = 'overview' | 'expenses' | 'workplaces' | 'analysis';
+type IncomeTab = 'overview' | 'expenses' | 'workplaces' | 'investment' | 'analysis';
 type IconComponent = LucideIcon;
 
 const incomeTabs: Array<{ id: IncomeTab; label: string; icon: IconComponent }> = [
   { id: 'overview', label: 'Tổng quan', icon: BarChart3 },
   { id: 'expenses', label: 'Chi tiêu', icon: ReceiptText },
   { id: 'workplaces', label: 'Nơi làm', icon: Building2 },
-  { id: 'analysis', label: 'Phân tích', icon: ShieldCheck }
+  { id: 'investment', label: 'Đầu tư', icon: LineChart },
+  { id: 'analysis', label: 'Kiểm tra', icon: ShieldCheck },
 ];
 
 const categoryMeta: Record<Expense['category'], { label: string; icon: IconComponent; tone: string }> = {
   rent: { label: 'Tiền nhà', icon: Home, tone: 'blue' },
   phone: { label: 'Điện thoại', icon: Phone, tone: 'green' },
   food: { label: 'Ăn uống', icon: Utensils, tone: 'amber' },
-  other: { label: 'Chi phí khác', icon: ReceiptText, tone: 'coral' }
+  other: { label: 'Chi phí khác', icon: ReceiptText, tone: 'coral' },
 };
 
 const weekdayLabels = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+
+function formatPercent(value: number) {
+  return `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
+}
 
 export function IncomeScreen({
   monthlyTotal,
@@ -59,7 +65,7 @@ export function IncomeScreen({
   onAddExpense,
   onDeleteExpense,
   target,
-  onSetTarget
+  onSetTarget,
 }: {
   monthlyTotal: number;
   monthlyHours: number;
@@ -83,7 +89,7 @@ export function IncomeScreen({
     category: 'food',
     amount: 0,
     date: new Date().toISOString().slice(0, 10),
-    note: ''
+    note: '',
   });
   const prevTotalRef = useRef(monthlyTotal);
 
@@ -114,7 +120,7 @@ export function IncomeScreen({
       workplaces.map((workplace) => ({
         ...workplace,
         hourly: workplace.hours ? workplace.total / workplace.hours : 0,
-        share: monthlyTotal ? (workplace.total / monthlyTotal) * 100 : 0
+        share: monthlyTotal ? (workplace.total / monthlyTotal) * 100 : 0,
       })),
     [monthlyTotal, workplaces]
   );
@@ -125,13 +131,48 @@ export function IncomeScreen({
     const holidayPay = shifts.reduce((sum, shift) => sum + (shift.holidayAllowance ?? 0), 0);
     const taxTotal = shifts.reduce((sum, shift) => sum + calculateShiftPay(shift).taxAmount, 0);
 
-    return {
-      underMinimum,
-      nightShifts,
-      holidayPay,
-      taxTotal
-    };
+    return { underMinimum, nightShifts, holidayPay, taxTotal };
   }, [minimumWage, shifts]);
+
+  const investmentPlan = useMemo(() => {
+    const monthlyCapacity = Math.max(Math.floor(netBalance * 0.18), 0);
+    const reserveTarget = Math.max(Math.floor(target * 0.35), 500000);
+    const emergencyFund = Math.min(Math.max(netBalance, 0), reserveTarget);
+    const positions = [
+      {
+        symbol: 'SAFE',
+        name: 'Quỹ dự phòng KRW',
+        kind: 'Tiền mặt',
+        invested: emergencyFund,
+        value: emergencyFund,
+        change: 0,
+        note: 'Ưu tiên trước mọi khoản đầu tư rủi ro',
+      },
+      {
+        symbol: 'ETF',
+        name: 'ETF chỉ số toàn cầu',
+        kind: 'Theo dõi',
+        invested: 250000,
+        value: 267500,
+        change: 7,
+        note: 'Phù hợp tích lũy nhỏ, đều theo tháng',
+      },
+      {
+        symbol: '005930',
+        name: 'Samsung Electronics',
+        kind: 'Cổ phiếu Hàn',
+        invested: 180000,
+        value: 171000,
+        change: -5,
+        note: 'Theo dõi biến động, không dùng tiền sinh hoạt',
+      },
+    ];
+    const invested = positions.reduce((sum, item) => sum + item.invested, 0);
+    const value = positions.reduce((sum, item) => sum + item.value, 0);
+    const gain = value - invested;
+
+    return { monthlyCapacity, reserveTarget, positions, invested, value, gain };
+  }, [netBalance, target]);
 
   useEffect(() => {
     if (monthlyTotal >= target && prevTotalRef.current < target && target > 0) {
@@ -139,7 +180,7 @@ export function IncomeScreen({
         particleCount: 150,
         spread: 80,
         origin: { y: 0.6 },
-        colors: ['#2752ff', '#0d9b72', '#ff6b7a', '#f59e0b']
+        colors: ['#2752ff', '#0d9b72', '#ff6b7a', '#f59e0b'],
       });
     }
     prevTotalRef.current = monthlyTotal;
@@ -158,23 +199,21 @@ export function IncomeScreen({
       category: 'food',
       amount: 0,
       date: new Date().toISOString().slice(0, 10),
-      note: ''
+      note: '',
     });
     setIsAddingExpense(false);
   }
 
   return (
     <>
-      <header className="income-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', paddingBottom: '0' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span style={{ fontSize: '18px', fontWeight: 900, color: '#0f172a' }}>{monthLabel}</span>
-        </div>
+      <header className="income-header">
+        <span>{monthLabel}</span>
       </header>
 
       <section className="income-ledger-hero">
         <div className="income-hero-top">
           <div>
-            <span>Thực nhận tháng này</span>
+            <span>Thu nhập ròng tháng này</span>
             <h2>{formatKrw(netBalance)}</h2>
           </div>
           <WalletCards size={28} />
@@ -217,7 +256,7 @@ export function IncomeScreen({
         <div className="income-progress-track" aria-label={`Đã đạt ${progressPercentage.toFixed(0)}% mục tiêu`}>
           <span style={{ width: `${progressPercentage}%`, background: progressColor }} />
         </div>
-        <p>{missingTarget > 0 ? `Còn ${formatKrw(missingTarget)} để đạt mục tiêu.` : 'Bạn đã vượt mục tiêu tháng này.'}</p>
+        <p>{missingTarget > 0 ? `Cần ${formatKrw(missingTarget)} để đạt mục tiêu.` : 'Bạn đã vượt mục tiêu tháng này.'}</p>
       </section>
 
       <div className="income-subtabs" role="tablist" aria-label="Mục thu nhập">
@@ -289,7 +328,7 @@ export function IncomeScreen({
                 <p>Quản lý chi tiêu</p>
                 <h2>Khoản đã ghi</h2>
               </div>
-              <button type="button" className="income-mini-action" onClick={() => setIsAddingExpense((value) => !value)}>
+              <button type="button" className="income-mini-action" onClick={() => setIsAddingExpense((value) => !value)} aria-label="Thêm chi tiêu">
                 <Plus size={18} />
               </button>
             </div>
@@ -303,9 +342,7 @@ export function IncomeScreen({
                     onChange={(event) => setExpenseForm({ ...expenseForm, category: event.target.value as Expense['category'] })}
                   >
                     {Object.entries(categoryMeta).map(([value, meta]) => (
-                      <option key={value} value={value}>
-                        {meta.label}
-                      </option>
+                      <option key={value} value={value}>{meta.label}</option>
                     ))}
                   </select>
                 </label>
@@ -327,9 +364,7 @@ export function IncomeScreen({
                     onChange={(event) => setExpenseForm({ ...expenseForm, note: event.target.value })}
                   />
                 </label>
-                <button type="button" onClick={handleAddExpense}>
-                  Lưu chi tiêu
-                </button>
+                <button type="button" onClick={handleAddExpense}>Lưu chi tiêu</button>
               </div>
             ) : null}
 
@@ -360,7 +395,7 @@ export function IncomeScreen({
                 <div className="income-empty">
                   <ReceiptText size={34} />
                   <strong>Chưa có chi tiêu</strong>
-                  <p>Ghi lại tiền nhà, ăn uống hoặc điện thoại để biết thực nhận chính xác hơn.</p>
+                  <p>Ghi tiền nhà, ăn uống và điện thoại để biết thu nhập ròng chính xác hơn.</p>
                 </div>
               )}
             </div>
@@ -383,9 +418,7 @@ export function IncomeScreen({
                     <span className="income-venue-dot" style={{ background: getVenueColor(workplace.label, venueColors) }} />
                     <div>
                       <strong>{workplace.label}</strong>
-                      <small>
-                        {workplace.count} ca · {workplace.hours.toFixed(1)}h · {workplace.share.toFixed(0)}%
-                      </small>
+                      <small>{workplace.count} ca • {workplace.hours.toFixed(1)}h • {workplace.share.toFixed(0)}%</small>
                       <div className="income-workplace-track">
                         <span style={{ width: `${Math.min(workplace.share, 100)}%`, background: getVenueColor(workplace.label, venueColors) }} />
                       </div>
@@ -407,6 +440,57 @@ export function IncomeScreen({
           </section>
         ) : null}
 
+        {activeTab === 'investment' ? (
+          <section className="income-invest-panel">
+            <div className="income-section-head">
+              <div>
+                <p>Kỷ luật tài chính</p>
+                <h2>Đầu tư sau khi đã rõ dòng tiền</h2>
+              </div>
+              <Landmark size={22} />
+            </div>
+
+            <div className="income-invest-summary">
+              <article>
+                <span>Giá trị theo dõi</span>
+                <strong>{formatKrw(investmentPlan.value)}</strong>
+              </article>
+              <article className={investmentPlan.gain >= 0 ? 'positive' : 'negative'}>
+                <span>Lãi/lỗ tạm tính</span>
+                <strong>{formatKrw(investmentPlan.gain)}</strong>
+              </article>
+              <article>
+                <span>Có thể tích lũy/tháng</span>
+                <strong>{formatKrw(investmentPlan.monthlyCapacity)}</strong>
+              </article>
+            </div>
+
+            <div className="income-invest-guideline">
+              <ShieldCheck size={18} />
+              <p>Ưu tiên quỹ dự phòng khoảng {formatKrw(investmentPlan.reserveTarget)} trước khi mua tài sản rủi ro. Không dùng tiền học phí, tiền nhà hoặc tiền sinh hoạt để đầu tư.</p>
+            </div>
+
+            <div className="income-invest-list">
+              {investmentPlan.positions.map((position) => (
+                <article key={position.symbol} className="income-invest-row">
+                  <div className="income-invest-symbol">{position.symbol}</div>
+                  <div>
+                    <strong>{position.name}</strong>
+                    <span>{position.kind} • {position.note}</span>
+                    <div className="income-invest-track">
+                      <span style={{ width: `${Math.min((position.value / Math.max(investmentPlan.value, 1)) * 100, 100)}%` }} />
+                    </div>
+                  </div>
+                  <p>
+                    <b>{formatKrw(position.value)}</b>
+                    <small className={position.change >= 0 ? 'positive' : 'negative'}>{formatPercent(position.change)}</small>
+                  </p>
+                </article>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
         {activeTab === 'analysis' ? (
           <section className="income-analysis-panel">
             <article className={analysis.underMinimum.length ? 'income-alert-card warning' : 'income-alert-card success'}>
@@ -415,7 +499,7 @@ export function IncomeScreen({
                 <strong>{analysis.underMinimum.length ? 'Có ca dưới lương tối thiểu' : 'Lương giờ đang ổn'}</strong>
                 <p>
                   {analysis.underMinimum.length
-                    ? `${analysis.underMinimum.length} ca thấp hơn ${formatKrw(minimumWage)}/h. Nên kiểm tra lại hợp đồng hoặc cách tính break time.`
+                    ? `${analysis.underMinimum.length} ca thấp hơn ${formatKrw(minimumWage)}/h. Nên kiểm tra lại hợp đồng, break time và cách tính phụ cấp.`
                     : `Không có ca nào thấp hơn ${formatKrw(minimumWage)}/h trong tháng này.`}
                 </p>
               </div>

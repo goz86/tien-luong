@@ -2,10 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState, FormEvent } from 're
 import type { Session } from '@supabase/supabase-js';
 import { AnimatePresence, motion } from 'framer-motion';
 import { CalendarDays, House, MessageCircleMore, UserRound, WalletCards, Cloud, CloudOff, Bell, ThumbsUp, MessageCircle, X, Flame, ShieldCheck } from 'lucide-react';
-import { demoCompanions, demoProfile, demoShifts } from './data';
+import { regions } from './data';
 import { DEFAULT_KRW_TO_VND, MINIMUM_WAGE_2026, calculateShiftPay, shiftHours, Shift } from './lib/salary';
 import { hasSupabaseConfig, supabase } from './lib/supabase';
-import { Tab, StoredState, ShiftDraft, VenueColors, Expense, ProfileDraft } from './lib/types';
+import { Tab, StoredState, ShiftDraft, VenueColors, Expense, ProfileDraft, CompanionProfile } from './lib/types';
 import { startOfMonth, shiftMonth, formatMonthHeader } from './utils/helpers';
 import { HomeScreen } from './components/HomeScreen';
 import { CalendarScreen } from './components/CalendarScreen';
@@ -46,9 +46,9 @@ const defaultDraft: ShiftDraft = {
 
 function fallbackState(): StoredState {
   return {
-    shifts: demoShifts,
-    profile: demoProfile,
-    companions: demoCompanions,
+    shifts: [],
+    profile: { displayName: '', school: '', region: '', note: '', tags: [] },
+    companions: [],
     requested: [],
     rate: { value: DEFAULT_KRW_TO_VND, source: 'cached', updatedAt: new Date().toISOString() },
     venueColors: {},
@@ -64,9 +64,9 @@ function loadState(): StoredState {
     if (!raw) return fallbackState();
     const parsed = JSON.parse(raw) as Partial<StoredState>;
     return {
-      shifts: Array.isArray(parsed.shifts) && parsed.shifts.length ? parsed.shifts : demoShifts,
-      profile: parsed.profile ? { ...demoProfile, ...parsed.profile } : demoProfile,
-      companions: Array.isArray(parsed.companions) && parsed.companions.length ? parsed.companions : demoCompanions,
+      shifts: Array.isArray(parsed.shifts) ? parsed.shifts : [],
+      profile: parsed.profile ? { ...fallbackState().profile, ...parsed.profile } : fallbackState().profile,
+      companions: Array.isArray(parsed.companions) ? parsed.companions : [],
       requested: Array.isArray(parsed.requested) ? parsed.requested : [],
       rate: parsed.rate ? { ...parsed.rate, source: parsed.rate.source === 'live' ? 'live' : 'cached' } : fallbackState().rate,
       venueColors: (parsed as Record<string, unknown>).venueColors && typeof (parsed as Record<string, unknown>).venueColors === 'object' ? (parsed as Record<string, unknown>).venueColors as VenueColors : {},
@@ -96,7 +96,7 @@ export default function App() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [shifts, setShifts] = useState<Shift[]>(initial.shifts);
   const [profile, setProfile] = useState(initial.profile);
-  const [companions] = useState(initial.companions);
+  const [companions, setCompanions] = useState<CompanionProfile[]>(initial.companions);
   const [requested, setRequested] = useState(initial.requested);
   const [showNotifications, setShowNotifications] = useState(false);
 
@@ -225,8 +225,9 @@ export default function App() {
     Promise.all([
       client.from('shift_entries').select('*').eq('user_id', session.user.id),
       client.from('profiles').select('*').eq('id', session.user.id).maybeSingle(),
-      client.from('expenses').select('*').eq('user_id', session.user.id)
-    ]).then(([shiftsRes, profileRes, expensesRes]) => {
+      client.from('expenses').select('*').eq('user_id', session.user.id),
+      client.from('profiles').select('*').neq('id', session.user.id)
+    ]).then(([shiftsRes, profileRes, expensesRes, companionsRes]) => {
       if (!isMounted) return;
       if (shiftsRes.data) {
         setShifts(shiftsRes.data.map(row => ({
@@ -249,7 +250,8 @@ export default function App() {
           school: profileRes.data.school || '',
           region: profileRes.data.region || '',
           note: profileRes.data.note || '',
-          avatarUrl: profileRes.data.avatar_url || ''
+          avatarUrl: profileRes.data.avatar_url || '',
+          tags: Array.isArray(profileRes.data.tags) ? profileRes.data.tags : []
         });
       }
       if (expensesRes.data) {
@@ -259,6 +261,17 @@ export default function App() {
           amount: row.amount,
           date: row.date,
           note: row.note || ''
+        })));
+      }
+      if (companionsRes.data) {
+        setCompanions(companionsRes.data.map(row => ({
+          id: row.id,
+          displayName: row.display_name || 'Người dùng Ẩn danh',
+          school: row.school || 'Chưa cập nhật',
+          region: row.region || 'Chưa cập nhật',
+          focus: row.note || '',
+          availability: 'Đang cập nhật...', // Fallback since we don't have this column yet
+          tags: Array.isArray(row.tags) ? row.tags : []
         })));
       }
     });
@@ -325,7 +338,8 @@ export default function App() {
         school: toSave.school,
         region: toSave.region,
         note: toSave.note,
-        avatar_url: toSave.avatarUrl
+        avatar_url: toSave.avatarUrl,
+        tags: toSave.tags
       });
       if (error) console.error('Lỗi lưu hồ sơ:', error);
     }
