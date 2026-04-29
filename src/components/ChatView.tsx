@@ -81,7 +81,7 @@ export function ChatView({ session, partner, onBack }: ChatViewProps) {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase?.removeChannel(channel);
     };
   }, [currentUserId, partner.id, fetchMessages]);
 
