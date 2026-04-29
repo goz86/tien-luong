@@ -661,17 +661,27 @@ export default function App() {
 
     if (existingIncoming) {
       // If they already requested us, just accept it
-      await supabase
+      const { error } = await supabase
         .from('friend_requests')
         .update({ status: 'accepted' })
         .eq('id', existingIncoming.id);
+      
+      if (!error) {
+        setFriendships(prev => prev.map(f => 
+          f.id === existingIncoming.id ? { ...f, status: 'accepted' } : f
+        ));
+      }
     } else {
       // Otherwise, create a new pending request
-      await supabase.from('friend_requests').insert({ 
+      const { data: newReq, error } = await supabase.from('friend_requests').insert({ 
         requester_id: session.user.id, 
         target_profile_id: id,
         status: 'pending'
-      });
+      }).select().single();
+
+      if (!error && newReq) {
+        setFriendships(prev => [...prev, newReq]);
+      }
     }
   }
 
