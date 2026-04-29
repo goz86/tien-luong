@@ -98,7 +98,15 @@ export function HomeScreen({
         <div className="hero-topline">
           <div onClick={() => setIsVND(!isVND)} style={{ cursor: 'pointer', flex: 1, minWidth: 0 }} title="Nhấn để đổi tiền tệ">
             <p>Thu nhập tháng này</p>
-            <h2 style={{ whiteSpace: 'nowrap', fontSize: isVND ? '28px' : '35px' }}>
+            <h2 style={{ 
+              whiteSpace: 'nowrap', 
+              fontSize: isVND ? '28px' : '35px',
+              height: '42px',
+              display: 'flex',
+              alignItems: 'center',
+              transition: 'font-size 0.2s ease',
+              letterSpacing: isVND ? '-0.05em' : '-0.035em'
+            }}>
               {isVND ? `${Math.round(monthlyTotal * rate.value).toLocaleString('vi-VN')} VNĐ` : formatKrw(monthlyTotal)}
             </h2>
           </div>
