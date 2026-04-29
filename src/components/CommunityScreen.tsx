@@ -235,6 +235,14 @@ export function CommunityScreen({
     );
   }, [friendships]);
 
+  const hasIncomingRequest = useCallback((id: string) => {
+    return friendships.some(f => 
+      f.requester_id === id && 
+      f.target_profile_id === currentUserId && 
+      f.status === 'pending'
+    );
+  }, [friendships, currentUserId]);
+
   useEffect(() => {
     let alive = true;
     setLoading(true);
@@ -820,11 +828,18 @@ export function CommunityScreen({
                     {!isFriend(friend.id) ? (
                       <button 
                         type="button" 
-                        className={`community-request ${requested.includes(friend.id) ? 'sent' : ''}`}
+                        className={`community-request ${requested.includes(friend.id) ? 'sent' : ''} ${hasIncomingRequest(friend.id) ? 'incoming' : ''}`}
                         onClick={() => onRequest(friend.id)}
-                        disabled={requested.includes(friend.id)}
+                        disabled={requested.includes(friend.id) && !hasIncomingRequest(friend.id)}
+                        style={hasIncomingRequest(friend.id) ? { width: 'auto', padding: '0 12px', background: '#4CAF50', color: 'white' } : {}}
                       >
-                        {requested.includes(friend.id) ? <CheckCircle2 size={18} /> : <Plus size={18} />}
+                        {hasIncomingRequest(friend.id) ? (
+                          <span style={{ fontSize: '12px', fontWeight: 'bold' }}>Chấp nhận</span>
+                        ) : requested.includes(friend.id) ? (
+                          <CheckCircle2 size={18} />
+                        ) : (
+                          <Plus size={18} />
+                        )}
                       </button>
                     ) : (
                       <button 
@@ -1376,16 +1391,44 @@ export function CommunityScreen({
             </div>
           )}
           
-          <button 
-            type="button"
-            className={`community-request ${requested.includes(viewProfile.id) ? 'sent' : ''}`}
-            style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 15 }}
-            onClick={() => {
-              onRequest(viewProfile.id);
-            }}
-          >
-            {requested.includes(viewProfile.id) ? <><CheckCircle2 size={18} /> Đã gửi lời mời</> : <><Plus size={18} /> Kết bạn</>}
-          </button>
+          {isFriend(viewProfile.id) ? (
+            <button 
+              type="button"
+              className="community-request"
+              style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 15, background: '#2752ff', color: 'white' }}
+              onClick={() => {
+                if (requireLogin()) {
+                  setActiveChatPartner(viewProfile);
+                  setViewProfile(null);
+                }
+              }}
+            >
+              <MessageSquare size={18} /> Nhắn tin
+            </button>
+          ) : (
+            <button 
+              type="button"
+              className={`community-request ${requested.includes(viewProfile.id) ? 'sent' : ''} ${hasIncomingRequest(viewProfile.id) ? 'incoming' : ''}`}
+              style={{ 
+                width: '100%', padding: '14px', borderRadius: 12, border: 'none', cursor: 'pointer', 
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 15,
+                background: hasIncomingRequest(viewProfile.id) ? '#4CAF50' : (requested.includes(viewProfile.id) ? '#f1f5f9' : '#2752ff'),
+                color: hasIncomingRequest(viewProfile.id) || !requested.includes(viewProfile.id) ? 'white' : '#64748b'
+              }}
+              onClick={() => {
+                onRequest(viewProfile.id);
+              }}
+              disabled={requested.includes(viewProfile.id) && !hasIncomingRequest(viewProfile.id)}
+            >
+              {hasIncomingRequest(viewProfile.id) ? (
+                <>Chấp nhận kết bạn</>
+              ) : requested.includes(viewProfile.id) ? (
+                <><CheckCircle2 size={18} /> Đã gửi lời mời</>
+              ) : (
+                <><Plus size={18} /> Kết bạn</>
+              )}
+            </button>
+          )}
         </div>
       </div>
     );

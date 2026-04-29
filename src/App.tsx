@@ -647,9 +647,27 @@ export default function App() {
   }
 
   async function requestConnection(id: string) {
+    if (!supabase || !session) return;
+    
     setRequested((current) => [...new Set([...current, id])]);
-    if (supabase && session) {
-      await supabase!.from('friend_requests').insert({ 
+
+    // Check if there is an existing incoming request from this user
+    const { data: existingIncoming } = await supabase
+      .from('friend_requests')
+      .select('*')
+      .eq('requester_id', id)
+      .eq('target_profile_id', session.user.id)
+      .maybeSingle();
+
+    if (existingIncoming) {
+      // If they already requested us, just accept it
+      await supabase
+        .from('friend_requests')
+        .update({ status: 'accepted' })
+        .eq('id', existingIncoming.id);
+    } else {
+      // Otherwise, create a new pending request
+      await supabase.from('friend_requests').insert({ 
         requester_id: session.user.id, 
         target_profile_id: id,
         status: 'pending'
