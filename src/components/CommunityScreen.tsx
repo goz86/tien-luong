@@ -590,14 +590,16 @@ export function CommunityScreen({
       setSyncMessage('Bài viết đang lưu tạm. Đăng nhập để đồng bộ Supabase.');
     }
 
-    closeComposer();
-    setBoardMode('feed');
+    setIsWritingPost(false);
+    setIsWritingReview(false);
+    setEditingPostId(null);
   }
 
-  function makeLocalPost(draft: Omit<Parameters<typeof createCommunityPost>[0], 'userId'>): CommunityPost {
-    return {
-      id: crypto.randomUUID(),
-      user_id: currentUserId || 'local-user',
+  const openComposer = () => {
+    setIsWritingPost(true);
+    setEditingPostId(null);
+  };
+
       category: draft.category,
       title: draft.title,
       content: draft.content,
@@ -857,7 +859,7 @@ export function CommunityScreen({
           <button 
             type="button" 
             className="cm-write-bar-btn" 
-            onClick={boardMode === 'review' ? () => setIsWriting(true) : openComposer}
+            onClick={boardMode === 'review' ? () => setIsWritingReview(true) : openComposer}
           >
             <Plus size={18} />
             {boardMode === 'review' ? 'Viết Review' : 'Viết bài'}
@@ -866,7 +868,7 @@ export function CommunityScreen({
 
 
 
-        {isWriting ? renderComposer() : null}
+        {isWritingPost ? renderComposer() : null}
         {showDeleteConfirm ? renderDeleteConfirm() : null}
         {viewProfile ? renderProfileModal() : null}
       </>
@@ -1046,7 +1048,7 @@ export function CommunityScreen({
           </div>
         </div>
 
-        {isWriting ? renderComposer() : null}
+        {isWritingPost ? renderComposer() : null}
         {showDeleteConfirm ? renderDeleteConfirm() : null}
       </div>
     );
@@ -1203,7 +1205,7 @@ function ReviewBoard({ session, displayName }: { session: Session | null; displa
   const [reviews, setReviews] = useState<PlaceReview[]>([]);
   const [loading, setLoading] = useState(true);
   const [catFilter, setCatFilter] = useState<ReviewCategory>('all');
-  const [isWriting, setIsWriting] = useState(false);
+  const [isWritingReview, setIsWritingReview] = useState(false);
 
   // Write form state
   const [searchQuery, setSearchQuery] = useState('');
@@ -1289,7 +1291,7 @@ function ReviewBoard({ session, displayName }: { session: Session | null; displa
   };
 
   const closeWriter = () => {
-    setIsWriting(false);
+    setIsWritingReview(false);
     setSelectedPlace(null);
     setWriteCat('food');
     setWriteRating(0);
@@ -1417,10 +1419,8 @@ function ReviewBoard({ session, displayName }: { session: Session | null; displa
 
       {/* Write FAB removed - now using unified cm-write-bar */}
 
-
-
       {/* Write Review Fullscreen */}
-      {isWriting && (
+      {isWritingReview && (
         <div className="rv-write-overlay">
           <header className="rv-write-header">
             <button type="button" className="cm-icon-btn" onClick={closeWriter}><X size={22} /></button>
