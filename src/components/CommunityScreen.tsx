@@ -424,13 +424,29 @@ export function CommunityScreen({
     });
   }, [activeCategory, bookmarkedPosts, currentUserId, feedFilter, posts, searchQuery]);
 
+  const postCommentCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    comments.forEach(c => {
+      counts[c.post_id] = (counts[c.post_id] || 0) + 1;
+    });
+    return counts;
+  }, [comments]);
+
   const hotPosts = useMemo(
-    () => [...posts].sort((a, b) => b.likes_count + b.comments_count - (a.likes_count + a.comments_count)).slice(0, 2),
-    [posts]
+    () => [...posts].sort((a, b) => {
+      const aCount = postCommentCounts[a.id] || 0;
+      const bCount = postCommentCounts[b.id] || 0;
+      return (b.likes_count + bCount) - (a.likes_count + aCount);
+    }).slice(0, 2),
+    [posts, postCommentCounts]
   );
   const trendingPost = useMemo(
-    () => [...posts].sort((a, b) => b.comments_count + b.views_count - (a.comments_count + a.views_count))[0],
-    [posts]
+    () => [...posts].sort((a, b) => {
+      const aCount = postCommentCounts[a.id] || 0;
+      const bCount = postCommentCounts[b.id] || 0;
+      return (bCount + b.views_count) - (aCount + a.views_count);
+    })[0],
+    [posts, postCommentCounts]
   );
   const postComments = selectedPost ? comments.filter((comment) => comment.post_id === selectedPost.id) : [];
   const rootComments = postComments.filter((comment) => !comment.parent_id);
@@ -645,13 +661,13 @@ export function CommunityScreen({
           recipientId: selectedPost.user_id,
           postTitle: selectedPost.title,
         });
-        setSyncMessage('Bình luận đã lưu vào Supabase');
+        setSyncMessage('Đã lưu bình luận');
       } catch (error) {
         console.error(error);
-        setSyncMessage('Chưa lưu được bình luận. Đang giữ tạm trên máy.');
+        setSyncMessage('Chưa gửi được bình luận. Đang giữ tạm trên máy.');
       }
     } else {
-      setSyncMessage('Bình luận đang lưu tạm. Đăng nhập để đồng bộ Supabase.');
+      setSyncMessage('Bình luận đang lưu tạm. Đăng nhập để đồng bộ dữ liệu.');
     }
 
     setComments((current) => [...current, savedComment]);
@@ -687,11 +703,11 @@ export function CommunityScreen({
         try {
           const saved = await updateCommunityPost(editingPostId, draft);
           updatePost(editingPostId, () => saved);
-          setSyncMessage('Đã cập nhật bài viết trên Supabase');
+          setSyncMessage('Đã cập nhật bài viết ');
         } catch (error) {
           console.error(error);
           updatePost(editingPostId, nextPost);
-          setSyncMessage('Chưa cập nhật được Supabase, đang giữ bản sửa tạm.');
+          setSyncMessage('Chưa cập nhật được , đang giữ bản sửa tạm.');
         }
       } else {
         updatePost(editingPostId, nextPost);
@@ -702,18 +718,18 @@ export function CommunityScreen({
         const saved = await createCommunityPost({ ...draft, userId: currentUserId });
         setPosts((current) => [saved, ...current]);
         setIsLocalMode(false);
-        setSyncMessage('Bài viết đã lưu vào Supabase');
+        setSyncMessage('Bài viết đã được lưu');
       } catch (error) {
         console.error(error);
         const localPost = makeLocalPost(draft);
         setPosts((current) => [localPost, ...current]);
         setIsLocalMode(true);
-        setSyncMessage('Chưa lưu được Supabase, bài viết đang lưu tạm trên máy.');
+        setSyncMessage('Chưa lưu được dữ liệu, bài viết đang lưu tạm trên máy.');
       }
     } else {
       const localPost = makeLocalPost(draft);
       setPosts((current) => [localPost, ...current]);
-      setSyncMessage('Bài viết đang lưu tạm. Đăng nhập để đồng bộ Supabase.');
+      setSyncMessage('Bài viết đang lưu tạm. Đăng nhập để đồng bộ Supabasedữ liệu.');
     }
 
     setIsWritingPost(false);
@@ -922,7 +938,7 @@ export function CommunityScreen({
             <div className="cm-trending-head">
               <div>
                 <p className="cm-trending-kicker">Đang hot</p>
-                <h2 className="cm-trending-title">Bài đăng nổi</h2>
+                <h2 className="cm-trending-title">Bài đang nổi</h2>
               </div>
               <Flame size={24} color="#64748b" />
             </div>
@@ -940,7 +956,7 @@ export function CommunityScreen({
               </span>
               <div className="cm-post-stats">
                 <span><ThumbsUp size={14} /> {trendingPost.likes_count}</span>
-                <span><MessageCircle size={14} /> {trendingPost.comments_count}</span>
+                <span><MessageCircle size={14} /> {postCommentCounts[trendingPost.id] || 0}</span>
               </div>
             </div>
           </section>
@@ -989,7 +1005,7 @@ export function CommunityScreen({
                   </span>
                   <div className="cm-post-stats">
                     <span><ThumbsUp size={14} /> {post.likes_count}</span>
-                    <span><MessageCircle size={14} /> {comments.filter(c => c.post_id === post.id).length}</span>
+                    <span><MessageCircle size={14} /> {postCommentCounts[post.id] || 0}</span>
                   </div>
                 </div>
               </article>
