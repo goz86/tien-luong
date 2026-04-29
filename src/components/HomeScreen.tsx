@@ -176,7 +176,7 @@ export function HomeScreen({
           width: 100%;
           max-width: 430px;
           margin: 0 auto;
-          height: 65vh;
+          height: 85vh;
           border-top-left-radius: 40px;
           border-top-right-radius: 40px;
           padding: 24px;
