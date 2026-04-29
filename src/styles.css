@@ -3608,7 +3608,7 @@ select {
 
 /* --- WHEEL PICKER (IOS STYLE) --- */
 .time-wheel-modal {
-  padding-bottom: 24px;
+  padding-bottom: 60px;
 }
 
 .time-wheels-container {

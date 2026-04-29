@@ -23,7 +23,7 @@ export function WheelPicker({
 
   // Determine padding so first and last items can be centered
   const halfVisible = Math.floor(visibleItems / 2);
-  const paddingVertical = halfVisible * itemHeight;
+  const paddingVertical = halfVisible * itemHeight - 2;
 
   useEffect(() => {
     // Initial scroll to the selected value
