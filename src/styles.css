@@ -6487,8 +6487,9 @@ select {
 /* ============================================ */
 
 .rv-container {
-  padding: 0 16px 120px;
+  padding: 0 16px 160px;
 }
+
 
 /* Search Bar */
 .rv-search-wrap {
@@ -6811,14 +6812,14 @@ select {
 }
 
 /* Write Review FAB */
-.rv-write-fab {
-  position: fixed;
-  bottom: 90px;
+
   right: 20px;
-  z-index: 40;
-  width: 54px;
-  height: 54px;
+
+  z-index: 1001;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
+
   background: linear-gradient(135deg, #2752ff, #1a3dd4);
   color: white;
   border: none;

@@ -854,11 +854,17 @@ export function CommunityScreen({
         {renderBoardBody()}
 
         <div className="cm-write-bar">
-          <button type="button" className="cm-write-bar-btn" onClick={openComposer}>
+          <button 
+            type="button" 
+            className="cm-write-bar-btn" 
+            onClick={boardMode === 'review' ? () => setIsWriting(true) : openComposer}
+          >
             <Plus size={18} />
-            Viết bài
+            {boardMode === 'review' ? 'Viết Review' : 'Viết bài'}
           </button>
         </div>
+
+
 
         {isWriting ? renderComposer() : null}
         {showDeleteConfirm ? renderDeleteConfirm() : null}
@@ -1409,10 +1415,9 @@ function ReviewBoard({ session, displayName }: { session: Session | null; displa
         )}
       </div>
 
-      {/* Write FAB */}
-      <button type="button" className="rv-write-fab" onClick={() => setIsWriting(true)} aria-label="Viết review">
-        <PenLine size={22} />
-      </button>
+      {/* Write FAB removed - now using unified cm-write-bar */}
+
+
 
       {/* Write Review Fullscreen */}
       {isWriting && (

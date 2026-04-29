@@ -514,10 +514,11 @@ export default function App() {
   }
 
   const handleToggleAnonymous = async (val: boolean) => {
-    if (!session) return;
+    if (!session || !supabase) return;
     setIsAnonymousRank(val);
     await supabase.from('profiles').update({ is_anonymous_rank: val }).eq('id', session.user.id);
   };
+
 
   async function addShift(nextTab: Tab = 'calendar') {
     const shift: Shift = {
