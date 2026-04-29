@@ -338,15 +338,34 @@ export default function App() {
   useEffect(() => {
     if (!supabase) return;
     const currentMonthKey = new Date().toISOString().slice(0, 7); // "YYYY-MM"
-    supabase.from('monthly_rankings').select('*, profiles(is_anonymous_rank)').eq('month_key', currentMonthKey).order('total_income', { ascending: false }).limit(10)
-      .then(({ data }) => {
-        if (data) {
-          // Flatten the joined data
-          const flattened = data.map((item: any) => ({
+    supabase.from('monthly_rankings').select('*').eq('month_key', currentMonthKey).order('total_income', { ascending: false }).limit(10)
+      .then(async ({ data: rankingsData, error: rankingsError }) => {
+        if (rankingsError) {
+          console.error('Error fetching rankings:', rankingsError);
+          return;
+        }
+        
+        if (rankingsData && rankingsData.length > 0) {
+          const userIds = rankingsData.map(r => r.user_id);
+          
+          // Fetch current anonymity status for these users from profiles
+          const { data: profilesData } = await supabase!.from('profiles')
+            .select('id, is_anonymous_rank')
+            .in('id', userIds);
+            
+          const profileMap = (profilesData || []).reduce((acc: any, p: any) => {
+            acc[p.id] = p.is_anonymous_rank;
+            return acc;
+          }, {});
+
+          const flattened = rankingsData.map((item: any) => ({
             ...item,
-            is_anonymous_rank: item.profiles?.is_anonymous_rank ?? item.is_anonymous_rank
+            is_anonymous_rank: profileMap[item.user_id] ?? item.is_anonymous_rank
           }));
+          
           setRankings(flattened);
+        } else {
+          setRankings([]);
         }
       });
   }, []);

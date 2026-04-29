@@ -72,7 +72,8 @@ export function WheelPicker({
         onScroll={handleScroll}
         style={{
           paddingTop: `${paddingVertical}px`,
-          paddingBottom: `${paddingVertical}px`
+          paddingBottom: `${paddingVertical}px`,
+          boxSizing: 'border-box'
         }}
       >
         {options.map((opt, i) => {
@@ -81,7 +82,7 @@ export function WheelPicker({
             <div 
               key={i} 
               className={`wheel-picker-item ${isSelected ? 'selected' : ''}`}
-              style={{ height: `${itemHeight}px`, lineHeight: `${itemHeight}px` }}
+              style={{ height: `${itemHeight}px` }}
               onClick={() => {
                 if (containerRef.current) {
                   containerRef.current.scrollTo({
