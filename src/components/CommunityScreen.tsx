@@ -175,6 +175,7 @@ export function CommunityScreen({
   profile,
   onOpenNotifications,
   unreadCount,
+  onNavigateToProfile,
 }: {
   companions: CompanionProfile[];
   requested: string[];
@@ -183,6 +184,7 @@ export function CommunityScreen({
   profile?: { displayName?: string };
   onOpenNotifications: () => void;
   unreadCount: number;
+  onNavigateToProfile: () => void;
 }) {
   const [view, setView] = useState<CommunityView>('feed');
   const [boardMode, setBoardMode] = useState<BoardMode>('feed');
@@ -213,10 +215,11 @@ export function CommunityScreen({
   const [syncMessage, setSyncMessage] = useState('Đang tải cộng đồng...');
   const [isLocalMode, setIsLocalMode] = useState(true);
   const [viewProfile, setViewProfile] = useState<CompanionProfile | null>(null);
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const commentInputRef = useRef<HTMLInputElement>(null);
 
   const currentUserId = session?.user.id ?? '';
-  const displayName = profile?.displayName?.trim() || session?.user.email?.split('@')[0] || 'Du học sinh';
+  const displayName = session ? (profile?.displayName?.trim() || session.user.email?.split('@')[0] || 'Du học sinh') : 'Du học sinh';
 
   useEffect(() => {
     let alive = true;
@@ -267,6 +270,14 @@ export function CommunityScreen({
       alive = false;
     };
   }, [currentUserId]);
+  
+  const requireLogin = useCallback(() => {
+    if (!session) {
+      setShowLoginPrompt(true);
+      return false;
+    }
+    return true;
+  }, [session]);
 
   useEffect(() => {
     if (loading || !isLocalMode) return;
@@ -342,6 +353,7 @@ export function CommunityScreen({
   }
 
   function openComposer() {
+    if (!requireLogin()) return;
     setIsWritingPost(true);
     setEditingPostId(null);
   }
@@ -389,6 +401,7 @@ export function CommunityScreen({
   }
 
   async function handlePostReaction(postId: string, reaction: 'like' | 'dislike') {
+    if (!requireLogin()) return;
     const hadLike = likedPosts.has(postId);
     const hadDislike = dislikedPosts.has(postId);
     const nextLikes = new Set(likedPosts);
@@ -454,6 +467,7 @@ export function CommunityScreen({
   }
 
   async function handleBookmark(postId: string) {
+    if (!requireLogin()) return;
     const next = new Set(bookmarkedPosts);
     const wasSaved = next.has(postId);
     if (wasSaved) next.delete(postId);
@@ -475,6 +489,7 @@ export function CommunityScreen({
   }
 
   async function handleCommentLike(commentId: string) {
+    if (!requireLogin()) return;
     const next = new Set(likedComments);
     const hadLiked = next.has(commentId);
     if (hadLiked) next.delete(commentId);
@@ -498,6 +513,7 @@ export function CommunityScreen({
   }
 
   async function addComment() {
+    if (!requireLogin()) return;
     if (!newComment.trim() || !selectedPost) return;
 
     const commentDisplayName = isAnonymous ? 'Ẩn danh' : displayName;
@@ -546,6 +562,7 @@ export function CommunityScreen({
   }
 
   async function addPost() {
+    if (!requireLogin()) return;
     if (!newTitle.trim() || !newContent.trim()) return;
 
     const postDisplayName = isAnonymous ? 'Ẩn danh' : displayName;
@@ -869,7 +886,7 @@ export function CommunityScreen({
           <button 
             type="button" 
             className="cm-write-bar-btn" 
-            onClick={boardMode === 'reviews' ? () => setIsWritingReview(true) : openComposer}
+            onClick={boardMode === 'reviews' ? () => { if (requireLogin()) setIsWritingReview(true); } : openComposer}
           >
             <Plus size={18} />
             {boardMode === 'reviews' ? 'Viết Review' : 'Viết bài'}
@@ -882,6 +899,7 @@ export function CommunityScreen({
         {isWritingPost ? renderComposer() : null}
         {showDeleteConfirm ? renderDeleteConfirm() : null}
         {viewProfile ? renderProfileModal() : null}
+        {showLoginPrompt ? renderLoginPrompt() : null}
       </>
     );
   }
@@ -1061,6 +1079,7 @@ export function CommunityScreen({
 
         {isWritingPost ? renderComposer() : null}
         {showDeleteConfirm ? renderDeleteConfirm() : null}
+        {showLoginPrompt ? renderLoginPrompt() : null}
       </div>
     );
   }
@@ -1202,6 +1221,43 @@ export function CommunityScreen({
           >
             {requested.includes(viewProfile.id) ? <><CheckCircle2 size={18} /> Đã gửi lời mời</> : <><Plus size={18} /> Kết bạn</>}
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  function renderLoginPrompt() {
+    return (
+      <div className="custom-confirm-overlay" onClick={() => setShowLoginPrompt(false)}>
+        <div className="custom-confirm-card" onClick={(event) => event.stopPropagation()} style={{ textAlign: 'center', padding: '32px 24px' }}>
+          <div style={{ width: 64, height: 64, borderRadius: 32, background: 'rgba(39, 82, 255, 0.1)', color: '#2752ff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+            <User size={32} />
+          </div>
+          <h3 style={{ fontSize: 20, marginBottom: 12, color: '#0f172a' }}>Yêu cầu đăng nhập</h3>
+          <p style={{ color: '#64748b', marginBottom: 28, lineHeight: 1.5 }}>
+            Bạn cần đăng nhập để thực hiện các tương tác như bình luận, thích bài viết hoặc chia sẻ bài đăng của riêng mình.
+          </p>
+          <div className="custom-confirm-actions" style={{ flexDirection: 'column', gap: 12 }}>
+            <button 
+              type="button" 
+              className="confirm-btn-delete" 
+              style={{ background: '#2752ff', width: '100%', margin: 0 }}
+              onClick={() => {
+                setShowLoginPrompt(false);
+                onNavigateToProfile();
+              }}
+            >
+              Đến trang hồ sơ
+            </button>
+            <button 
+              type="button" 
+              className="confirm-btn-cancel" 
+              style={{ width: '100%', margin: 0, border: '1px solid #e2e8f0' }}
+              onClick={() => setShowLoginPrompt(false)}
+            >
+              Để sau
+            </button>
+          </div>
         </div>
       </div>
     );

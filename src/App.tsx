@@ -759,7 +759,18 @@ export default function App() {
               onSetTarget={setIncomeTarget}
             />
           ) : null}
-          {tab === 'friends' ? <CommunityScreen profile={profile} companions={companions} requested={requested} onRequest={(id) => void requestConnection(id)} session={session} onOpenNotifications={handleOpenNotifications} unreadCount={unreadCount} /> : null}
+          {tab === 'friends' ? (
+            <CommunityScreen
+              profile={profile}
+              companions={companions}
+              requested={requested}
+              onRequest={(id) => void requestConnection(id)}
+              session={session}
+              onOpenNotifications={handleOpenNotifications}
+              unreadCount={unreadCount}
+              onNavigateToProfile={() => setTab('profile')}
+            />
+          ) : null}
           {tab === 'profile' ? (
             <ProfileScreen
               profile={profile}
