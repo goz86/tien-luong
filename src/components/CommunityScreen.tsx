@@ -23,11 +23,13 @@ import {
   User,
   Users,
   X,
+  MessageSquare,
 } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import type { CompanionProfile } from '../lib/types';
 import { supabase } from '../lib/supabase';
 import { Logo } from './shared/Logo';
+import { ChatView } from './ChatView';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -175,6 +177,7 @@ export function CommunityScreen({
   profile,
   onOpenNotifications,
   unreadCount,
+  friendships,
   onNavigateToProfile,
 }: {
   companions: CompanionProfile[];
@@ -184,6 +187,7 @@ export function CommunityScreen({
   profile?: { displayName?: string };
   onOpenNotifications: () => void;
   unreadCount: number;
+  friendships: any[];
   onNavigateToProfile: () => void;
 }) {
   const [view, setView] = useState<CommunityView>('feed');
@@ -216,10 +220,20 @@ export function CommunityScreen({
   const [isLocalMode, setIsLocalMode] = useState(true);
   const [viewProfile, setViewProfile] = useState<CompanionProfile | null>(null);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+  const [activeChatPartner, setActiveChatPartner] = useState<CompanionProfile | null>(null);
+  const [friendFilter, setFriendFilter] = useState<'discovery' | 'chats' | 'unread'>('discovery');
+  const [recentChats, setRecentChats] = useState<any[]>([]);
   const commentInputRef = useRef<HTMLInputElement>(null);
 
   const currentUserId = session?.user.id ?? '';
   const displayName = session ? (profile?.displayName?.trim() || session.user.email?.split('@')[0] || 'Du học sinh') : 'Du học sinh';
+
+  const isFriend = useCallback((id: string) => {
+    return friendships.some(f => 
+      (f.requester_id === id || f.target_profile_id === id) && 
+      f.status === 'accepted'
+    );
+  }, [friendships]);
 
   useEffect(() => {
     let alive = true;
@@ -270,6 +284,43 @@ export function CommunityScreen({
       alive = false;
     };
   }, [currentUserId]);
+  
+  const fetchRecentChats = useCallback(async () => {
+    if (!supabase || !currentUserId) return;
+    
+    const { data, error } = await supabase
+      .from('chat_messages')
+      .select('sender_id, receiver_id, created_at, content, is_read')
+      .or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`)
+      .order('created_at', { ascending: false });
+
+    if (!error && data) {
+      const chatsMap = new Map<string, any>();
+      data.forEach((msg) => {
+        const partnerId = msg.sender_id === currentUserId ? msg.receiver_id : msg.sender_id;
+        if (!chatsMap.has(partnerId)) {
+          chatsMap.set(partnerId, {
+            partnerId,
+            lastMessage: msg.content,
+            lastMessageAt: msg.created_at,
+            unreadCount: 0,
+            isMe: msg.sender_id === currentUserId
+          });
+        }
+        if (!msg.is_read && msg.receiver_id === currentUserId) {
+          const current = chatsMap.get(partnerId);
+          current.unreadCount += 1;
+        }
+      });
+      setRecentChats(Array.from(chatsMap.values()));
+    }
+  }, [currentUserId]);
+
+  useEffect(() => {
+    if (boardMode === 'friends') {
+      fetchRecentChats();
+    }
+  }, [boardMode, fetchRecentChats]);
   
   const requireLogin = useCallback(() => {
     if (!session) {
@@ -655,6 +706,16 @@ export function CommunityScreen({
 
   function renderBoardBody() {
     if (boardMode === 'friends') {
+      const displayList = friendFilter === 'discovery' 
+        ? companions 
+        : recentChats
+            .filter(c => friendFilter === 'chats' || (friendFilter === 'unread' && c.unreadCount > 0))
+            .map(c => {
+              const profile = companions.find(p => p.id === c.partnerId);
+              return profile ? { ...profile, lastMessage: c.lastMessage, unreadCount: c.unreadCount, isMe: c.isMe } : null;
+            })
+            .filter(Boolean) as (CompanionProfile & { lastMessage: string, unreadCount: number, isMe: boolean })[];
+
       return (
         <section className="cm-service-panel">
           <div className="cm-service-head">
@@ -664,13 +725,52 @@ export function CommunityScreen({
             </div>
             <Users size={22} />
           </div>
+
+          <div className="rv-cat-chips" style={{ padding: '0 20px 15px', borderBottom: 'none', gap: '8px' }}>
+            <button 
+              type="button" 
+              className={`rv-cat-chip ${friendFilter === 'discovery' ? 'active' : ''}`}
+              onClick={() => setFriendFilter('discovery')}
+              style={{ fontSize: '13px', padding: '6px 14px' }}
+            >
+              Khám phá
+            </button>
+            <button 
+              type="button" 
+              className={`rv-cat-chip ${friendFilter === 'chats' ? 'active' : ''}`}
+              onClick={() => setFriendFilter('chats')}
+              style={{ fontSize: '13px', padding: '6px 14px' }}
+            >
+              Tất cả
+            </button>
+            <button 
+              type="button" 
+              className={`rv-cat-chip ${friendFilter === 'unread' ? 'active' : ''}`}
+              onClick={() => setFriendFilter('unread')}
+              style={{ fontSize: '13px', padding: '6px 14px', position: 'relative' }}
+            >
+              Chưa đọc
+              {recentChats.some(c => c.unreadCount > 0) && (
+                <span style={{ 
+                  position: 'absolute', top: -2, right: -2, width: 8, height: 8, 
+                  background: '#ff4b4b', borderRadius: '50%', border: '2px solid white' 
+                }} />
+              )}
+            </button>
+          </div>
           <div className="community-friend-list">
-            {companions.map((friend) => {
+            {displayList.length === 0 ? (
+              <div className="rv-empty" style={{ padding: '40px 20px' }}>
+                <Users size={40} style={{ opacity: 0.3 }} />
+                <p style={{ marginTop: 12, color: 'var(--text-soft)' }}>
+                  {friendFilter === 'unread' ? 'Không có tin nhắn chưa đọc' : 'Chưa có cuộc hội thoại nào'}
+                </p>
+              </div>
+            ) : displayList.map((friend) => {
               const nameParts = friend.displayName.trim().split(' ');
               const avatarLetter = (nameParts[nameParts.length - 1] || 'U').slice(0, 1).toUpperCase();
-              // In case the user wanted the name string reversed:
-              // const displayStr = nameParts.length > 1 ? nameParts.reverse().join(' ') : friend.displayName;
               const displayStr = friend.displayName;
+              const chatData = friendFilter !== 'discovery' ? (friend as any) : null;
               
               return (
                 <article key={friend.id} className="community-friend-row">
@@ -678,24 +778,68 @@ export function CommunityScreen({
                     {avatarLetter}
                   </div>
                   <div className="community-friend-main">
-                    <strong onClick={() => setViewProfile(friend)} style={{ cursor: 'pointer' }}>
-                      {displayStr}
-                    </strong>
-                    <span>{friend.school} • {friend.region}</span>
-                    <p>{friend.focus}</p>
-                    <div className="community-chip-row">
-                      {friend.tags.slice(0, 3).map((tag) => <span key={tag}>{tag}</span>)}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <strong onClick={() => setViewProfile(friend)} style={{ cursor: 'pointer' }}>
+                        {displayStr}
+                      </strong>
+                      {chatData?.unreadCount > 0 && (
+                        <span style={{ 
+                          background: '#2752ff', color: 'white', fontSize: '10px', 
+                          padding: '1px 6px', borderRadius: '10px', fontWeight: 'bold'
+                        }}>
+                          {chatData.unreadCount}
+                        </span>
+                      )}
                     </div>
+
+                    {chatData ? (
+                      <p style={{ 
+                        color: chatData.unreadCount > 0 ? 'var(--text-main)' : 'var(--text-soft)',
+                        fontWeight: chatData.unreadCount > 0 ? '600' : '400',
+                        fontSize: '13px',
+                        marginTop: '2px',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        maxWidth: '200px'
+                      }}>
+                        {chatData.isMe ? 'Bạn: ' : ''}{chatData.lastMessage}
+                      </p>
+                    ) : (
+                      <>
+                        <span>{friend.school} • {friend.region}</span>
+                        <p>{friend.focus}</p>
+                        <div className="community-chip-row">
+                          {friend.tags.slice(0, 3).map((tag) => <span key={tag}>{tag}</span>)}
+                        </div>
+                      </>
+                    )}
                   </div>
-                  <button
-                    type="button"
-                    className={`community-request ${requested.includes(friend.id) ? 'sent' : ''}`}
-                  onClick={() => onRequest(friend.id)}
-                  aria-label={requested.includes(friend.id) ? 'Đã gửi lời mời' : 'Kết bạn'}
-                >
-                  {requested.includes(friend.id) ? <CheckCircle2 size={20} /> : <Plus size={20} />}
-                </button>
-              </article>
+                  
+                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {!isFriend(friend.id) ? (
+                      <button 
+                        type="button" 
+                        className={`community-request ${requested.includes(friend.id) ? 'sent' : ''}`}
+                        onClick={() => onRequest(friend.id)}
+                        disabled={requested.includes(friend.id)}
+                      >
+                        {requested.includes(friend.id) ? <CheckCircle2 size={18} /> : <Plus size={18} />}
+                      </button>
+                    ) : (
+                      <button 
+                        type="button" 
+                        className="community-request" 
+                        style={{ background: '#2752ff', color: 'white' }}
+                        onClick={() => {
+                          if (requireLogin()) setActiveChatPartner(friend);
+                        }}
+                      >
+                        <MessageSquare size={18} />
+                      </button>
+                    )}
+                  </div>
+                </article>
             );
           })}
           </div>
@@ -704,7 +848,14 @@ export function CommunityScreen({
     }
 
     if (boardMode === 'reviews') {
-      return <ReviewBoard session={session} displayName={displayName} />;
+      return (
+        <ReviewBoard 
+          session={session} 
+          displayName={displayName} 
+          isWriting={isWritingReview}
+          setIsWriting={setIsWritingReview}
+        />
+      );
     }
 
     return (
@@ -900,6 +1051,13 @@ export function CommunityScreen({
         {showDeleteConfirm ? renderDeleteConfirm() : null}
         {viewProfile ? renderProfileModal() : null}
         {showLoginPrompt ? renderLoginPrompt() : null}
+        {activeChatPartner && session && (
+          <ChatView 
+            session={session} 
+            partner={activeChatPartner} 
+            onBack={() => setActiveChatPartner(null)} 
+          />
+        )}
       </>
     );
   }
@@ -1080,6 +1238,13 @@ export function CommunityScreen({
         {isWritingPost ? renderComposer() : null}
         {showDeleteConfirm ? renderDeleteConfirm() : null}
         {showLoginPrompt ? renderLoginPrompt() : null}
+        {activeChatPartner && session && (
+          <ChatView 
+            session={session} 
+            partner={activeChatPartner} 
+            onBack={() => setActiveChatPartner(null)} 
+          />
+        )}
       </div>
     );
   }
@@ -1268,11 +1433,20 @@ export function CommunityScreen({
 /* ReviewBoard - Standalone component           */
 /* ============================================ */
 
-function ReviewBoard({ session, displayName }: { session: Session | null; displayName: string }) {
+function ReviewBoard({ 
+  session, 
+  displayName,
+  isWriting,
+  setIsWriting
+}: { 
+  session: Session | null; 
+  displayName: string;
+  isWriting: boolean;
+  setIsWriting: (v: boolean) => void;
+}) {
   const [reviews, setReviews] = useState<PlaceReview[]>([]);
   const [loading, setLoading] = useState(true);
   const [catFilter, setCatFilter] = useState<ReviewCategory>('all');
-  const [isWritingReview, setIsWritingReview] = useState(false);
 
   // Write form state
   const [searchQuery, setSearchQuery] = useState('');
@@ -1358,7 +1532,7 @@ function ReviewBoard({ session, displayName }: { session: Session | null; displa
   };
 
   const closeWriter = () => {
-    setIsWritingReview(false);
+    setIsWriting(false);
     setSelectedPlace(null);
     setWriteCat('food');
     setWriteRating(0);
@@ -1487,7 +1661,7 @@ function ReviewBoard({ session, displayName }: { session: Session | null; displa
       {/* Write FAB removed - now using unified cm-write-bar */}
 
       {/* Write Review Fullscreen */}
-      {isWritingReview && (
+      {isWriting && (
         <div className="rv-write-overlay">
           <header className="rv-write-header">
             <button type="button" className="cm-icon-btn" onClick={closeWriter}><X size={22} /></button>

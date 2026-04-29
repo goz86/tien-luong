@@ -101,6 +101,7 @@ export default function App() {
   const [profile, setProfile] = useState(initial.profile);
   const [companions, setCompanions] = useState<CompanionProfile[]>(initial.companions);
   const [requested, setRequested] = useState(initial.requested);
+  const [friendships, setFriendships] = useState<any[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<CommunityNotification[]>([]);
   const [toastNotification, setToastNotification] = useState<CommunityNotification | null>(null);
@@ -419,8 +420,9 @@ export default function App() {
       client.from('shift_entries').select('*').eq('user_id', session.user.id),
       client.from('profiles').select('*').eq('id', session.user.id).maybeSingle(),
       client.from('expenses').select('*').eq('user_id', session.user.id),
-      client.from('profiles').select('*').neq('id', session.user.id)
-    ]).then(([shiftsRes, profileRes, expensesRes, companionsRes]) => {
+      client.from('profiles').select('*').neq('id', session.user.id),
+      client.from('friend_requests').select('*').or(`requester_id.eq.${session.user.id},target_profile_id.eq.${session.user.id}`)
+    ]).then(([shiftsRes, profileRes, expensesRes, companionsRes, friendsRes]) => {
       if (!isMounted) return;
       if (shiftsRes.data) {
         setShifts(shiftsRes.data.map(row => ({
@@ -466,6 +468,13 @@ export default function App() {
           availability: 'Đang cập nhật...', // Fallback since we don't have this column yet
           tags: Array.isArray(row.tags) ? row.tags : []
         })));
+      }
+      if (friendsRes.data) {
+        setFriendships(friendsRes.data);
+        const reqIds = friendsRes.data
+          .filter(f => f.requester_id === session.user.id)
+          .map(f => f.target_profile_id);
+        setRequested(reqIds);
       }
     });
     return () => { isMounted = false; };
@@ -640,7 +649,11 @@ export default function App() {
   async function requestConnection(id: string) {
     setRequested((current) => [...new Set([...current, id])]);
     if (supabase && session) {
-      await supabase!.from('companion_requests').insert({ requester_id: session.user.id, companion_id: id });
+      await supabase!.from('friend_requests').insert({ 
+        requester_id: session.user.id, 
+        target_profile_id: id,
+        status: 'pending'
+      });
     }
   }
 
@@ -764,6 +777,7 @@ export default function App() {
               profile={profile}
               companions={companions}
               requested={requested}
+              friendships={friendships}
               onRequest={(id) => void requestConnection(id)}
               session={session}
               onOpenNotifications={handleOpenNotifications}
