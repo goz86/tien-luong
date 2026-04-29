@@ -216,7 +216,7 @@ export function CommunityScreen({
   const [likedComments, setLikedComments] = useState<Set<string>>(new Set());
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [syncMessage, setSyncMessage] = useState('Đang tải cộng đồng...');
+  const [syncMessage, setSyncMessage] = useState('Đang làm mới');
   const [isLocalMode, setIsLocalMode] = useState(true);
   const [viewProfile, setViewProfile] = useState<CompanionProfile | null>(null);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
@@ -263,10 +263,10 @@ export function CommunityScreen({
         setIsLocalMode(state.source !== 'supabase');
         setSyncMessage(
           state.source === 'supabase'
-            ? 'Đã đồng bộ với Supabase'
+            ? 'Đang trực tuyến'
             : currentUserId
-              ? 'Chưa có dữ liệu Supabase, đang dùng dữ liệu mẫu'
-              : 'Đăng nhập để đồng bộ bài viết với Supabase'
+              ? 'Chưa có dữ liệu Supabase'
+              : 'Đăng nhập để đồng bộ bài viết'
         );
       })
       .catch((error) => {
@@ -281,7 +281,7 @@ export function CommunityScreen({
           setBookmarkedPosts(new Set(local.bookmarkedPostIds));
           setLikedComments(new Set(local.likedCommentIds));
         }
-        setSyncMessage('Không tải được Supabase, đang lưu tạm trên máy');
+        setSyncMessage('Không tải được, đang lưu tạm trên máy');
         setIsLocalMode(true);
       })
       .finally(() => {

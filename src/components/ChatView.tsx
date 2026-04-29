@@ -68,13 +68,20 @@ export function ChatView({ session, partner, onBack }: ChatViewProps) {
           event: 'INSERT',
           schema: 'public',
           table: 'chat_messages',
-          filter: `receiver_id=eq.${currentUserId}`,
         },
         (payload) => {
           const msg = payload.new as Message;
-          if (msg.sender_id === partner.id) {
-            setMessages((prev) => [...prev, msg]);
-            void markAsRead();
+          // Chỉ nhận tin nhắn của room này
+          const isRelevant = (msg.sender_id === partner.id && msg.receiver_id === currentUserId) ||
+                            (msg.sender_id === currentUserId && msg.receiver_id === partner.id);
+          
+          if (isRelevant) {
+            setMessages((prev) => {
+              // Tránh trùng lặp nếu đã có (từ insert result)
+              if (prev.some(m => m.id === msg.id)) return prev;
+              return [...prev, msg];
+            });
+            if (msg.receiver_id === currentUserId) void markAsRead();
           }
         }
       )
@@ -95,9 +102,17 @@ export function ChatView({ session, partner, onBack }: ChatViewProps) {
     e.preventDefault();
     if (!newMessage.trim() || !supabase || sending) return;
 
-    setSending(true);
-    const content = newMessage.trim();
-    setNewMessage('');
+    const tempId = `temp-${Date.now()}`;
+    const tempMsg: Message = {
+      id: tempId,
+      sender_id: currentUserId,
+      receiver_id: partner.id,
+      content: content,
+      is_read: false,
+      created_at: new Date().toISOString()
+    };
+    
+    setMessages(prev => [...prev, tempMsg]);
 
     const { data, error } = await supabase
       .from('chat_messages')
@@ -109,8 +124,12 @@ export function ChatView({ session, partner, onBack }: ChatViewProps) {
       .select('*')
       .single();
 
-    if (!error && data) {
-      setMessages((prev) => [...prev, data as Message]);
+    if (error) {
+      console.error('Lỗi gửi tin nhắn:', error);
+      // Xóa tin nhắn tạm nếu lỗi
+      setMessages(prev => prev.filter(m => m.id !== tempId));
+    } else if (data) {
+      setMessages(prev => prev.map(m => m.id === tempId ? (data as Message) : m));
     }
     setSending(false);
   }
