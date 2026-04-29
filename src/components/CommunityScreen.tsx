@@ -191,7 +191,9 @@ export function CommunityScreen({
   const [posts, setPosts] = useState<CommunityPost[]>([]);
   const [comments, setComments] = useState<CommunityComment[]>([]);
   const [notifications, setNotifications] = useState<CommunityNotification[]>([]);
-  const [isWriting, setIsWriting] = useState(false);
+  const [isWritingPost, setIsWritingPost] = useState(false);
+  const [isWritingReview, setIsWritingReview] = useState(false);
+
   const [newTitle, setNewTitle] = useState('');
   const [newContent, setNewContent] = useState('');
   const [newCategory, setNewCategory] = useState<CommunityCategory>('free');
@@ -279,19 +281,22 @@ export function CommunityScreen({
   }, [bookmarkedPosts, comments, dislikedPosts, isLocalMode, likedComments, likedPosts, loading, posts]);
 
   useEffect(() => {
-    function handlePopstate() {
-      if (isWriting) {
-        closeComposer();
+    const handlePopState = () => {
+      if (isWritingPost || isWritingReview) {
+        setIsWritingPost(false);
+        setIsWritingReview(false);
         return;
       }
+
       if (view === 'detail') {
         goBack();
       }
     }
 
-    window.addEventListener('popstate', handlePopstate);
-    return () => window.removeEventListener('popstate', handlePopstate);
-  }, [isWriting, view]);
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [isWritingPost, isWritingReview, view]);
+
 
   const filteredPosts = useMemo(() => {
     return posts.filter((post) => {
@@ -325,8 +330,10 @@ export function CommunityScreen({
   }
 
   function closeComposer() {
-    setIsWriting(false);
+    setIsWritingPost(false);
+    setIsWritingReview(false);
     setEditingPostId(null);
+
     setNewTitle('');
     setNewContent('');
     setNewCategory('free');
@@ -334,9 +341,11 @@ export function CommunityScreen({
   }
 
   function openComposer() {
-    setIsWriting(true);
-    history.pushState({ communityModal: 'write' }, '');
+    setIsWritingPost(true);
+    setEditingPostId(null);
   }
+
+
 
   function openPost(post: CommunityPost) {
     const nextPost = { ...post, views_count: post.views_count + 1 };
@@ -595,11 +604,10 @@ export function CommunityScreen({
     setEditingPostId(null);
   }
 
-  const openComposer = () => {
-    setIsWritingPost(true);
-    setEditingPostId(null);
-  };
-
+  function makeLocalPost(draft: Omit<Parameters<typeof createCommunityPost>[0], 'userId'>): CommunityPost {
+    return {
+      id: crypto.randomUUID(),
+      user_id: currentUserId || 'local-user',
       category: draft.category,
       title: draft.title,
       content: draft.content,
@@ -612,6 +620,7 @@ export function CommunityScreen({
       created_at: new Date().toISOString(),
     };
   }
+
 
   function startEditing(post: CommunityPost) {
     setEditingPostId(post.id);
