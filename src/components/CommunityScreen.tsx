@@ -829,12 +829,14 @@ export function CommunityScreen({
                       <button 
                         type="button" 
                         className={`community-request ${requested.includes(friend.id) ? 'sent' : ''} ${hasIncomingRequest(friend.id) ? 'incoming' : ''}`}
-                        onClick={() => onRequest(friend.id)}
+                        onClick={() => {
+                          if (requireLogin()) onRequest(friend.id);
+                        }}
                         disabled={requested.includes(friend.id) && !hasIncomingRequest(friend.id)}
-                        style={hasIncomingRequest(friend.id) ? { width: 'auto', padding: '0 12px', background: '#4CAF50', color: 'white' } : {}}
+                        style={hasIncomingRequest(friend.id) ? { width: 'auto', minWidth: '85px', padding: '0 12px', background: '#4CAF50', color: 'white', whiteSpace: 'nowrap' } : {}}
                       >
                         {hasIncomingRequest(friend.id) ? (
-                          <span style={{ fontSize: '12px', fontWeight: 'bold' }}>Chấp nhận</span>
+                          <span style={{ fontSize: '12px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>Chấp nhận</span>
                         ) : requested.includes(friend.id) ? (
                           <CheckCircle2 size={18} />
                         ) : (
