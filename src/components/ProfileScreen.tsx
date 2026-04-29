@@ -27,7 +27,10 @@ import {
   Camera,
   Settings,
   X,
+  Trophy,
 } from 'lucide-react';
+import { BADGES } from '../data/badgeData';
+
 import { Session } from '@supabase/supabase-js';
 import { ProfileDraft } from '../lib/types';
 import { regions } from '../data';
@@ -63,6 +66,7 @@ export function ProfileScreen({
   onChangeWallpaper,
   lang,
   onChangeLang,
+  earnedBadges,
 }: {
   profile: ProfileDraft;
   setProfile: (draft: ProfileDraft) => void;
@@ -75,7 +79,9 @@ export function ProfileScreen({
   onChangeWallpaper: (w: WallpaperKey) => void;
   lang: AppLang;
   onChangeLang: (l: AppLang) => void;
+  earnedBadges: string[];
 }) {
+
   const [authMode, setAuthMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -409,28 +415,31 @@ export function ProfileScreen({
           {/* ===== BADGES SECTION ===== */}
           <section className="pf-card">
             <div className="pf-card-header">
-              <span style={{ fontSize: '18px' }}>🏆</span>
+              <Trophy size={18} color="#f59e0b" />
               <span>{isKo ? '업적 배지' : 'Huy hiệu thành tích'}</span>
-              <span className="pf-see-all">{isKo ? '모두 보기' : 'Xem tất cả'}</span>
+              <span className="pf-see-all">{earnedBadges.length}/{BADGES.length}</span>
             </div>
             <div className="pf-badges-grid">
-              {[
-                { label_vi: 'Chăm chỉ', label_ko: '열심히', icon: '🔥', color: '#ffedd5', border: '#f97316', earned: true },
-                { label_vi: 'Tiết kiệm', label_ko: '절약왕', icon: '💰', color: '#dcfce7', border: '#22c55e', earned: true },
-                { label_vi: 'Cộng đồng', label_ko: '커뮤니티', icon: '💬', color: '#dbeafe', border: '#3b82f6', earned: true },
-                { label_vi: 'Chi tiêu giỏi', label_ko: '소비왕', icon: '💎', color: '#f1f5f9', border: '#94a3b8', earned: false },
-                { label_vi: 'Thủ lĩnh', label_ko: '리더', icon: '👑', color: '#fef9c3', border: '#eab308', earned: false },
-                { label_vi: 'Bí ẩn', label_ko: '미스터리', icon: '🔮', color: '#f3e8ff', border: '#a855f7', earned: false },
-              ].map((badge, i) => (
-                <div key={i} className={`pf-badge ${badge.earned ? 'earned' : 'locked'}`}>
-                  <div className="pf-badge-icon" style={{ background: badge.color, borderColor: badge.border }}>
-                    {badge.icon}
+              {BADGES.map((badge) => {
+                const isEarned = earnedBadges.includes(badge.id);
+                return (
+                  <div key={badge.id} className={`pf-badge ${isEarned ? 'earned' : 'locked'}`}>
+                    <div className="pf-badge-icon" style={{ 
+                      background: isEarned ? badge.color : '#f1f5f9', 
+                      borderColor: isEarned ? badge.border : '#cbd5e1',
+                      filter: isEarned ? 'none' : 'grayscale(1) opacity(0.5)'
+                    }}>
+                      {badge.icon}
+                    </div>
+                    <span style={{ color: isEarned ? 'var(--text-main)' : 'var(--text-faint)' }}>
+                      {isKo ? badge.label_ko : badge.label_vi}
+                    </span>
                   </div>
-                  <span>{isKo ? badge.label_ko : badge.label_vi}</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </section>
+
         </>
       ) : (
         /* ===== AUTH / LOGIN CARD (When not logged in) ===== */

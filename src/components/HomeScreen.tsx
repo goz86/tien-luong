@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, ChevronLeft, ChevronRight, X, Edit3, Trash2, Bell } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, X, Edit3, Trash2, Bell, TrendingUp, ShieldCheck } from 'lucide-react';
 import { formatKrw, calculateShiftPay, shiftHours } from '../lib/salary';
 import { RateState, Shift, VenueColors } from '../lib/types';
 import { formatDateChip, getVenueColor } from '../utils/helpers';
@@ -22,7 +22,13 @@ export function HomeScreen({
   currentMonth,
   onPrevMonth,
   onNextMonth,
-  onOpenNotifications
+  onOpenNotifications,
+  unreadCount,
+  profile,
+  isAnonymousRank,
+  onToggleAnonymous,
+  rankings,
+  myId,
 }: {
   monthlyTotal: number;
   monthlyHours: number;
@@ -40,6 +46,12 @@ export function HomeScreen({
   onPrevMonth: () => void;
   onNextMonth: () => void;
   onOpenNotifications: () => void;
+  unreadCount: number;
+  profile: any;
+  isAnonymousRank: boolean;
+  onToggleAnonymous: (val: boolean) => void;
+  rankings: any[];
+  myId: string;
 }) {
   const [selectedWorkplace, setSelectedWorkplace] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -76,16 +88,9 @@ export function HomeScreen({
           }}
         >
           <Bell size={22} color="#64748b" />
-          <span style={{
-            position: 'absolute',
-            top: '10px',
-            right: '10px',
-            width: '8px',
-            height: '8px',
-            background: '#e11d48',
-            borderRadius: '50%',
-            border: '2px solid white'
-          }} />
+          {unreadCount > 0 && (
+            <span className="cm-notification-badge">{unreadCount}</span>
+          )}
         </button>
       </header>
 
@@ -330,27 +335,86 @@ export function HomeScreen({
       <section className="section-block">
         <div className="section-head">
           <div>
-            <p className="section-kicker">Bảng xếp hạng ẩn danh</p>
-            <h3>Top thu nhập khu vực</h3>
+            <p className="section-kicker">Cộng đồng Duhoc Mate</p>
+            <h3>Bảng xếp hạng thu nhập</h3>
+          </div>
+          <div className="rank-month-badge">
+            Tháng {new Date().getMonth() + 1}
           </div>
         </div>
-        <div className="surface-card">
-          {[
-            { name: 'Du học sinh A', school: 'Konkuk', amount: '2,850,000₩', rank: 1 },
-            { name: 'Ẩn danh 123', school: 'Sejong', amount: '2,420,000₩', rank: 2 },
-            { name: 'Bạn (Hạng 12)', school: 'Kyunghee', amount: formatKrw(monthlyTotal), rank: 12 },
-          ].map((item, i) => (
-            <div key={i} className="workplace-row" style={{ opacity: item.rank > 3 ? 0.7 : 1 }}>
-              <div style={{ width: '24px', fontWeight: 900, color: item.rank === 1 ? '#f59e0b' : '#64748b' }}>{item.rank}</div>
-              <div className="workplace-copy">
-                <strong>{item.name}</strong>
-                <span>{item.school}</span>
-              </div>
-              <strong style={{ color: '#2752ff' }}>{item.amount}</strong>
+        
+        <div className="ranking-container">
+          {rankings.length === 0 ? (
+            <div className="rank-empty-state">
+              <TrendingUp size={24} style={{ opacity: 0.2, marginBottom: '8px' }} />
+              <p>Chưa có dữ liệu xếp hạng tháng {monthNumber}</p>
+              <span>Hãy ghi lại ca làm đầu tiên để lên hạng!</span>
             </div>
-          ))}
+          ) : (
+            rankings.map((item, i) => {
+              const isMe = item.user_id === myId;
+              const rank = i + 1;
+              const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : null;
+              
+              // Resolve display name for the list
+              let displayName = item.display_name;
+              
+              // Cute names list
+              const cuteNames = [
+                "Gấu Trúc Chăm Chỉ 🐼", "Mèo Con Cần Mẫn 🐱", "Thỏ Ngọc May Mắn 🐰", 
+                "Sóc Nhỏ Năng Động 🐿️", "Cánh Cụt Đáng Yêu 🐧", "Hươu Sao Tốt Bụng 🦌",
+                "Vịt Vàng Lon Ton 🐥", "Cún Con Tinh Nghịch 🐶"
+              ];
+
+              const getCuteName = (uid: string) => {
+                const index = uid ? uid.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0) % cuteNames.length : 0;
+                return cuteNames[index];
+              };
+
+              // Masking logic
+              const effectiveAnonymous = isMe ? isAnonymousRank : item.is_anonymous_rank;
+              
+              if (effectiveAnonymous) {
+                displayName = getCuteName(item.user_id);
+              }
+
+              return (
+                <div key={item.user_id} className={`rank-card ${isMe ? 'is-me' : ''}`}>
+                  <div className="rank-number">
+                    {medal ? <span className="medal">{medal}</span> : <span>{rank}</span>}
+                  </div>
+                  <div className="rank-info">
+                    <div className="rank-name-row">
+                      <strong>{isMe ? (isAnonymousRank ? displayName : item.display_name) : displayName}</strong>
+                    </div>
+                  </div>
+
+                  <div className="rank-value">
+                    <span className="rank-amount">{formatKrw(item.total_income)}</span>
+                  </div>
+                </div>
+
+              );
+            })
+          )}
+        </div>
+
+
+
+        <div className="rank-privacy-toggle" onClick={() => onToggleAnonymous(!isAnonymousRank)}>
+          <div className={`privacy-switch ${isAnonymousRank ? 'active' : ''}`}>
+            <div className="switch-handle" />
+          </div>
+          <div className="privacy-copy">
+            <ShieldCheck size={16} color={isAnonymousRank ? '#2752ff' : '#64748b'} />
+            <span style={{ color: isAnonymousRank ? '#2752ff' : '#64748b' }}>
+              {isAnonymousRank ? 'Bạn đang ẩn danh' : 'Chế độ ẩn danh'}
+            </span>
+          </div>
         </div>
       </section>
+
+
 
       <section className="section-block">
         <div className="section-head">

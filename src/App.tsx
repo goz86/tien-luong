@@ -12,6 +12,9 @@ import { CalendarScreen } from './components/CalendarScreen';
 import { IncomeScreen } from './components/IncomeScreen';
 import { CommunityScreen } from './components/CommunityScreen';
 import { ProfileScreen, WALLPAPERS, type WallpaperKey, type AppLang } from './components/ProfileScreen';
+import { type CommunityNotification, timeAgo } from './data/communityData';
+import { BADGES } from './data/badgeData';
+
 
 const STORAGE_KEY = 'duhoc-mate-redesign-state';
 const getLocalDateString = () => {
@@ -99,17 +102,21 @@ export default function App() {
   const [companions, setCompanions] = useState<CompanionProfile[]>(initial.companions);
   const [requested, setRequested] = useState(initial.requested);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState<CommunityNotification[]>([]);
+  const [toastNotification, setToastNotification] = useState<CommunityNotification | null>(null);
 
-  // Demo notifications data
-  const demoNotifications = [
-    { id: 1, type: 'like', user: 'Linh', post: 'Kinh nghiệm leo núi...', time: '2 phút trước' },
-    { id: 2, type: 'comment', user: 'Tuấn', post: 'Tìm bạn cùng phòng', content: 'Mình quan tâm ạ!', time: '15 phút trước' },
-    { id: 3, type: 'like', user: 'Ẩn danh', post: 'Sinchon có gì vui?', time: '1 giờ trước' },
-  ];
+  const unreadCount = useMemo(() => notifications.filter(n => !n.is_read).length, [notifications]);
+
   const [rate, setRate] = useState(initial.rate);
   const [venueColors, setVenueColors] = useState<VenueColors>(initial.venueColors);
   const [incomeTarget, setIncomeTarget] = useState(initial.incomeTarget ?? 2000000);
   const [expenses, setExpenses] = useState(initial.expenses ?? []);
+  const [earnedBadges, setEarnedBadges] = useState<string[]>([]);
+  const [isAnonymousRank, setIsAnonymousRank] = useState(false);
+  const [rankings, setRankings] = useState<any[]>([]);
+
+
+
   const [draft, setDraft] = useState<ShiftDraft>(defaultDraft);
   const [editingShiftId, setEditingShiftId] = useState<string | null>(null);
   const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(todayIso));
@@ -137,6 +144,87 @@ export default function App() {
   useEffect(() => {
     window.localStorage.setItem('duhoc-mate-wallpaper', wallpaper);
   }, [wallpaper]);
+
+  // Fetch notifications and subscribe to realtime
+  useEffect(() => {
+    if (!session || !supabase) return;
+    const userId = session.user.id;
+
+    // Fetch initial notifications
+    const fetchNotifications = async () => {
+      const { data, error } = await supabase!.from('community_notifications')
+        .select('*')
+        .eq('recipient_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(20);
+        
+      if (error) {
+        console.error('Error fetching notifications:', error);
+        return;
+      }
+
+      if (data) {
+        setNotifications(data.map(row => ({
+          ...row,
+          is_read: row.is_read === true, // Explicit boolean check
+          type: (row.type ?? 'system') as CommunityNotification['type']
+        } as CommunityNotification)));
+      }
+    };
+
+    void fetchNotifications();
+
+    // Subscribe to new notifications
+    const channel = supabase!.channel('public:community_notifications')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'community_notifications'
+      }, (payload) => {
+        console.log('Realtime payload received:', payload);
+        
+        // Filter manually here
+        if (payload.new.recipient_id !== userId) return;
+
+        const newNotif = {
+          ...payload.new,
+          is_read: false,
+          type: (payload.new.type ?? 'system') as CommunityNotification['type']
+        } as CommunityNotification;
+        
+        setNotifications(prev => [newNotif, ...prev]);
+        
+        // Show push toast
+        setToastNotification(newNotif);
+        setTimeout(() => {
+          setToastNotification(null);
+        }, 5000);
+      })
+      .subscribe((status) => {
+        console.log('Realtime subscription status:', status);
+      });
+
+    return () => {
+      void supabase!.removeChannel(channel);
+    };
+  }, [session]);
+
+  const markAllAsRead = async () => {
+    if (!session || !supabase || unreadCount === 0) return;
+    
+    // Optimistic update
+    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+    
+    await supabase!.from('community_notifications')
+      .update({ is_read: true })
+      .eq('recipient_id', session.user.id)
+      .eq('is_read', false);
+  };
+
+  const handleOpenNotifications = () => {
+    setShowNotifications(true);
+    void markAllAsRead();
+  };
 
   useEffect(() => {
     window.localStorage.setItem('duhoc-mate-lang', lang);
@@ -213,10 +301,89 @@ export default function App() {
   useEffect(() => {
     if (!supabase) return;
     const client = supabase;
+    
+    // Initial session check
     client.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data } = client.auth.onAuthStateChange((_event, nextSession) => setSession(nextSession));
-    return () => data.subscription.unsubscribe();
+
+    // Listen for changes
+    const { data: { subscription } } = client.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!supabase || !session) return;
+    const client = supabase;
+    
+    // Fetch profile extras (badges and anonymity)
+    client.from('profiles').select('is_anonymous_rank').eq('id', session.user.id).single()
+      .then(({ data }) => {
+        if (data) setIsAnonymousRank(!!data.is_anonymous_rank);
+      });
+
+    client.from('user_badges').select('badge_id').eq('user_id', session.user.id)
+      .then(({ data }) => {
+        if (data) setEarnedBadges(data.map(b => b.badge_id));
+      });
+
+    client.from('expenses').select('*').eq('user_id', session.user.id).order('date', { ascending: false })
+      .then(({ data }) => {
+        if (data) setExpenses(data);
+      });
+
+    // Fetch monthly rankings
+    const currentMonthKey = new Date().toISOString().slice(0, 7); // "YYYY-MM"
+    client.from('monthly_rankings').select('*').eq('month_key', currentMonthKey).order('total_income', { ascending: false }).limit(10)
+      .then(({ data }) => {
+        if (data) setRankings(data);
+      });
+
+
+
+  }, [session]);
+
+
+  // Logic to check and award badges
+  useEffect(() => {
+    if (!session || !supabase) return;
+    
+    const checkAndAwardBadges = async () => {
+      const stats = {
+        shifts,
+        expenses,
+        posts: [], // We need to track these or fetch count
+        comments: [], // Same here
+        companionsCount: companions.length,
+        likesCount: 0 // Fetch from profiles stats
+      };
+
+      const newBadges: string[] = [];
+      for (const badge of BADGES) {
+        if (earnedBadges.includes(badge.id)) continue;
+        
+        if (badge.requirement(stats as any)) {
+          newBadges.push(badge.id);
+        }
+      }
+
+      if (newBadges.length > 0) {
+        setEarnedBadges(prev => [...prev, ...newBadges]);
+        
+        // Save to DB
+        for (const bid of newBadges) {
+          await supabase!.from('user_badges').insert({
+            user_id: session.user.id,
+            badge_id: bid
+          });
+        }
+      }
+    };
+
+    void checkAndAwardBadges();
+  }, [shifts, expenses, companions, session, earnedBadges]);
+
 
   useEffect(() => {
     if (!supabase || !session) return;
@@ -345,6 +512,12 @@ export default function App() {
     }
     setSavingProfile(false);
   }
+
+  const handleToggleAnonymous = async (val: boolean) => {
+    if (!session) return;
+    setIsAnonymousRank(val);
+    await supabase.from('profiles').update({ is_anonymous_rank: val }).eq('id', session.user.id);
+  };
 
   async function addShift(nextTab: Tab = 'calendar') {
     const shift: Shift = {
@@ -528,9 +701,18 @@ export default function App() {
               venueColors={venueColors}
               currentMonth={calendarMonth}
               onPrevMonth={() => { const nextMonth = shiftMonth(calendarMonth, -1); setCalendarMonth(nextMonth); }}
-              onNextMonth={() => { const nextMonth = shiftMonth(calendarMonth, 1); setCalendarMonth(nextMonth); }}
-              onOpenNotifications={() => setShowNotifications(true)}
+              onNextMonth={() => setCalendarMonth(shiftMonth(calendarMonth, 1))}
+              onOpenNotifications={handleOpenNotifications}
+              unreadCount={unreadCount}
+              profile={profile}
+              isAnonymousRank={isAnonymousRank}
+              onToggleAnonymous={handleToggleAnonymous}
+              rankings={rankings}
+              myId={session?.user.id || ''}
             />
+
+
+
           ) : null}
           {tab === 'calendar' ? <CalendarScreen shifts={shifts} selectedDate={selectedDate} month={calendarMonth} venueSuggestions={[...new Set(workplaceSummary.map((item) => item.label))].slice(0, 4)} draft={draft} setDraft={setDraft} editingShiftId={editingShiftId} setEditingShiftId={setEditingShiftId} isSheetOpen={isDaySheetOpen} onCloseSheet={() => setIsDaySheetOpen(false)} onPrevMonth={() => { const nextMonth = shiftMonth(calendarMonth, -1); setCalendarMonth(nextMonth); setSelectedDate(nextMonth); setDraft((current) => ({ ...current, date: nextMonth })); }} onNextMonth={() => { const nextMonth = shiftMonth(calendarMonth, 1); setCalendarMonth(nextMonth); setSelectedDate(nextMonth); setDraft((current) => ({ ...current, date: nextMonth })); }} onSetMonth={(nextMonth) => { setCalendarMonth(nextMonth); setSelectedDate(nextMonth); setDraft((current) => ({ ...current, date: nextMonth })); }} onSelectDate={(date) => { setEditingShiftId(null); setSelectedDate(date); setDraft((current) => ({ ...current, date, note: '' })); setIsDaySheetOpen(true); }} onQuickSave={() => void addShift('calendar')} onUpdateShift={(shift) => void updateShift(shift)} onDeleteShift={(id) => void deleteShift(id)} venueColors={venueColors} onSetVenueColor={setVenueColor} /> : null}
           {tab === 'income' ? (
@@ -550,7 +732,7 @@ export default function App() {
               onSetTarget={setIncomeTarget}
             />
           ) : null}
-          {tab === 'friends' ? <CommunityScreen profile={profile} companions={companions} requested={requested} onRequest={(id) => void requestConnection(id)} session={session} onOpenNotifications={() => setShowNotifications(true)} /> : null}
+          {tab === 'friends' ? <CommunityScreen profile={profile} companions={companions} requested={requested} onRequest={(id) => void requestConnection(id)} session={session} onOpenNotifications={handleOpenNotifications} unreadCount={unreadCount} /> : null}
           {tab === 'profile' ? (
             <ProfileScreen
               profile={profile}
@@ -564,8 +746,10 @@ export default function App() {
               onChangeWallpaper={setWallpaper}
               lang={lang}
               onChangeLang={setLang}
+              earnedBadges={earnedBadges}
             />
           ) : null}
+
         </main>
 
         <nav className="bottom-tabs" aria-label="Điều hướng chính">
@@ -578,6 +762,33 @@ export default function App() {
             </button>
           ))}
         </nav>
+
+        {/* Push Toast Notification */}
+        <AnimatePresence>
+          {toastNotification && (
+            <motion.div
+              className="cm-push-toast"
+              initial={{ opacity: 0, y: -50, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.95 }}
+              onClick={handleOpenNotifications}
+            >
+              <div className={`cm-notif-icon-circle ${toastNotification.type}`}>
+                {toastNotification.type === 'like' ? <ThumbsUp size={14} /> : <MessageCircle size={14} />}
+              </div>
+              <div className="cm-push-toast-content">
+                <strong>{toastNotification.title}</strong>
+                <p>{toastNotification.body}</p>
+              </div>
+              <button className="cm-push-toast-close" onClick={(e) => {
+                e.stopPropagation();
+                setToastNotification(null);
+              }}>
+                <X size={16} />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Global Notification Popover */}
         <AnimatePresence>
@@ -601,38 +812,25 @@ export default function App() {
                 <button onClick={() => setShowNotifications(false)}><X size={16} /></button>
               </div>
               <div className="cm-notif-popover-body">
-                {demoNotifications.map(n => (
-                  <div key={`global-act-${n.id}`} className="cm-notif-item">
-                    <div className={`cm-notif-icon-circle ${n.type}`}>
-                      {n.type === 'like' ? <ThumbsUp size={12} /> : <MessageCircle size={12} />}
+                {notifications.length === 0 ? (
+                  <div style={{ padding: '32px 16px', textAlign: 'center', color: '#94a3b8', fontSize: '14px' }}>
+                    <Bell size={32} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
+                    <p>Bạn chưa có thông báo nào</p>
+                  </div>
+                ) : (
+                  notifications.map(n => (
+                    <div key={`global-act-${n.id}`} className={`cm-notif-item ${!n.is_read ? 'unread' : ''}`} style={{ cursor: 'pointer' }}>
+                      <div className={`cm-notif-icon-circle ${n.type}`}>
+                        {n.type === 'like' ? <ThumbsUp size={12} /> : <MessageCircle size={12} />}
+                      </div>
+                      <div className="cm-notif-item-content">
+                        <p>{n.body}</p>
+                        <span className="cm-notif-time">{timeAgo(n.created_at)}</span>
+                      </div>
+                      {!n.is_read && <div className="cm-notif-unread-dot" style={{ width: '8px', height: '8px', background: '#2752ff', borderRadius: '50%', flexShrink: 0 }} />}
                     </div>
-                    <div className="cm-notif-item-content">
-                      <p><strong>{n.user}</strong> {n.type === 'like' ? 'đã thích' : 'đã bình luận vào'} bài viết <span>"{n.post}"</span></p>
-                      {n.content && <p className="cm-notif-comment-snippet">"{n.content}"</p>}
-                      <span className="cm-notif-time">{n.time}</span>
-                    </div>
-                  </div>
-                ))}
-                
-                {/* Community News */}
-                <div className="cm-notif-item">
-                  <div className="cm-notif-icon-circle" style={{ background: 'rgba(255, 171, 0, 0.1)', color: '#ffab00' }}>
-                    <Flame size={14} />
-                  </div>
-                  <div className="cm-notif-item-content">
-                    <p><strong>Cộng đồng:</strong> Bài viết <span>"Mẹo tiết kiệm chi phí..."</span> đang rất Hot!</p>
-                    <span className="cm-notif-time">1 ngày trước</span>
-                  </div>
-                </div>
-                <div className="cm-notif-item">
-                  <div className="cm-notif-icon-circle" style={{ background: 'rgba(13, 155, 114, 0.1)', color: 'var(--green-600)' }}>
-                    <ShieldCheck size={14} />
-                  </div>
-                  <div className="cm-notif-item-content">
-                    <p><strong>Quy định:</strong> Cập nhật điều khoản cộng đồng mới nhất.</p>
-                    <span className="cm-notif-time">3 ngày trước</span>
-                  </div>
-                </div>
+                  ))
+                )}
               </div>
             </motion.div>
           </>

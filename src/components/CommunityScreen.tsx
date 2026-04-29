@@ -174,6 +174,7 @@ export function CommunityScreen({
   session,
   profile,
   onOpenNotifications,
+  unreadCount,
 }: {
   companions: CompanionProfile[];
   requested: string[];
@@ -181,6 +182,7 @@ export function CommunityScreen({
   session: Session | null;
   profile?: { displayName?: string };
   onOpenNotifications: () => void;
+  unreadCount: number;
 }) {
   const [view, setView] = useState<CommunityView>('feed');
   const [boardMode, setBoardMode] = useState<BoardMode>('feed');
@@ -795,8 +797,8 @@ export function CommunityScreen({
                   <BookmarkCheck size={19} />
                 </button>
                 <button type="button" className="cm-icon-btn" aria-label="Thông báo" onClick={onOpenNotifications}>
-                  <Bell size={20} />
-                  {notifications.some((notice) => !notice.is_read) ? <span className="cm-notification-dot" /> : null}
+                  <Bell size={22} color="#64748b" />
+                  {unreadCount > 0 ? <span className="cm-notification-badge">{unreadCount}</span> : null}
                 </button>
               </div>
             </>

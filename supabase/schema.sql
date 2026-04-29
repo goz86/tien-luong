@@ -331,3 +331,24 @@ DROP TRIGGER IF EXISTS set_place_reviews_updated_at ON public.place_reviews;
 CREATE TRIGGER set_place_reviews_updated_at
 BEFORE UPDATE ON public.place_reviews
 FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+-- 13. User Badges
+CREATE TABLE IF NOT EXISTS public.user_badges (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) NOT NULL,
+  badge_id TEXT NOT NULL,
+  earned_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
+  UNIQUE(user_id, badge_id)
+);
+
+ALTER TABLE public.user_badges ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can view own badges." ON public.user_badges;
+CREATE POLICY "Users can view own badges." ON public.user_badges FOR SELECT USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can insert own badges." ON public.user_badges;
+CREATE POLICY "Users can insert own badges." ON public.user_badges FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+-- 14. Enable Realtime for Community Tables
+ALTER PUBLICATION supabase_realtime ADD TABLE public.community_notifications;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.community_comments;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.community_posts;
