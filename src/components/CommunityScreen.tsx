@@ -288,6 +288,7 @@ export function CommunityScreen({
         return;
       }
 
+
       if (view === 'detail') {
         goBack();
       }
@@ -868,12 +869,13 @@ export function CommunityScreen({
           <button 
             type="button" 
             className="cm-write-bar-btn" 
-            onClick={boardMode === 'review' ? () => setIsWritingReview(true) : openComposer}
+            onClick={boardMode === 'reviews' ? () => setIsWritingReview(true) : openComposer}
           >
             <Plus size={18} />
-            {boardMode === 'review' ? 'Viết Review' : 'Viết bài'}
+            {boardMode === 'reviews' ? 'Viết Review' : 'Viết bài'}
           </button>
         </div>
+
 
 
 
