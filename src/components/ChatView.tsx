@@ -102,12 +102,16 @@ export function ChatView({ session, partner, onBack }: ChatViewProps) {
     e.preventDefault();
     if (!newMessage.trim() || !supabase || sending) return;
 
+    setSending(true);
+    const content = newMessage.trim();
+    setNewMessage('');
+
     const tempId = `temp-${Date.now()}`;
     const tempMsg: Message = {
       id: tempId,
       sender_id: currentUserId,
       receiver_id: partner.id,
-      content: content,
+      content,
       is_read: false,
       created_at: new Date().toISOString()
     };
@@ -119,14 +123,13 @@ export function ChatView({ session, partner, onBack }: ChatViewProps) {
       .insert({
         sender_id: currentUserId,
         receiver_id: partner.id,
-        content: content,
+        content,
       })
       .select('*')
       .single();
 
     if (error) {
       console.error('Lỗi gửi tin nhắn:', error);
-      // Xóa tin nhắn tạm nếu lỗi
       setMessages(prev => prev.filter(m => m.id !== tempId));
     } else if (data) {
       setMessages(prev => prev.map(m => m.id === tempId ? (data as Message) : m));

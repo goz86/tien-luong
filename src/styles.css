@@ -7680,12 +7680,13 @@ select {
 }
 
 .chat-input-bar {
-  padding: 12px 16px;
+  padding: 12px 16px calc(env(safe-area-inset-bottom, 0px) + 12px);
   background: #ffffff;
   border-top: 1px solid rgba(0, 0, 0, 0.05);
   display: flex;
   gap: 12px;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .chat-input-bar input {

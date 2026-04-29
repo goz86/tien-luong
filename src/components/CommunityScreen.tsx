@@ -292,6 +292,46 @@ export function CommunityScreen({
       alive = false;
     };
   }, [currentUserId]);
+
+  // Realtime subscription for comments
+  useEffect(() => {
+    if (!supabase) return;
+
+    const channel = supabase
+      .channel('community-comments-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'community_comments',
+        },
+        (payload) => {
+          const row = payload.new as any;
+          const newComment: CommunityComment = {
+            id: row.id,
+            post_id: row.post_id,
+            parent_id: row.parent_id ?? null,
+            user_id: row.user_id ?? row.author_id ?? '',
+            content: row.content ?? '',
+            is_anonymous: row.is_anonymous ?? true,
+            display_name: row.display_name ?? 'Ẩn danh',
+            is_author: row.is_author ?? false,
+            likes_count: Number(row.likes_count ?? 0),
+            created_at: row.created_at ?? new Date().toISOString(),
+          };
+          setComments((prev) => {
+            if (prev.some(c => c.id === newComment.id)) return prev;
+            return [...prev, newComment];
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase?.removeChannel(channel);
+    };
+  }, []);
   
   const fetchRecentChats = useCallback(async () => {
     if (!supabase || !currentUserId) return;
@@ -949,7 +989,7 @@ export function CommunityScreen({
                   </span>
                   <div className="cm-post-stats">
                     <span><ThumbsUp size={14} /> {post.likes_count}</span>
-                    <span><MessageCircle size={14} /> {post.comments_count}</span>
+                    <span><MessageCircle size={14} /> {comments.filter(c => c.post_id === post.id).length}</span>
                   </div>
                 </div>
               </article>
@@ -1170,7 +1210,7 @@ export function CommunityScreen({
 
           <div className="cm-comments-section">
             <div className="cm-comments-header">
-              <strong>Bình luận {selectedPost.comments_count}</strong>
+              <strong>Bình luận {postComments.length}</strong>
             </div>
 
             {rootComments.length === 0 ? (
