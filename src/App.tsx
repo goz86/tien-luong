@@ -338,9 +338,16 @@ export default function App() {
   useEffect(() => {
     if (!supabase) return;
     const currentMonthKey = new Date().toISOString().slice(0, 7); // "YYYY-MM"
-    supabase.from('monthly_rankings').select('*').eq('month_key', currentMonthKey).order('total_income', { ascending: false }).limit(10)
+    supabase.from('monthly_rankings').select('*, profiles(is_anonymous_rank)').eq('month_key', currentMonthKey).order('total_income', { ascending: false }).limit(10)
       .then(({ data }) => {
-        if (data) setRankings(data);
+        if (data) {
+          // Flatten the joined data
+          const flattened = data.map((item: any) => ({
+            ...item,
+            is_anonymous_rank: item.profiles?.is_anonymous_rank ?? item.is_anonymous_rank
+          }));
+          setRankings(flattened);
+        }
       });
   }, []);
 
