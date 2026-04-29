@@ -332,17 +332,17 @@ export default function App() {
       .then(({ data }) => {
         if (data) setExpenses(data);
       });
+  }, [session]);
 
-    // Fetch monthly rankings
+  // Fetch monthly rankings - Publicly available
+  useEffect(() => {
+    if (!supabase) return;
     const currentMonthKey = new Date().toISOString().slice(0, 7); // "YYYY-MM"
-    client.from('monthly_rankings').select('*').eq('month_key', currentMonthKey).order('total_income', { ascending: false }).limit(10)
+    supabase.from('monthly_rankings').select('*').eq('month_key', currentMonthKey).order('total_income', { ascending: false }).limit(10)
       .then(({ data }) => {
         if (data) setRankings(data);
       });
-
-
-
-  }, [session]);
+  }, []);
 
 
   // Logic to check and award badges

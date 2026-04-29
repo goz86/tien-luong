@@ -348,7 +348,7 @@ export function HomeScreen({
             <div className="rank-empty-state">
               <TrendingUp size={24} style={{ opacity: 0.2, marginBottom: '8px' }} />
               <p>Chưa có dữ liệu xếp hạng tháng {monthNumber}</p>
-              <span>Hãy ghi lại ca làm đầu tiên để lên hạng!</span>
+              <span>{myId ? 'Hãy ghi lại ca làm đầu tiên để lên hạng!' : 'Đăng nhập để ghi lại ca làm và lên hạng!'}</span>
             </div>
           ) : (
             rankings.map((item, i) => {
@@ -401,17 +401,19 @@ export function HomeScreen({
 
 
 
-        <div className="rank-privacy-toggle" onClick={() => onToggleAnonymous(!isAnonymousRank)}>
-          <div className={`privacy-switch ${isAnonymousRank ? 'active' : ''}`}>
-            <div className="switch-handle" />
+        {myId && (
+          <div className="rank-privacy-toggle" onClick={() => onToggleAnonymous(!isAnonymousRank)}>
+            <div className={`privacy-switch ${isAnonymousRank ? 'active' : ''}`}>
+              <div className="switch-handle" />
+            </div>
+            <div className="privacy-copy">
+              <ShieldCheck size={16} color={isAnonymousRank ? '#2752ff' : '#64748b'} />
+              <span style={{ color: isAnonymousRank ? '#2752ff' : '#64748b' }}>
+                {isAnonymousRank ? 'Bạn đang ẩn danh' : 'Chế độ ẩn danh'}
+              </span>
+            </div>
           </div>
-          <div className="privacy-copy">
-            <ShieldCheck size={16} color={isAnonymousRank ? '#2752ff' : '#64748b'} />
-            <span style={{ color: isAnonymousRank ? '#2752ff' : '#64748b' }}>
-              {isAnonymousRank ? 'Bạn đang ẩn danh' : 'Chế độ ẩn danh'}
-            </span>
-          </div>
-        </div>
+        )}
       </section>
 
 
