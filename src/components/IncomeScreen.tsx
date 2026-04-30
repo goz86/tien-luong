@@ -128,8 +128,7 @@ export function IncomeScreen({
     shifts.forEach((s) => {
       const current = map.get(s.date) || { total: 0, hours: 0 };
       const pay = calculateShiftPay(s);
-      const h = Number(s.hours) || 0;
-      map.set(s.date, { total: current.total + pay.total, hours: current.hours + h });
+      map.set(s.date, { total: current.total + pay.total, hours: current.hours + pay.hours });
     });
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [shifts]);
