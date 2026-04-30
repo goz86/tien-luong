@@ -3325,14 +3325,20 @@ select {
   cursor: pointer;
 }
 
-.income-date-trigger {
+.income-date-trigger,
+.income-category-trigger {
   cursor: pointer;
   border: 1.5px solid #e2e8f0;
   background: white;
   color: #0f172a;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: space-between !important;
 }
 
-.income-date-trigger:active {
+.income-date-trigger:active,
+.income-category-trigger:active {
   background: #f8fafc;
   transform: scale(0.98);
 }
