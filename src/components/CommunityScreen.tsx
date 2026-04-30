@@ -63,8 +63,8 @@ type BoardMode = 'feed' | 'friends' | 'reviews';
 
 const LOCAL_COMMUNITY_KEY = 'duhoc-mate-community-local';
 
-const boardTabs: Array<{ id: BoardMode; label: string; icon: typeof MessageCircle }> = [
-  { id: 'feed', label: 'Bảng tin', icon: MessageCircle },
+const boardTabs: Array<{ id: BoardMode; label: string; icon: any }> = [
+  { id: 'feed', label: 'Bảng tin', icon: MessageSquare },
   { id: 'friends', label: 'Bạn bè', icon: Users },
   { id: 'reviews', label: 'Review', icon: Star },
 ];
