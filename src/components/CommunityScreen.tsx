@@ -1725,7 +1725,7 @@ function ReviewBoard({
       try {
         const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(floatingSearch)}&addressdetails=1&limit=5&countrycodes=kr`, {
           headers: {
-            'Accept-Language': 'vi,en-US;q=0.9,en;q=0.8',
+            'Accept-Language': 'ko,en;q=0.9,vi;q=0.8',
           }
         });
         const data = await res.json();
