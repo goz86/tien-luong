@@ -1602,6 +1602,25 @@ export function CommunityScreen({
 /* ReviewBoard - Standalone component           */
 /* ============================================ */
 
+function MapEvents({ setMapBounds }: { setMapBounds: (bounds: L.LatLngBounds) => void }) {
+  const map = useMap();
+  
+  useEffect(() => {
+    // Initial bounds
+    setMapBounds(map.getBounds());
+  }, [map, setMapBounds]);
+
+  useMapEvents({
+    moveend: () => {
+      setMapBounds(map.getBounds());
+    },
+    zoomend: () => {
+      setMapBounds(map.getBounds());
+    },
+  });
+  return null;
+}
+
 function ReviewBoard({
   session,
   displayName,
@@ -1713,22 +1732,6 @@ function ReviewBoard({
     return R * c;
   };
 
-  const MapEvents = () => {
-    const map = useMap();
-    useEffect(() => {
-      setMapBounds(map.getBounds());
-    }, [map]);
-
-    useMapEvents({
-      moveend: () => {
-        setMapBounds(map.getBounds());
-      },
-      zoomend: () => {
-        setMapBounds(map.getBounds());
-      },
-    });
-    return null;
-  };
 
   const filtered = useMemo(() => {
     let result = reviews;
@@ -1920,7 +1923,7 @@ function ReviewBoard({
                 attribution='&copy; <a href="https://osm.org/copyright">OSM</a>'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
-              <MapEvents />
+              <MapEvents setMapBounds={setMapBounds} />
               <FitBounds 
                 positions={mapPositions.length > 0 ? mapPositions : [SEOUL_CENTER]} 
                 totalCount={reviews.length} 
