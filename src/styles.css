@@ -7170,7 +7170,6 @@ select {
   flex-direction: column;
   max-height: 92%;
   box-shadow: 0 -4px 30px rgba(0,0,0,0.1);
-  touch-action: none;
   overflow: visible; /* Ensure GPS button floating above is visible */
 }
 

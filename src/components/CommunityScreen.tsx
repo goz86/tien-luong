@@ -1959,19 +1959,19 @@ function ReviewBoard({
         {/* Bottom Sheet Review List */}
         <motion.div 
           className="rv-bottom-sheet"
-          initial={{ y: '70%' }}
-          animate={{ y: sheetExpanded ? '8%' : '70%' }}
-          transition={{ type: 'spring', damping: 20, stiffness: 150 }}
+          initial={{ y: '85%' }}
+          animate={{ y: sheetExpanded ? '10%' : '85%' }}
+          transition={{ type: 'spring', damping: 25, stiffness: 180 }}
           drag="y"
-          dragConstraints={{ top: 0, bottom: 500 }}
-          dragElastic={0.05}
+          dragConstraints={{ top: 0, bottom: 600 }}
+          dragElastic={0.1}
           onDragEnd={(_, info) => {
             const dragDistance = info.offset.y;
             const dragVelocity = info.velocity.y;
             
-            if (dragDistance < -100 || dragVelocity < -500) {
+            if (dragDistance < -50 || dragVelocity < -300) {
               setSheetExpanded(true);
-            } else if (dragDistance > 100 || dragVelocity > 500) {
+            } else if (dragDistance > 50 || dragVelocity > 300) {
               setSheetExpanded(false);
             }
           }}
