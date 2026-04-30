@@ -98,6 +98,7 @@ export function ProfileScreen({
   const [schoolSuggestions, setSchoolSuggestions] = useState<School[]>([]);
   const [regionSuggestions, setRegionSuggestions] = useState<Region[]>([]);
   const [regRegionSuggestions, setRegRegionSuggestions] = useState<Region[]>([]);
+  const [regSchoolSuggestions, setRegSchoolSuggestions] = useState<School[]>([]);
   const [stats, setStats] = useState({ posts: 0, comments: 0, bookmarks: 0, likes: 0 });
 
   useEffect(() => {
@@ -323,6 +324,24 @@ export function ProfileScreen({
     setRegRegionSuggestions([]);
   };
 
+  const handleRegSchoolChange = (val: string) => {
+    setRegSchool(val);
+    if (val.trim().length > 1) {
+      const filtered = schools.filter(s => 
+        s.ko.toLowerCase().includes(val.toLowerCase()) || 
+        s.en.toLowerCase().includes(val.toLowerCase())
+      ).slice(0, 5);
+      setRegSchoolSuggestions(filtered);
+    } else {
+      setRegSchoolSuggestions([]);
+    }
+  };
+
+  const selectRegSchool = (s: School) => {
+    setRegSchool(s.en);
+    setRegSchoolSuggestions([]);
+  };
+
   return (
     <div className="profile-wrapper">
       {/* ===== HEADER / HERO SECTION (Only when logged in) ===== */}
@@ -479,9 +498,28 @@ export function ProfileScreen({
                   <label>{isKo ? '닉네임' : 'Tên hiển thị'}</label>
                   <input className="pf-input" value={regName} onChange={(e) => setRegName(e.target.value)} placeholder={isKo ? '닉네임 입력' : 'Nhập tên...'} required />
                 </div>
-                <div className="pf-field">
+                <div className="pf-field" style={{ position: 'relative' }}>
                   <label>{isKo ? '학교 ' : 'Trường đang theo học'}</label>
-                  <input className="pf-input" value={regSchool} onChange={(e) => setRegSchool(e.target.value)} placeholder={isKo ? '학교 이름' : 'Tên trường...'} />
+                  <input 
+                    className="pf-input" 
+                    value={regSchool} 
+                    onChange={(e) => handleRegSchoolChange(e.target.value)} 
+                    placeholder={isKo ? '학교 이름' : 'Tên trường...'} 
+                  />
+                  {regSchoolSuggestions.length > 0 && (
+                    <div className="pf-autocomplete-list">
+                      {regSchoolSuggestions.map((s, idx) => (
+                        <div 
+                          key={idx} 
+                          className="pf-autocomplete-item"
+                          onClick={() => selectRegSchool(s)}
+                        >
+                          <div className="pf-ac-main">{s.en}</div>
+                          <div className="pf-ac-sub">{s.ko}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                  <div className="pf-field" style={{ position: 'relative' }}>
                   <label>{isKo ? '지역' : 'Khu vực'}</label>

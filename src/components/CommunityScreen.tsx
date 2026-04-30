@@ -287,52 +287,115 @@ export function CommunityScreen({
       .finally(() => {
         if (alive) setLoading(false);
       });
-
     return () => {
       alive = false;
     };
   }, [currentUserId]);
 
-  // Realtime subscription for comments
+  // Realtime subscription for posts and comments
   useEffect(() => {
-    if (!supabase) return;
+    if (!supabase) {
+      console.warn('Supabase client not available for Realtime');
+      return;
+    }
 
-    const channel = supabase
+    console.log('Setting up Realtime subscriptions...');
+
+    const postsChannel = supabase
+      .channel('community-posts-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'community_posts' },
+        (payload) => {
+          console.log('Realtime POST change:', payload);
+          if (payload.eventType === 'INSERT') {
+            const row = payload.new as any;
+            const newPost: CommunityPost = {
+              id: row.id,
+              user_id: row.user_id ?? '',
+              category: (row.category ?? 'free') as CommunityCategory,
+              title: row.title ?? '',
+              content: row.content ?? '',
+              is_anonymous: row.is_anonymous ?? true,
+              display_name: row.display_name ?? 'Ẩn danh',
+              likes_count: Number(row.likes_count ?? 0),
+              dislikes_count: Number(row.dislikes_count ?? 0),
+              comments_count: Number(row.comments_count ?? 0),
+              views_count: Number(row.views_count ?? 0),
+              created_at: row.created_at ?? new Date().toISOString(),
+            };
+            setPosts((prev) => {
+              if (prev.some(p => p.id === newPost.id)) return prev;
+              return [newPost, ...prev];
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            const row = payload.new as any;
+            setPosts((prev) => prev.map(p => p.id === row.id ? {
+              ...p,
+              category: (row.category ?? p.category) as CommunityCategory,
+              title: row.title ?? p.title,
+              content: row.content ?? p.content,
+              likes_count: Number(row.likes_count ?? p.likes_count),
+              dislikes_count: Number(row.dislikes_count ?? p.dislikes_count),
+              comments_count: Number(row.comments_count ?? p.comments_count),
+              views_count: Number(row.views_count ?? p.views_count),
+            } : p));
+          } else if (payload.eventType === 'DELETE') {
+            setPosts((prev) => prev.filter(p => p.id !== payload.old.id));
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('Posts Realtime Status:', status);
+      });
+
+    const commentsChannel = supabase
       .channel('community-comments-realtime')
       .on(
         'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'community_comments',
-        },
+        { event: '*', schema: 'public', table: 'community_comments' },
         (payload) => {
-          const row = payload.new as any;
-          const newComment: CommunityComment = {
-            id: row.id,
-            post_id: row.post_id,
-            parent_id: row.parent_id ?? null,
-            user_id: row.user_id ?? row.author_id ?? '',
-            content: row.content ?? '',
-            is_anonymous: row.is_anonymous ?? true,
-            display_name: row.display_name ?? 'Ẩn danh',
-            is_author: row.is_author ?? false,
-            likes_count: Number(row.likes_count ?? 0),
-            created_at: row.created_at ?? new Date().toISOString(),
-          };
-          setComments((prev) => {
-            if (prev.some(c => c.id === newComment.id)) return prev;
-            return [...prev, newComment];
-          });
+          console.log('Realtime COMMENT change:', payload);
+          if (payload.eventType === 'INSERT') {
+            const row = payload.new as any;
+            const newComment: CommunityComment = {
+              id: row.id,
+              post_id: row.post_id,
+              parent_id: row.parent_id ?? null,
+              user_id: row.user_id ?? row.author_id ?? '',
+              content: row.content ?? '',
+              is_anonymous: row.is_anonymous ?? true,
+              display_name: row.display_name ?? 'Ẩn danh',
+              is_author: row.is_author ?? false,
+              likes_count: Number(row.likes_count ?? 0),
+              created_at: row.created_at ?? new Date().toISOString(),
+            };
+            setComments((prev) => {
+              if (prev.some(c => c.id === newComment.id)) return prev;
+              return [...prev, newComment];
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            const row = payload.new as any;
+            setComments((prev) => prev.map(c => c.id === row.id ? {
+              ...c,
+              content: row.content ?? c.content,
+              likes_count: Number(row.likes_count ?? c.likes_count),
+            } : c));
+          } else if (payload.eventType === 'DELETE') {
+            setComments((prev) => prev.filter(c => c.id !== payload.old.id));
+          }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('Comments Realtime Status:', status);
+      });
 
     return () => {
-      supabase?.removeChannel(channel);
+      supabase?.removeChannel(postsChannel);
+      supabase?.removeChannel(commentsChannel);
     };
   }, []);
-  
+
   const fetchRecentChats = useCallback(async () => {
     if (!supabase || !currentUserId) return;
     
@@ -571,7 +634,7 @@ export function CommunityScreen({
           postId,
           type: 'like',
           title: 'Có lượt thích mới',
-          body: `${displayName} đã thích "${targetPost.title}".`,
+          body: `${isAnonymous ? 'Ẩn danh' : displayName} đã thích "${targetPost.title}".`,
         });
       }
       setSyncMessage('Đã lưu tương tác vào Supabase');

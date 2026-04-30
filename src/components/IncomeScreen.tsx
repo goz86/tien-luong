@@ -225,7 +225,7 @@ export function IncomeScreen({
           </article>
           <article>
             <span>Chi tiêu</span>
-            <strong>-{formatKrw(totalExpenses)}</strong>
+            <strong>{formatKrw(totalExpenses)}</strong>
           </article>
           <article>
             <span>Tổng giờ</span>
@@ -383,7 +383,7 @@ export function IncomeScreen({
                         <span>{meta.label}</span>
                       </div>
                       <div className="income-expense-amount">
-                        <b>-{formatKrw(expense.amount)}</b>
+                        <b>{formatKrw(expense.amount)}</b>
                         <button type="button" onClick={() => onDeleteExpense(expense.id)} aria-label="Xóa chi tiêu">
                           <Trash2 size={15} />
                         </button>
