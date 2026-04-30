@@ -3297,23 +3297,21 @@ select {
 
 .income-expense-form input,
 .income-expense-form select,
-.income-date-trigger {
+.income-date-trigger,
+.income-category-trigger {
   min-width: 0;
   width: 100%;
   min-height: 48px;
-  border: 1.5px solid #e2e8f0;
-  border-radius: 14px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
   padding: 0 14px;
-  color: #0f172a;
+  color: var(--text-main);
   background: white;
-  font-weight: 700;
-  font-size: 14px;
+  font-weight: 800;
+  font-size: 15px;
   outline: none;
   transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  text-align: left;
+  box-sizing: border-box;
 }
 
 .income-expense-form select {
@@ -3328,9 +3326,9 @@ select {
 .income-date-trigger,
 .income-category-trigger {
   cursor: pointer;
-  border: 1.5px solid #e2e8f0;
+  border: 1px solid var(--line);
   background: white;
-  color: #0f172a;
+  color: var(--text-main);
   display: flex !important;
   flex-direction: row !important;
   align-items: center !important;
