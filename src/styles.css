@@ -8277,3 +8277,56 @@ select {
   background: #1e293b;
   color: #475569;
 }
+/* Review Board Upvote/Downvote Styles */
+.rv-item-votes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.rv-vote-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: white;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.rv-vote-btn:active {
+  transform: scale(0.92);
+}
+
+.rv-vote-btn.up:hover {
+  border-color: #22c55e;
+  color: #22c55e;
+  background: #f0fdf4;
+}
+
+.rv-vote-btn.down:hover {
+  border-color: #ef4444;
+  color: #ef4444;
+  background: #fef2f2;
+}
+
+.rv-item-card.selected .rv-vote-btn {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+/* Image horizontal scroll refinements */
+.rv-item-body div::-webkit-scrollbar {
+  height: 4px;
+}
+
+.rv-item-body div::-webkit-scrollbar-thumb {
+  background: #e2e8f0;
+  border-radius: 10px;
+}

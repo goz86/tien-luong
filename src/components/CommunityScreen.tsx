@@ -93,6 +93,8 @@ interface PlaceReview {
   content: string;
   rating: number;
   helpful_count: number;
+  upvotes_count: number;
+  downvotes_count: number;
   images: string[] | null;
   created_at: string;
 }
@@ -1782,6 +1784,36 @@ function ReviewBoard({
     setSearchResults([]);
   };
 
+  const handleReviewReaction = async (reviewId: string, type: 'up' | 'down') => {
+    if (!session || !supabase) return;
+    const target = reviews.find(r => r.id === reviewId);
+    if (!target) return;
+
+    let upDelta = 0;
+    let downDelta = 0;
+
+    // Simplified logic: just increment/decrement for now (can be expanded to track per-user)
+    if (type === 'up') upDelta = 1;
+    else downDelta = 1;
+
+    setReviews(prev => prev.map(r => r.id === reviewId ? {
+      ...r,
+      upvotes_count: r.upvotes_count + upDelta,
+      downvotes_count: r.downvotes_count + downDelta
+    } : r));
+
+    // Update DB
+    const { error } = await supabase.rpc(type === 'up' ? 'increment_review_upvote' : 'increment_review_downvote', { row_id: reviewId });
+    
+    // If RPC doesn't exist, fallback to direct update
+    if (error) {
+       await supabase.from('place_reviews').update({
+         upvotes_count: target.upvotes_count + upDelta,
+         downvotes_count: target.downvotes_count + downDelta
+       }).eq('id', reviewId);
+    }
+  };
+
   const handleSubmitReview = async () => {
     if (!supabase || !session || !selectedPlace || !writeTitle.trim() || !writeContent.trim() || writeRating === 0) return;
     setSubmitting(true);
@@ -1859,7 +1891,13 @@ function ReviewBoard({
       });
     }
 
-    return result;
+    // 3. Smart Sort by popularity (Upvotes - Downvotes)
+    return [...result].sort((a, b) => {
+      const scoreA = (a.upvotes_count || 0) - (a.downvotes_count || 0);
+      const scoreB = (b.upvotes_count || 0) - (b.downvotes_count || 0);
+      if (scoreA !== scoreB) return scoreB - scoreA;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
   }, [reviews, catFilter, mapBounds]);
 
   const mapPositions: [number, number][] = filtered
@@ -2177,9 +2215,24 @@ function ReviewBoard({
                         <div className="rv-item-price-val" style={{ color: isSelected ? '#2752ff' : '#ea580c' }}>
                           ★ {Number(review.rating).toFixed(1)}
                         </div>
-                        <button type="button" className="rv-item-fav">
-                          <Bookmark size={18} fill={isSelected ? '#2752ff' : 'none'} color={isSelected ? '#2752ff' : '#cbd5e1'} />
-                        </button>
+                        <div className="rv-item-votes">
+                          <button 
+                            type="button" 
+                            className="rv-vote-btn up" 
+                            onClick={(e) => { e.stopPropagation(); handleReviewReaction(review.id, 'up'); }}
+                          >
+                            <Plus size={14} />
+                            <span>{review.upvotes_count || 0}</span>
+                          </button>
+                          <button 
+                            type="button" 
+                            className="rv-vote-btn down"
+                            onClick={(e) => { e.stopPropagation(); handleReviewReaction(review.id, 'down'); }}
+                          >
+                            <X size={14} style={{ transform: 'rotate(45deg)' }} />
+                            <span>{review.downvotes_count || 0}</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
                     <div className="rv-item-body">
