@@ -24,7 +24,9 @@ import {
   Users,
   X,
   MessageSquare,
+  Navigation,
 } from 'lucide-react';
+import { motion, AnimatePresence, useDragControls } from 'framer-motion';
 import type { Session } from '@supabase/supabase-js';
 import type { CompanionProfile } from '../lib/types';
 import { supabase } from '../lib/supabase';
@@ -1695,6 +1697,106 @@ function ReviewBoard({
     }
   };
 
+  const filtered = catFilter === 'all' ? reviews : reviews.filter(r => r.category === catFilter);
+
+  const mapPositions: [number, number][] = filtered
+    .filter(r => r.place_lat != null && r.place_lng != null)
+    .map(r => [r.place_lat!, r.place_lng!]);
+
+  const avgRating = reviews.length ? (reviews.reduce((s, r) => s + Number(r.rating), 0) / reviews.length).toFixed(1) : '0';
+
+  const [sheetExpanded, setSheetExpanded] = useState(false);
+  const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null);
+  const [floatingSearch, setFloatingSearch] = useState('');
+  const [floatingResults, setFloatingResults] = useState<any[]>([]);
+  const [isSearchingMap, setIsSearchingMap] = useState(false);
+  const [userPos, setUserPos] = useState<[number, number] | null>(null);
+  const reviewRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const mapRef = useRef<L.Map | null>(null);
+
+  // Search logic for floating bar
+  useEffect(() => {
+    if (floatingSearch.length < 3) {
+      setFloatingResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setIsSearchingMap(true);
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(floatingSearch)}&addressdetails=1&limit=5&countrycodes=kr`);
+        const data = await res.json();
+        setFloatingResults(data);
+      } catch (err) {
+        console.error('Search error:', err);
+      } finally {
+        setIsSearchingMap(false);
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [floatingSearch]);
+
+  const handleMyLocation = () => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition((pos) => {
+      const coords: [number, number] = [pos.coords.latitude, pos.coords.longitude];
+      setUserPos(coords);
+      mapRef.current?.setView(coords, 15);
+    });
+  };
+
+  const handleFloatingSelect = (res: any) => {
+    const lat = parseFloat(res.lat);
+    const lon = parseFloat(res.lon);
+    mapRef.current?.setView([lat, lon], 16);
+    setFloatingSearch(res.display_name);
+    setFloatingResults([]);
+  };
+
+  const handleMarkerClick = (reviewId: string) => {
+    setSelectedReviewId(reviewId);
+    setSheetExpanded(true);
+    setTimeout(() => {
+      const el = reviewRefs.current.get(reviewId);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 300);
+  };
+
+  // Group reviews by place (address or coords)
+  const groupedPlaces = useMemo(() => {
+    const groups: Record<string, { lat: number, lng: number, name: string, reviews: PlaceReview[] }> = {};
+    filtered.forEach(r => {
+      if (r.place_lat && r.place_lng) {
+        const key = `${r.place_lat.toFixed(4)}_${r.place_lng.toFixed(4)}`;
+        if (!groups[key]) {
+          groups[key] = { lat: r.place_lat, lng: r.place_lng, name: r.place_name, reviews: [] };
+        }
+        groups[key].reviews.push(r);
+      }
+    });
+    return Object.values(groups);
+  }, [filtered]);
+
+  const createGroupIcon = (reviews: PlaceReview[], isSelected: boolean) => {
+    const avg = (reviews.reduce((s, r) => s + Number(r.rating), 0) / reviews.length).toFixed(1);
+    const count = reviews.length;
+    const cat = reviews[0].category;
+    const category = REVIEW_CATS[cat as keyof typeof REVIEW_CATS] || REVIEW_CATS.other;
+    
+    return L.divIcon({
+      className: `rv-custom-marker ${isSelected ? 'selected' : ''}`,
+      html: `<div class="rv-marker-inner" style="background-color: ${isSelected ? '#2752ff' : category.color}; width: 44px; height: 44px;">
+              <div class="rv-marker-group-info">
+                <span class="avg">${avg}</span>
+                ${count > 1 ? `<span class="count">${count}</span>` : ''}
+              </div>
+             </div><div class="rv-marker-arrow" style="border-top-color: ${isSelected ? '#2752ff' : category.color};"></div>`,
+      iconSize: [44, 44],
+      iconAnchor: [22, 44],
+    });
+  };
+
   const closeWriter = () => {
     setIsWriting(false);
     setSelectedPlace(null);
@@ -1707,119 +1809,199 @@ function ReviewBoard({
     setIsAnon(false);
   };
 
-  const filtered = catFilter === 'all' ? reviews : reviews.filter(r => r.category === catFilter);
-
-  const mapPositions: [number, number][] = filtered
-    .filter(r => r.place_lat != null && r.place_lng != null)
-    .map(r => [r.place_lat!, r.place_lng!]);
-
-  const avgRating = reviews.length ? (reviews.reduce((s, r) => s + Number(r.rating), 0) / reviews.length).toFixed(1) : '0';
-
   return (
     <>
       <div className="rv-container">
-        {/* Stats */}
-        <div className="rv-stats-row">
-          <div className="rv-stat-card">
-            <strong>{reviews.length}</strong>
-            <span>Reviews</span>
+        {/* Floating Search Bar */}
+        <div className="rv-floating-search">
+          <div className="rv-search-inner">
+            <Search size={18} color="#64748b" />
+            <input 
+              type="text" 
+              placeholder="Tìm tên quán, địa chỉ..." 
+              className="rv-search-input-field"
+              value={floatingSearch}
+              onChange={e => setFloatingSearch(e.target.value)}
+            />
+            {isSearchingMap && <Loader2 size={16} className="cm-spin" color="#2752ff" />}
           </div>
-          <div className="rv-stat-card">
-            <strong>{avgRating}</strong>
-            <span>Trung bình ★</span>
-          </div>
-          <div className="rv-stat-card">
-            <strong>{mapPositions.length}</strong>
-            <span>Địa điểm</span>
-          </div>
+          
+          {floatingResults.length > 0 && (
+            <div className="rv-floating-results">
+              {floatingResults.map((res, i) => (
+                <div key={i} className="rv-floating-item" onClick={() => handleFloatingSelect(res)}>
+                  <MapPin size={14} />
+                  <span>{res.display_name}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* Category Chips */}
-        <div className="rv-cat-chips">
-          <button type="button" className={`rv-cat-chip ${catFilter === 'all' ? 'active' : ''}`} onClick={() => setCatFilter('all')}>
-            Tất cả
-          </button>
-          {(Object.keys(REVIEW_CATS) as Exclude<ReviewCategory, 'all'>[]).map(cat => (
-            <button key={cat} type="button" className={`rv-cat-chip ${catFilter === cat ? 'active' : ''}`} onClick={() => setCatFilter(cat)}>
-              {REVIEW_CATS[cat].label}
-            </button>
-          ))}
-        </div>
-
-        {/* Map */}
+        {/* Map Background */}
         <div className="rv-map-wrap">
           {mapPositions.length > 0 ? (
-            <MapContainer center={SEOUL_CENTER} zoom={12} scrollWheelZoom={false} style={{ height: '100%', width: '100%' }}>
+            <MapContainer 
+              center={SEOUL_CENTER} 
+              zoom={12} 
+              scrollWheelZoom={true} 
+              style={{ height: '100%', width: '100%' }}
+              zoomControl={false}
+              ref={mapRef}
+            >
               <TileLayer
                 attribution='&copy; <a href="https://osm.org/copyright">OSM</a>'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
               <FitBounds positions={mapPositions} />
-              {filtered.filter(r => r.place_lat && r.place_lng).map(r => (
-                <Marker key={r.id} position={[r.place_lat!, r.place_lng!]} icon={markerIcon}>
-                  <Popup>
-                    <strong>{r.place_name}</strong><br />
-                    <span>★ {Number(r.rating).toFixed(1)}</span> · <span>{REVIEW_CATS[r.category as keyof typeof REVIEW_CATS]?.label || r.category}</span>
-                    <br /><small>{r.title}</small>
-                  </Popup>
-                </Marker>
-              ))}
+              
+              {userPos && (
+                <Marker position={userPos} icon={L.divIcon({ className: 'user-marker', html: '<div class="user-dot"></div>' })} />
+              )}
+
+              {groupedPlaces.map((group, idx) => {
+                const isSelected = group.reviews.some(r => r.id === selectedReviewId);
+                return (
+                  <Marker 
+                    key={idx} 
+                    position={[group.lat, group.lng]} 
+                    icon={createGroupIcon(group.reviews, isSelected)}
+                    eventHandlers={{
+                      click: () => handleMarkerClick(group.reviews[0].id)
+                    }}
+                  >
+                    <Popup className="rv-map-popup">
+                      <div className="rv-popup-content">
+                        <strong>{group.name}</strong>
+                        <div className="rv-popup-meta">
+                          <span>{group.reviews.length} đánh giá</span>
+                          <span>★ {(group.reviews.reduce((s, r) => s + Number(r.rating), 0) / group.reviews.length).toFixed(1)}</span>
+                        </div>
+                      </div>
+                    </Popup>
+                  </Marker>
+                );
+              })}
             </MapContainer>
           ) : (
             <div className="rv-map-empty">
               <MapPin size={32} />
-              <span>Chưa có review nào có tọa độ trên bản đồ</span>
+              <span>Chưa có review nào trên bản đồ</span>
             </div>
           )}
         </div>
 
-        {/* Section Title */}
-        <h3 className="rv-section-title">
-          <Star size={16} /> Tất cả reviews ({filtered.length})
-        </h3>
+        {/* Bottom Sheet Review List */}
+        <motion.div 
+          className="rv-bottom-sheet"
+          initial={{ y: '70%' }}
+          animate={{ y: sheetExpanded ? '8%' : '70%' }}
+          transition={{ type: 'spring', damping: 20, stiffness: 150 }}
+          drag="y"
+          dragConstraints={{ top: 0, bottom: 500 }}
+          dragElastic={0.05}
+          onDragEnd={(_, info) => {
+            const dragDistance = info.offset.y;
+            const dragVelocity = info.velocity.y;
+            
+            if (dragDistance < -100 || dragVelocity < -500) {
+              setSheetExpanded(true);
+            } else if (dragDistance > 100 || dragVelocity > 500) {
+              setSheetExpanded(false);
+            }
+          }}
+        >
+          {/* GPS Button attached to the sheet */}
+          <button type="button" className="rv-gps-btn" onClick={handleMyLocation}>
+            <Navigation size={20} />
+          </button>
 
-        {/* Review Cards */}
-        {loading ? (
-          <div className="rv-empty">
-            <Loader2 size={28} className="cm-spin" />
-            <p>Đang tải reviews...</p>
+          <div className="rv-sheet-header" onClick={() => setSheetExpanded(!sheetExpanded)} style={{ cursor: 'grab' }}>
+            <div className="rv-sheet-handle" />
+            <div className="rv-sheet-title-row">
+              <h3>Tìm thấy {filtered.length} địa điểm</h3>
+              <span className="rv-avg-score">★ {avgRating}</span>
+            </div>
+            
+            {/* Categories inside the sheet */}
+            <div className="rv-sheet-categories" onClick={e => e.stopPropagation()}>
+              <button 
+                type="button" 
+                className={`rv-cat-chip ${catFilter === 'all' ? 'active' : ''}`} 
+                onClick={() => setCatFilter('all')}
+              >
+                Tất cả
+              </button>
+              {(Object.keys(REVIEW_CATS) as Exclude<ReviewCategory, 'all'>[]).map(cat => (
+                <button 
+                  key={cat} 
+                  type="button" 
+                  className={`rv-cat-chip ${catFilter === cat ? 'active' : ''}`} 
+                  onClick={() => setCatFilter(cat)}
+                >
+                  {REVIEW_CATS[cat].label}
+                </button>
+              ))}
+            </div>
           </div>
-        ) : filtered.length === 0 ? (
-          <div className="rv-empty">
-            <Star size={40} />
-            <strong>Chưa có review nào</strong>
-            <p>Hãy là người đầu tiên chia sẻ trải nghiệm của bạn!</p>
+
+          <div className="rv-sheet-content">
+            {loading ? (
+              <div className="rv-sheet-loading">
+                <Loader2 size={24} className="cm-spin" />
+                <p>Đang tải...</p>
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="rv-sheet-empty">
+                <Star size={32} />
+                <p>Chưa có review nào trong danh mục này</p>
+              </div>
+            ) : (
+              filtered.map((review, idx) => {
+                const cat = REVIEW_CATS[review.category as keyof typeof REVIEW_CATS] || REVIEW_CATS.other;
+                const isSelected = selectedReviewId === review.id;
+                return (
+                  <article 
+                    key={review.id} 
+                    className={`rv-item-card ${isSelected ? 'selected' : ''}`}
+                    ref={el => { if (el) reviewRefs.current.set(review.id, el); }}
+                    onClick={() => setSelectedReviewId(review.id)}
+                  >
+                    <div className="rv-item-rank" style={{ background: isSelected ? '#2752ff' : '#94a3b8' }}>
+                      {idx + 1}
+                    </div>
+                    <div className="rv-item-main">
+                      <div className="rv-item-info">
+                        <div className="rv-item-place-row">
+                          <h4 className="rv-item-place">{review.place_name}</h4>
+                          <span className="rv-item-cat-label">{cat.label}</span>
+                        </div>
+                        <p className="rv-item-address">{review.place_address.split(',').slice(0, 2).join(', ')}</p>
+                        <div className="rv-item-meta">
+                          <span className="rv-item-author">{review.display_name}</span>
+                          <span className="rv-item-dot">•</span>
+                          <span className="rv-item-time">{timeAgo(review.created_at)}</span>
+                        </div>
+                      </div>
+                      <div className="rv-item-side">
+                        <div className="rv-item-price-val" style={{ color: isSelected ? '#2752ff' : '#ea580c' }}>
+                          ★ {Number(review.rating).toFixed(1)}
+                        </div>
+                        <button type="button" className="rv-item-fav">
+                          <Bookmark size={18} fill={isSelected ? '#2752ff' : 'none'} color={isSelected ? '#2752ff' : '#cbd5e1'} />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="rv-item-body">
+                      <h5 className="rv-item-title">{review.title}</h5>
+                      <p className="rv-item-text">{shortText(review.content, 120)}</p>
+                    </div>
+                  </article>
+                );
+              })
+            )}
           </div>
-        ) : (
-          filtered.map(review => {
-            const cat = REVIEW_CATS[review.category as keyof typeof REVIEW_CATS] || REVIEW_CATS.other;
-            return (
-              <article key={review.id} className="rv-card">
-                <div className="rv-card-header">
-                  <div>
-                    <h4 className="rv-card-place">{review.place_name}</h4>
-                    <p className="rv-card-address"><MapPin size={12} /> {review.place_address.split(',').slice(0, 3).join(', ')}</p>
-                  </div>
-                  <div className="rv-card-rating">
-                    <Star size={14} fill="#f59e0b" />
-                    <b>{Number(review.rating).toFixed(1)}</b>
-                  </div>
-                </div>
-                <span className="rv-card-cat" style={{ color: cat.color, background: cat.bg }}>{cat.label}</span>
-                <h5 className="rv-card-title">{review.title}</h5>
-                <p className="rv-card-content">{review.content}</p>
-                <div className="rv-card-footer">
-                  <span className="rv-card-author">
-                    <User size={12} /> {review.display_name} · {timeAgo(review.created_at)}
-                  </span>
-                  <span className="rv-card-helpful">
-                    <ThumbsUp size={12} /> {review.helpful_count}
-                  </span>
-                </div>
-              </article>
-            );
-          })
-        )}
+        </motion.div>
       </div>
 
       {/* Write FAB removed - now using unified cm-write-bar */}
