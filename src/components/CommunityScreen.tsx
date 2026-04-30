@@ -93,6 +93,7 @@ interface PlaceReview {
   content: string;
   rating: number;
   helpful_count: number;
+  images: string[] | null;
   created_at: string;
 }
 
@@ -1645,9 +1646,94 @@ function ReviewBoard({
   const [writeRating, setWriteRating] = useState(0);
   const [writeTitle, setWriteTitle] = useState('');
   const [writeContent, setWriteContent] = useState('');
+  const [selectedImages, setSelectedImages] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [isAnon, setIsAnon] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+
+  // Image compression utility
+  const compressImage = (file: File): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const MAX_WIDTH = 1080;
+          const MAX_HEIGHT = 1080;
+
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height *= MAX_WIDTH / width;
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width *= MAX_HEIGHT / height;
+              height = MAX_HEIGHT;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+          canvas.toBlob((blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error('Canvas toBlob failed'));
+          }, 'image/jpeg', 0.7);
+        };
+      };
+      reader.onerror = (error) => reject(error);
+    });
+  };
+
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    
+    // Limit to 3 images
+    const totalCount = selectedImages.length + files.length;
+    if (totalCount > 3) {
+      alert('Chỉ có thể chọn tối đa 3 ảnh');
+      return;
+    }
+
+    setUploading(true);
+    const newPreviews = [...imagePreviews];
+    const newFiles = [...selectedImages];
+
+    for (const file of files) {
+      try {
+        const compressedBlob = await compressImage(file);
+        const compressedFile = new File([compressedBlob], file.name, { type: 'image/jpeg' });
+        newFiles.push(compressedFile);
+        newPreviews.push(URL.createObjectURL(compressedBlob));
+      } catch (err) {
+        console.error('Compression failed:', err);
+      }
+    }
+
+    setSelectedImages(newFiles);
+    setImagePreviews(newPreviews);
+    setUploading(false);
+  };
+
+  const removeImage = (index: number) => {
+    const newFiles = [...selectedImages];
+    const newPreviews = [...imagePreviews];
+    URL.revokeObjectURL(newPreviews[index]);
+    newFiles.splice(index, 1);
+    newPreviews.splice(index, 1);
+    setSelectedImages(newFiles);
+    setImagePreviews(newPreviews);
+  };
 
   // Fetch reviews
   useEffect(() => {
@@ -1699,6 +1785,25 @@ function ReviewBoard({
   const handleSubmitReview = async () => {
     if (!supabase || !session || !selectedPlace || !writeTitle.trim() || !writeContent.trim() || writeRating === 0) return;
     setSubmitting(true);
+    
+    const imageUrls: string[] = [];
+
+    // 1. Upload images to Storage
+    for (const file of selectedImages) {
+      const fileName = `${session.user.id}/${Date.now()}-${file.name}`;
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('review-images')
+        .upload(fileName, file);
+      
+      if (!uploadError && uploadData) {
+        const { data: { publicUrl } } = supabase.storage
+          .from('review-images')
+          .getPublicUrl(fileName);
+        imageUrls.push(publicUrl);
+      }
+    }
+
+    // 2. Insert to DB
     const { data, error } = await supabase.from('place_reviews').insert({
       user_id: session.user.id,
       display_name: isAnon ? 'Ẩn danh' : displayName,
@@ -1711,11 +1816,16 @@ function ReviewBoard({
       title: writeTitle.trim(),
       content: writeContent.trim(),
       rating: writeRating,
+      images: imageUrls,
     }).select().single();
+
     setSubmitting(false);
     if (!error && data) {
       setReviews(prev => [data as PlaceReview, ...prev]);
       closeWriter();
+    } else if (error) {
+      console.error('Submit error:', error);
+      alert('Có lỗi xảy ra khi đăng review. Vui lòng kiểm tra cấu trúc bảng images.');
     }
   };
 
@@ -2075,6 +2185,16 @@ function ReviewBoard({
                     <div className="rv-item-body">
                       <h5 className="rv-item-title">{review.title}</h5>
                       <p className="rv-item-text">{shortText(review.content, 120)}</p>
+                      
+                      {review.images && review.images.length > 0 && (
+                        <div style={{ display: 'flex', gap: 8, marginTop: 12, overflowX: 'auto', paddingBottom: 4 }}>
+                          {review.images.map((url, i) => (
+                            <div key={i} style={{ flex: '0 0 100px', height: 100, borderRadius: 8, overflow: 'hidden', border: '1px solid #f1f5f9' }}>
+                              <img src={url} alt="Review" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </article>
                 );
@@ -2193,6 +2313,31 @@ function ReviewBoard({
               />
               <div style={{ textAlign: 'right', fontSize: 12, color: 'var(--text-soft)', marginTop: 4 }}>
                 {writeContent.length}/2000
+              </div>
+            </div>
+
+            {/* Images */}
+            <div className="rv-write-section">
+              <label className="rv-write-label">🖼️ Hình ảnh (Tối đa 3)</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8 }}>
+                {imagePreviews.map((url, idx) => (
+                  <div key={idx} style={{ width: 80, height: 80, borderRadius: 12, overflow: 'hidden', position: 'relative', border: '1px solid #e2e8f0' }}>
+                    <img src={url} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <button
+                      type="button"
+                      style={{ position: 'absolute', top: 4, right: 4, width: 20, height: 20, borderRadius: 10, background: 'rgba(0,0,0,0.5)', border: 'none', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                      onClick={() => removeImage(idx)}
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
+                {imagePreviews.length < 3 && (
+                  <label style={{ width: 80, height: 80, borderRadius: 12, border: '2px dashed #e2e8f0', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#94a3b8' }}>
+                    {uploading ? <Loader2 size={20} className="cm-spin" /> : <Plus size={20} />}
+                    <input type="file" accept="image/*" multiple onChange={handleImageSelect} style={{ display: 'none' }} />
+                  </label>
+                )}
               </div>
             </div>
 
