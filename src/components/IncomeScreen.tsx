@@ -398,7 +398,7 @@ export function IncomeScreen({
                     onChange={(event) => setExpenseForm({ ...expenseForm, note: event.target.value })}
                   />
                 </label>
-                <button type="button" onClick={handleAddExpense}>Lưu chi tiêu</button>
+                <button type="button" className="income-save-btn" onClick={handleAddExpense}>Lưu chi tiêu</button>
               </div>
             ) : null}
 
