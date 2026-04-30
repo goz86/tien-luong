@@ -83,6 +83,7 @@ export function IncomeScreen({
   const [isEditingTarget, setIsEditingTarget] = useState(false);
   const [tempTarget, setTempTarget] = useState(target.toString());
   const [isAddingExpense, setIsAddingExpense] = useState(false);
+  const [isVnd, setIsVnd] = useState(false);
   const [expenseForm, setExpenseForm] = useState<Omit<Expense, 'id'>>({
     category: 'food',
     amount: 0,
@@ -90,6 +91,13 @@ export function IncomeScreen({
     note: '',
   });
   const prevTotalRef = useRef(monthlyTotal);
+
+  const formatMoney = (val: number) => {
+    if (isVnd) {
+      return new Intl.DateTimeFormat('vi-VN').format(new Date()) && `${Math.round(val * rate.value).toLocaleString('vi-VN')}đ`;
+    }
+    return formatKrw(val);
+  };
 
   const weekdayTotals = useMemo(
     () =>
@@ -196,22 +204,22 @@ export function IncomeScreen({
         <span>{monthLabel}</span>
       </header>
 
-      <section className="income-ledger-hero">
+      <section className="income-ledger-hero" onClick={() => setIsVnd(!isVnd)} style={{ cursor: 'pointer' }}>
         <div className="income-hero-top">
           <div>
-            <span>Thu nhập ròng tháng này</span>
-            <h2>{formatKrw(netBalance)}</h2>
+            <span>Thu nhập ròng tháng này {isVnd ? '(VND)' : '(KRW)'}</span>
+            <h2>{formatMoney(netBalance)}</h2>
           </div>
           <WalletCards size={28} />
         </div>
         <div className="income-hero-metrics">
           <article>
             <span>Tổng lương</span>
-            <strong>{formatKrw(monthlyTotal)}</strong>
+            <strong>{formatMoney(monthlyTotal)}</strong>
           </article>
           <article>
             <span>Chi tiêu</span>
-            <strong>{formatKrw(totalExpenses)}</strong>
+            <strong>{formatMoney(totalExpenses)}</strong>
           </article>
           <article>
             <span>Tổng giờ</span>
@@ -232,7 +240,7 @@ export function IncomeScreen({
                 </button>
               </div>
             ) : (
-              <strong>{formatKrw(target)}</strong>
+              <strong>{formatMoney(target)}</strong>
             )}
           </div>
           <button type="button" className="income-edit-button" onClick={() => setIsEditingTarget(true)} aria-label="Sửa mục tiêu">
@@ -242,7 +250,7 @@ export function IncomeScreen({
         <div className="income-progress-track" aria-label={`Đã đạt ${progressPercentage.toFixed(0)}% mục tiêu`}>
           <span style={{ width: `${progressPercentage}%`, background: progressColor }} />
         </div>
-        <p>{missingTarget > 0 ? `Cần ${formatKrw(missingTarget)} để đạt mục tiêu.` : 'Bạn đã vượt mục tiêu tháng này.'}</p>
+        <p>{missingTarget > 0 ? `Cần ${formatMoney(missingTarget)} để đạt mục tiêu.` : 'Bạn đã vượt mục tiêu tháng này.'}</p>
       </section>
 
       <div className="income-subtabs" role="tablist" aria-label="Mục thu nhập">
@@ -303,7 +311,7 @@ export function IncomeScreen({
               <article>
                 <Coins size={20} />
                 <span>Lương TB/giờ</span>
-                <strong>{formatKrw(averageHourly)}</strong>
+                <strong>{formatMoney(averageHourly)}</strong>
               </article>
               <article>
                 <CalendarDays size={20} />
@@ -358,6 +366,14 @@ export function IncomeScreen({
                     onChange={(event) => setExpenseForm({ ...expenseForm, amount: Number(event.target.value) })}
                   />
                 </label>
+                <label>
+                  <span>Ngày chi</span>
+                  <input
+                    type="date"
+                    value={expenseForm.date}
+                    onChange={(event) => setExpenseForm({ ...expenseForm, date: event.target.value })}
+                  />
+                </label>
                 <label className="wide">
                   <span>Ghi chú</span>
                   <input
@@ -383,10 +399,10 @@ export function IncomeScreen({
                       </div>
                       <div>
                         <strong>{expense.note || meta.label}</strong>
-                        <span>{meta.label}</span>
+                        <span>{meta.label} • {new Date(expense.date).getDate()}/{new Date(expense.date).getMonth() + 1}</span>
                       </div>
                       <div className="income-expense-amount">
-                        <b>{formatKrw(expense.amount)}</b>
+                        <b>{formatMoney(expense.amount)}</b>
                         <button type="button" onClick={() => onDeleteExpense(expense.id)} aria-label="Xóa chi tiêu">
                           <Trash2 size={15} />
                         </button>
@@ -427,8 +443,8 @@ export function IncomeScreen({
                       </div>
                     </div>
                     <p>
-                      <b>{formatKrw(workplace.total)}</b>
-                      <span>{formatKrw(workplace.hourly)}/h</span>
+                      <b>{formatMoney(workplace.total)}</b>
+                      <span>{formatMoney(workplace.hourly)}/h</span>
                     </p>
                   </article>
                 ))
