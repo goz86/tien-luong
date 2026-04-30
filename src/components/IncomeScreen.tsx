@@ -6,17 +6,17 @@ import {
   CalendarDays,
   Check,
   ChevronRight,
+  Clock,
   Coins,
   Edit2,
   Home,
   Landmark,
-  LineChart,
   Phone,
   PiggyBank,
   Plus,
   ReceiptText,
-  ShieldCheck,
   Sparkles,
+  Trophy,
   Trash2,
   TrendingUp,
   Utensils,
@@ -28,15 +28,13 @@ import { calculateShiftPay, formatKrw } from '../lib/salary';
 import type { Expense, RateState, Shift, VenueColors } from '../lib/types';
 import { getVenueColor } from '../utils/helpers';
 
-type IncomeTab = 'overview' | 'expenses' | 'workplaces' | 'investment' | 'analysis';
+type IncomeTab = 'overview' | 'expenses' | 'workplaces';
 type IconComponent = LucideIcon;
 
 const incomeTabs: Array<{ id: IncomeTab; label: string; icon: IconComponent }> = [
   { id: 'overview', label: 'Tổng quan', icon: BarChart3 },
   { id: 'expenses', label: 'Chi tiêu', icon: ReceiptText },
   { id: 'workplaces', label: 'Nơi làm', icon: Building2 },
-  { id: 'investment', label: 'Đầu tư', icon: LineChart },
-  { id: 'analysis', label: 'Kiểm tra', icon: ShieldCheck },
 ];
 
 const categoryMeta: Record<Expense['category'], { label: string; icon: IconComponent; tone: string }> = {
@@ -125,54 +123,40 @@ export function IncomeScreen({
     [monthlyTotal, workplaces]
   );
 
-  const analysis = useMemo(() => {
-    const underMinimum = shifts.filter((shift) => shift.hourlyWage < minimumWage);
-    const nightShifts = shifts.filter((shift) => shift.nightShift);
-    const holidayPay = shifts.reduce((sum, shift) => sum + (shift.holidayAllowance ?? 0), 0);
-    const taxTotal = shifts.reduce((sum, shift) => sum + calculateShiftPay(shift).taxAmount, 0);
+  const dailyAggregated = useMemo(() => {
+    const map = new Map<string, { total: number; hours: number }>();
+    shifts.forEach((s) => {
+      const current = map.get(s.date) || { total: 0, hours: 0 };
+      const pay = calculateShiftPay(s);
+      map.set(s.date, { total: current.total + pay.total, hours: current.hours + s.hours });
+    });
+    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [shifts]);
 
-    return { underMinimum, nightShifts, holidayPay, taxTotal };
-  }, [minimumWage, shifts]);
+  const maxHoursInDay = useMemo(() => {
+    if (dailyAggregated.length === 0) return 0;
+    return Math.max(...dailyAggregated.map(([, data]) => data.hours));
+  }, [dailyAggregated]);
 
-  const investmentPlan = useMemo(() => {
-    const monthlyCapacity = Math.max(Math.floor(netBalance * 0.18), 0);
-    const reserveTarget = Math.max(Math.floor(target * 0.35), 500000);
-    const emergencyFund = Math.min(Math.max(netBalance, 0), reserveTarget);
-    const positions = [
-      {
-        symbol: 'SAFE',
-        name: 'Quỹ dự phòng KRW',
-        kind: 'Tiền mặt',
-        invested: emergencyFund,
-        value: emergencyFund,
-        change: 0,
-        note: 'Ưu tiên trước mọi khoản đầu tư rủi ro',
-      },
-      {
-        symbol: 'ETF',
-        name: 'ETF chỉ số toàn cầu',
-        kind: 'Theo dõi',
-        invested: 250000,
-        value: 267500,
-        change: 7,
-        note: 'Phù hợp tích lũy nhỏ, đều theo tháng',
-      },
-      {
-        symbol: '005930',
-        name: 'Samsung Electronics',
-        kind: 'Cổ phiếu Hàn',
-        invested: 180000,
-        value: 171000,
-        change: -5,
-        note: 'Theo dõi biến động, không dùng tiền sinh hoạt',
-      },
-    ];
-    const invested = positions.reduce((sum, item) => sum + item.invested, 0);
-    const value = positions.reduce((sum, item) => sum + item.value, 0);
-    const gain = value - invested;
+  const bestDayData = useMemo(() => {
+    if (dailyAggregated.length === 0) return null;
+    return dailyAggregated.reduce((prev, curr) => (curr[1].total > prev[1].total ? curr : prev));
+  }, [dailyAggregated]);
 
-    return { monthlyCapacity, reserveTarget, positions, invested, value, gain };
-  }, [netBalance, target]);
+  // Monthly stats for the new chart (summarize by day of month)
+  const monthlyChartData = useMemo(() => {
+    const daysInMonth = 31; // Simplified, or use actual days
+    const results = Array(daysInMonth).fill(0);
+    shifts.forEach(s => {
+      const d = new Date(`${s.date}T00:00:00`).getDate();
+      if (d <= daysInMonth) {
+        results[d - 1] += calculateShiftPay(s).total;
+      }
+    });
+    return results;
+  }, [shifts]);
+
+  const maxMonthlyDay = Math.max(...monthlyChartData, 1);
 
   useEffect(() => {
     if (monthlyTotal >= target && prevTotalRef.current < target && target > 0) {
@@ -281,7 +265,7 @@ export function IncomeScreen({
             <section className="income-chart-panel">
               <div className="income-section-head">
                 <div>
-                  <p>Nhịp làm việc</p>
+                  <p>Nhịp làm việc tuần</p>
                   <h2>Thu theo ngày trong tuần</h2>
                 </div>
                 <TrendingUp size={22} />
@@ -289,8 +273,25 @@ export function IncomeScreen({
               <div className="income-week-bars">
                 {weekdayTotals.map((value, index) => (
                   <div key={weekdayLabels[index]} className={index === strongestDay && value > 0 ? 'hot' : ''}>
-                    <span style={{ height: `${Math.max(10, (value / maxWeekdayTotal) * 92)}px` }} />
+                    <span style={{ height: `${Math.max(4, (value / maxWeekdayTotal) * 80)}px` }} />
                     <small>{weekdayLabels[index]}</small>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="income-chart-panel monthly">
+              <div className="income-section-head">
+                <div>
+                  <p>Tổng quan tháng</p>
+                  <h2>Thu nhập 31 ngày qua</h2>
+                </div>
+                <BarChart3 size={22} />
+              </div>
+              <div className="income-month-bars">
+                {monthlyChartData.map((value, idx) => (
+                  <div key={idx} className={value === maxMonthlyDay && value > 0 ? 'top-day' : ''}>
+                    <span style={{ height: `${Math.max(2, (value / maxMonthlyDay) * 50)}px` }} />
                   </div>
                 ))}
               </div>
@@ -304,18 +305,18 @@ export function IncomeScreen({
               </article>
               <article>
                 <CalendarDays size={20} />
-                <span>Số ca</span>
+                <span>Số ca tháng</span>
                 <strong>{shifts.length} ca</strong>
               </article>
               <article>
-                <PiggyBank size={20} />
-                <span>Tỷ giá KRW/VND</span>
-                <strong>{rate.value.toFixed(1)}</strong>
+                <Clock size={20} />
+                <span>Kỷ lục giờ làm</span>
+                <strong>{maxHoursInDay.toFixed(1)}h</strong>
               </article>
-              <article>
-                <Sparkles size={20} />
-                <span>Ngày mạnh nhất</span>
-                <strong>{weekdayLabels[strongestDay]}</strong>
+              <article className="gold">
+                <Trophy size={20} />
+                <span>Ngày bội thu</span>
+                <strong>{bestDayData ? new Date(bestDayData[0]).getDate() + '/' + (new Date(bestDayData[0]).getMonth() + 1) : '--'}</strong>
               </article>
             </section>
           </>
@@ -440,95 +441,6 @@ export function IncomeScreen({
           </section>
         ) : null}
 
-        {activeTab === 'investment' ? (
-          <section className="income-invest-panel">
-            <div className="income-section-head">
-              <div>
-                <p>Kỷ luật tài chính</p>
-                <h2>Đầu tư sau khi đã rõ dòng tiền</h2>
-              </div>
-              <Landmark size={22} />
-            </div>
-
-            <div className="income-invest-summary">
-              <article>
-                <span>Giá trị theo dõi</span>
-                <strong>{formatKrw(investmentPlan.value)}</strong>
-              </article>
-              <article className={investmentPlan.gain >= 0 ? 'positive' : 'negative'}>
-                <span>Lãi/lỗ tạm tính</span>
-                <strong>{formatKrw(investmentPlan.gain)}</strong>
-              </article>
-              <article>
-                <span>Có thể tích lũy/tháng</span>
-                <strong>{formatKrw(investmentPlan.monthlyCapacity)}</strong>
-              </article>
-            </div>
-
-            <div className="income-invest-guideline">
-              <ShieldCheck size={18} />
-              <p>Ưu tiên quỹ dự phòng khoảng {formatKrw(investmentPlan.reserveTarget)} trước khi mua tài sản rủi ro. Không dùng tiền học phí, tiền nhà hoặc tiền sinh hoạt để đầu tư.</p>
-            </div>
-
-            <div className="income-invest-list">
-              {investmentPlan.positions.map((position) => (
-                <article key={position.symbol} className="income-invest-row">
-                  <div className="income-invest-symbol">{position.symbol}</div>
-                  <div>
-                    <strong>{position.name}</strong>
-                    <span>{position.kind} • {position.note}</span>
-                    <div className="income-invest-track">
-                      <span style={{ width: `${Math.min((position.value / Math.max(investmentPlan.value, 1)) * 100, 100)}%` }} />
-                    </div>
-                  </div>
-                  <p>
-                    <b>{formatKrw(position.value)}</b>
-                    <small className={position.change >= 0 ? 'positive' : 'negative'}>{formatPercent(position.change)}</small>
-                  </p>
-                </article>
-              ))}
-            </div>
-          </section>
-        ) : null}
-
-        {activeTab === 'analysis' ? (
-          <section className="income-analysis-panel">
-            <article className={analysis.underMinimum.length ? 'income-alert-card warning' : 'income-alert-card success'}>
-              {analysis.underMinimum.length ? <AlertTriangle size={22} /> : <ShieldCheck size={22} />}
-              <div>
-                <strong>{analysis.underMinimum.length ? 'Có ca dưới lương tối thiểu' : 'Lương giờ đang ổn'}</strong>
-                <p>
-                  {analysis.underMinimum.length
-                    ? `${analysis.underMinimum.length} ca thấp hơn ${formatKrw(minimumWage)}/h. Nên kiểm tra lại hợp đồng, break time và cách tính phụ cấp.`
-                    : `Không có ca nào thấp hơn ${formatKrw(minimumWage)}/h trong tháng này.`}
-                </p>
-              </div>
-              <ChevronRight size={20} />
-            </article>
-
-            <div className="income-analysis-grid">
-              <article>
-                <span>Ca đêm</span>
-                <strong>{analysis.nightShifts.length}</strong>
-                <p>Ca có tick phụ cấp</p>
-              </article>
-              <article>
-                <span>Phụ cấp lễ</span>
-                <strong>{formatKrw(analysis.holidayPay)}</strong>
-                <p>Tổng phụ cấp đã nhập</p>
-              </article>
-              <article>
-                <span>Thuế 3.3%</span>
-                <strong>{formatKrw(analysis.taxTotal)}</strong>
-                <p>Ước tính đã trừ</p>
-              </article>
-              <article>
-                <span>Tỷ giá</span>
-                <strong>{rate.source === 'live' ? 'Live' : 'Cache'}</strong>
-                <p>{rate.value.toFixed(2)} VND/KRW</p>
-              </article>
-            </div>
-          </section>
         ) : null}
       </div>
     </>
