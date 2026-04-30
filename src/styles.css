@@ -7543,9 +7543,9 @@ select {
 .chat-view-container {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
   background: #f8fafc;
-  position: fixed;
+  position: absolute;
   top: 0;
   left: 0;
   right: 0;
