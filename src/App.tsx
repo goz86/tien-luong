@@ -115,6 +115,7 @@ export default function App() {
   const [earnedBadges, setEarnedBadges] = useState<string[]>([]);
   const [isAnonymousRank, setIsAnonymousRank] = useState(false);
   const [rankings, setRankings] = useState<any[]>([]);
+  const [userStats, setUserStats] = useState({ postsCount: 0, commentsCount: 0, likesCount: 0 });
 
   const refreshRankings = useCallback(async () => {
     if (!supabase) return;
@@ -407,6 +408,33 @@ export default function App() {
       .then(({ data }) => {
         if (data) setExpenses(data);
       });
+
+    // Fetch community stats for badges
+    const fetchUserStats = async () => {
+      const userId = session.user.id;
+      
+      const { count: pCount } = await client.from('community_posts')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId);
+        
+      const { count: cCount } = await client.from('community_comments')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId);
+        
+      const { data: likesData } = await client.from('community_posts')
+        .select('likes_count')
+        .eq('user_id', userId);
+        
+      const lCount = likesData?.reduce((acc, curr) => acc + Number(curr.likes_count || 0), 0) || 0;
+      
+      setUserStats({
+        postsCount: pCount || 0,
+        commentsCount: cCount || 0,
+        likesCount: lCount
+      });
+    };
+    
+    void fetchUserStats();
   }, [session]);
 
   // Fetch monthly rankings - Publicly available
@@ -423,10 +451,10 @@ export default function App() {
       const stats = {
         shifts,
         expenses,
-        posts: [], // We need to track these or fetch count
-        comments: [], // Same here
+        posts: [], // Legacy
+        comments: { length: userStats.commentsCount }, // Map for requirement function
         companionsCount: companions.length,
-        likesCount: 0 // Fetch from profiles stats
+        likesCount: userStats.likesCount
       };
 
       const newBadges: string[] = [];

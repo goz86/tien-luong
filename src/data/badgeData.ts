@@ -21,100 +21,175 @@ export interface Badge {
 }
 
 export const BADGES: Badge[] = [
+  // --- NHÓM LAO ĐỘNG (SHIFTS) ---
   {
-    id: 'newcomer',
-    label_vi: 'Người mới',
-    label_ko: '신입생',
-    description_vi: 'Tham gia cộng đồng Duhoc Mate',
-    description_ko: '두혹메이트 커뮤니티 가입',
-    icon: '👋',
-    color: '#f3f4f6',
-    border: '#94a3b8',
-    requirement: () => true, // Always true if logged in
+    id: 'work_bronze',
+    label_vi: 'Lao động',
+    label_ko: '노동자',
+    description_vi: 'Hoàn thành 10 ca làm việc đầu tiên',
+    description_ko: '첫 10회 근무 완료',
+    icon: '🥉',
+    color: '#fff7ed',
+    border: '#fb923c',
+    requirement: ({ shifts }) => shifts.length >= 10,
   },
   {
-    id: 'hardworking',
+    id: 'work_silver',
     label_vi: 'Chăm chỉ',
-    label_ko: '열심히',
-    description_vi: 'Ghi ít nhất 5 ca làm việc',
-    description_ko: '최소 5개의 근무 기록 작성',
-    icon: '🔥',
-    color: '#ffedd5',
-    border: '#f97316',
-    requirement: ({ shifts }) => shifts.length >= 5,
+    label_ko: '성실함',
+    description_vi: 'Hoàn thành 50 ca làm việc',
+    description_ko: '50회 근무 완료',
+    icon: '🥈',
+    color: '#f8fafc',
+    border: '#94a3b8',
+    requirement: ({ shifts }) => shifts.length >= 50,
   },
   {
-    id: 'saver',
-    label_vi: 'Tiết kiệm',
-    label_ko: '절약왕',
-    description_vi: 'Ghi ít nhất 3 khoản chi tiêu',
-    description_ko: '최소 3개의 지출 기록 작성',
-    icon: '💰',
-    color: '#dcfce7',
-    border: '#22c55e',
-    requirement: ({ expenses }) => expenses.length >= 3,
-  },
-  {
-    id: 'community',
-    label_vi: 'Cộng đồng',
-    label_ko: '커뮤니티',
-    description_vi: 'Bình luận 3 lần trong cộng đồng',
-    description_ko: '커뮤니티에서 3번 댓글 작성',
-    icon: '💬',
-    color: '#dbeafe',
-    border: '#3b82f6',
-    requirement: ({ comments }) => comments.length >= 3,
-  },
-  {
-    id: 'expert_spending',
-    label_vi: 'Chi tiêu giỏi',
-    label_ko: '소비왕',
-    description_vi: 'Ghi nhận trên 10 khoản chi tiêu',
-    description_ko: '10개 이상의 지출 기록 작성',
-    icon: '💎',
-    color: '#f1f5f9',
-    border: '#64748b',
-    requirement: ({ expenses }) => expenses.length >= 10,
-  },
-  {
-    id: 'leader',
-    label_vi: 'Thủ lĩnh',
-    label_ko: '리더',
-    description_vi: 'Có ít nhất 5 người bạn kết nối',
-    description_ko: '최소 5명의 친구와 연결',
-    icon: '👑',
-    color: '#fef9c3',
+    id: 'work_gold',
+    label_vi: 'Chiến thần ca làm',
+    label_ko: '근무의 신',
+    description_vi: 'Hoàn thành 200 ca làm việc nỗ lực',
+    description_ko: '200회 근무 완료',
+    icon: '🥇',
+    color: '#fefce8',
     border: '#eab308',
-    requirement: ({ companionsCount }) => companionsCount >= 5,
+    requirement: ({ shifts }) => shifts.length >= 200,
   },
+
+  // --- NHÓM THU NHẬP (INCOME) ---
   {
-    id: 'influencer',
-    label_vi: 'Người truyền cảm hứng',
-    label_ko: '인플루언서',
-    description_vi: 'Nhận được tổng cộng 10 lượt thích',
-    description_ko: '총 10개의 좋아요 획득',
-    icon: '✨',
-    color: '#fdf2f8',
-    border: '#db2777',
-    requirement: ({ likesCount }) => likesCount >= 10,
-  },
-  {
-    id: 'millionaire',
-    label_vi: 'Triệu phú',
+    id: 'income_bronze',
+    label_vi: 'Tích lũy 1M',
     label_ko: '백만장자',
-    description_vi: 'Kiếm được trên 1,000,000 KRW trong một tháng',
-    description_ko: '한 달에 1,000,000 KRW 이상 수입',
-    icon: '💸',
+    description_vi: 'Kiếm được 1,000,000 KRW tích lũy',
+    description_ko: '누적 수입 1,000,000 KRW 달성',
+    icon: '💰',
     color: '#ecfdf5',
-    border: '#059669',
+    border: '#10b981',
     requirement: ({ shifts }) => {
-      // Simplification: just check if total pay of all shifts > 1M
-      // In a real app we'd check per month
       const total = shifts.reduce((acc, s) => {
-        const hours = (new Date(`2000-01-01T${s.endTime}`).getTime() - new Date(`2000-01-01T${s.startTime}`).getTime()) / 3600000;
-        return acc + (hours * s.hourlyWage);
+        const start = new Date(`2000-01-01T${s.startTime}`).getTime();
+        const end = new Date(`2000-01-01T${s.endTime}`).getTime();
+        let hours = (end - start) / 3600000;
+        if (hours < 0) hours += 24;
+        const totalMinutes = hours * 60 - (s.breakMinutes || 0);
+        return acc + (totalMinutes / 60 * s.hourlyWage);
       }, 0);
       return total >= 1000000;
     },
+  },
+  {
+    id: 'income_silver',
+    label_vi: 'Tích lũy 10M',
+    label_ko: '천만장자',
+    description_vi: 'Kiếm được 10,000,000 KRW tích lũy',
+    description_ko: '누적 수입 10,000,000 KRW 달성',
+    icon: '🏦',
+    color: '#f0f9ff',
+    border: '#0ea5e9',
+    requirement: ({ shifts }) => {
+      const total = shifts.reduce((acc, s) => {
+        const start = new Date(`2000-01-01T${s.startTime}`).getTime();
+        const end = new Date(`2000-01-01T${s.endTime}`).getTime();
+        let hours = (end - start) / 3600000;
+        if (hours < 0) hours += 24;
+        const totalMinutes = hours * 60 - (s.breakMinutes || 0);
+        return acc + (totalMinutes / 60 * s.hourlyWage);
+      }, 0);
+      return total >= 10000000;
+    },
+  },
+  {
+    id: 'income_gold',
+    label_vi: 'Tài phiệt Du học',
+    label_ko: '유학 재벌',
+    description_vi: 'Kiếm được 50,000,000 KRW tích lũy',
+    description_ko: '누적 수입 50,000,000 KRW 달성',
+    icon: '💎',
+    color: '#faf5ff',
+    border: '#a855f7',
+    requirement: ({ shifts }) => {
+      const total = shifts.reduce((acc, s) => {
+        const start = new Date(`2000-01-01T${s.startTime}`).getTime();
+        const end = new Date(`2000-01-01T${s.endTime}`).getTime();
+        let hours = (end - start) / 3600000;
+        if (hours < 0) hours += 24;
+        const totalMinutes = hours * 60 - (s.breakMinutes || 0);
+        return acc + (totalMinutes / 60 * s.hourlyWage);
+      }, 0);
+      return total >= 50000000;
+    },
+  },
+
+  // --- NHÓM CHI TIÊU (EXPENSES) ---
+  {
+    id: 'expense_bronze',
+    label_vi: 'Ghi chép',
+    label_ko: '기록가',
+    description_vi: 'Ghi lại 20 khoản chi tiêu',
+    description_ko: '지출 20회 기록',
+    icon: '📝',
+    color: '#f1f5f9',
+    border: '#64748b',
+    requirement: ({ expenses }) => expenses.length >= 20,
+  },
+  {
+    id: 'expense_gold',
+    label_vi: 'Bậc thầy chi tiêu',
+    label_ko: '지출 마스터',
+    description_vi: 'Ghi lại 200 khoản chi tiêu tỉ mỉ',
+    description_ko: '지출 200회 기록',
+    icon: '⚖️',
+    color: '#fff1f2',
+    border: '#e11d48',
+    requirement: ({ expenses }) => expenses.length >= 200,
+  },
+
+  // --- NHÓM CỘNG ĐỒNG (SOCIAL) ---
+  {
+    id: 'social_bronze',
+    label_vi: 'Năng nổ',
+    label_ko: '활동가',
+    description_vi: 'Bình luận 20 lần trong cộng đồng',
+    description_ko: '커뮤니티 댓글 20회 작성',
+    icon: '💬',
+    color: '#f0fdf4',
+    border: '#22c55e',
+    requirement: ({ comments }) => comments.length >= 20,
+  },
+  {
+    id: 'social_gold',
+    label_vi: 'Người truyền cảm hứng',
+    label_ko: '인플루언서',
+    description_vi: 'Nhận được 100 lượt thích từ cộng đồng',
+    description_ko: '좋아요 100회 획득',
+    icon: '✨',
+    color: '#fdf2f8',
+    border: '#db2777',
+    requirement: ({ likesCount }) => likesCount >= 100,
+  },
+
+  // --- NHÓM KẾT NỐI (FRIENDS) ---
+  {
+    id: 'friend_bronze',
+    label_vi: 'Bạn bè',
+    label_ko: '친구들',
+    description_vi: 'Kết nối với 5 người bạn',
+    description_ko: '친구 5명 연결',
+    icon: '🤝',
+    color: '#eff6ff',
+    border: '#3b82f6',
+    requirement: ({ companionsCount }) => companionsCount >= 5,
+  },
+  {
+    id: 'friend_gold',
+    label_vi: 'Siêu kết nối',
+    label_ko: '인싸',
+    description_vi: 'Kết nối với 50 người bạn',
+    description_ko: '친구 50명 연결',
+    icon: '🌐',
+    color: '#f5f3ff',
+    border: '#7c3aed',
+    requirement: ({ companionsCount }) => companionsCount >= 50,
   },
 ];
