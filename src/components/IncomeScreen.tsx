@@ -33,6 +33,7 @@ import confetti from 'canvas-confetti';
 import { calculateShiftPay, formatKrw } from '../lib/salary';
 import type { Expense, RateState, Shift, VenueColors } from '../lib/types';
 import { DateWheelModal } from './shared/DateWheelModal';
+import { CategoryWheelModal } from './shared/CategoryWheelModal';
 import { getVenueColor } from '../utils/helpers';
 
 type IncomeTab = 'overview' | 'expenses' | 'workplaces';
@@ -96,6 +97,7 @@ export function IncomeScreen({
   const [isAddingExpense, setIsAddingExpense] = useState(false);
   const [isVnd, setIsVnd] = useState(false);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const [isCategoryPickerOpen, setIsCategoryPickerOpen] = useState(false);
   const [expenseForm, setExpenseForm] = useState<Omit<Expense, 'id'>>({
     category: 'food',
     amount: 0,
@@ -360,14 +362,14 @@ export function IncomeScreen({
               <div className="income-expense-form">
                 <label>
                   <span>Hạng mục</span>
-                  <select
-                    value={expenseForm.category}
-                    onChange={(event) => setExpenseForm({ ...expenseForm, category: event.target.value as Expense['category'] })}
+                  <button
+                    type="button"
+                    className="income-category-trigger"
+                    onClick={() => setIsCategoryPickerOpen(true)}
                   >
-                    {Object.entries(categoryMeta).map(([value, meta]) => (
-                      <option key={value} value={value}>{meta.label}</option>
-                    ))}
-                  </select>
+                    {categoryMeta[expenseForm.category].label}
+                    <ChevronDown size={16} />
+                  </button>
                 </label>
                 <label>
                   <span>Số tiền</span>
@@ -482,6 +484,18 @@ export function IncomeScreen({
           onConfirm={(date) => {
             setExpenseForm({ ...expenseForm, date });
             setIsDatePickerOpen(false);
+          }}
+        />
+      )}
+      {isCategoryPickerOpen && (
+        <CategoryWheelModal
+          title="Chọn hạng mục"
+          options={Object.entries(categoryMeta).map(([value, meta]) => ({ value, label: meta.label }))}
+          value={expenseForm.category}
+          onClose={() => setIsCategoryPickerOpen(false)}
+          onConfirm={(category) => {
+            setExpenseForm({ ...expenseForm, category: category as Expense['category'] });
+            setIsCategoryPickerOpen(false);
           }}
         />
       )}

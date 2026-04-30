@@ -3322,14 +3322,16 @@ select {
   cursor: pointer;
 }
 
-.income-date-trigger {
+.income-date-trigger,
+.income-category-trigger {
   cursor: pointer;
   border: 1.5px solid #e2e8f0;
   background: white;
   color: #0f172a;
 }
 
-.income-date-trigger:active {
+.income-date-trigger:active,
+.income-category-trigger:active {
   background: #f8fafc;
   transform: scale(0.98);
 }
@@ -3359,7 +3361,8 @@ select {
 
 .dark .income-expense-form input,
 .dark .income-expense-form select,
-.dark .income-date-trigger {
+.dark .income-date-trigger,
+.dark .income-category-trigger {
   background: #1e293b;
   border-color: #334155;
   color: white;
