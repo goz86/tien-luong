@@ -115,17 +115,20 @@ const markerIcon = new L.Icon({
   shadowSize: [41, 41],
 });
 
-function FitBounds({ positions }: { positions: [number, number][] }) {
+function FitBounds({ positions, totalCount }: { positions: [number, number][], totalCount: number }) {
   const map = useMap();
+  const hasFitOnce = useRef(false);
+
   useEffect(() => {
-    if (positions.length === 0) return;
+    if (positions.length === 0 || hasFitOnce.current) return;
     if (positions.length === 1) {
       map.setView(positions[0], 15);
     } else {
       const bounds = L.latLngBounds(positions.map(p => L.latLng(p[0], p[1])));
       map.fitBounds(bounds, { padding: [30, 30] });
     }
-  }, [map, positions]);
+    hasFitOnce.current = true;
+  }, [map, totalCount]); // Only fit once based on total count
   return null;
 }
 
@@ -231,16 +234,16 @@ export function CommunityScreen({
   const displayName = session ? (profile?.displayName?.trim() || session.user.email?.split('@')[0] || 'Du học sinh') : 'Du học sinh';
 
   const isFriend = useCallback((id: string) => {
-    return friendships.some(f => 
-      (f.requester_id === id || f.target_profile_id === id) && 
+    return friendships.some(f =>
+      (f.requester_id === id || f.target_profile_id === id) &&
       f.status === 'accepted'
     );
   }, [friendships]);
 
   const hasIncomingRequest = useCallback((id: string) => {
-    return friendships.some(f => 
-      f.requester_id === id && 
-      f.target_profile_id === currentUserId && 
+    return friendships.some(f =>
+      f.requester_id === id &&
+      f.target_profile_id === currentUserId &&
       f.status === 'pending'
     );
   }, [friendships, currentUserId]);
@@ -400,7 +403,7 @@ export function CommunityScreen({
 
   const fetchRecentChats = useCallback(async () => {
     if (!supabase || !currentUserId) return;
-    
+
     const { data, error } = await supabase
       .from('chat_messages')
       .select('sender_id, receiver_id, created_at, content, is_read')
@@ -434,7 +437,7 @@ export function CommunityScreen({
       fetchRecentChats();
     }
   }, [boardMode, fetchRecentChats]);
-  
+
   const requireLogin = useCallback(() => {
     if (!session) {
       setShowLoginPrompt(true);
@@ -835,15 +838,15 @@ export function CommunityScreen({
 
   function renderBoardBody() {
     if (boardMode === 'friends') {
-      const displayList = friendFilter === 'discovery' 
-        ? companions 
+      const displayList = friendFilter === 'discovery'
+        ? companions
         : recentChats
-            .filter(c => friendFilter === 'chats' || (friendFilter === 'unread' && c.unreadCount > 0))
-            .map(c => {
-              const profile = companions.find(p => p.id === c.partnerId);
-              return profile ? { ...profile, lastMessage: c.lastMessage, unreadCount: c.unreadCount, isMe: c.isMe } : null;
-            })
-            .filter(Boolean) as (CompanionProfile & { lastMessage: string, unreadCount: number, isMe: boolean })[];
+          .filter(c => friendFilter === 'chats' || (friendFilter === 'unread' && c.unreadCount > 0))
+          .map(c => {
+            const profile = companions.find(p => p.id === c.partnerId);
+            return profile ? { ...profile, lastMessage: c.lastMessage, unreadCount: c.unreadCount, isMe: c.isMe } : null;
+          })
+          .filter(Boolean) as (CompanionProfile & { lastMessage: string, unreadCount: number, isMe: boolean })[];
 
       return (
         <section className="cm-service-panel">
@@ -856,33 +859,33 @@ export function CommunityScreen({
           </div>
 
           <div className="rv-cat-chips" style={{ padding: '0 20px 15px', borderBottom: 'none', gap: '8px' }}>
-            <button 
-              type="button" 
+            <button
+              type="button"
               className={`rv-cat-chip ${friendFilter === 'discovery' ? 'active' : ''}`}
               onClick={() => setFriendFilter('discovery')}
               style={{ fontSize: '13px', padding: '6px 14px' }}
             >
               Khám phá
             </button>
-            <button 
-              type="button" 
+            <button
+              type="button"
               className={`rv-cat-chip ${friendFilter === 'chats' ? 'active' : ''}`}
               onClick={() => setFriendFilter('chats')}
               style={{ fontSize: '13px', padding: '6px 14px' }}
             >
               Tất cả
             </button>
-            <button 
-              type="button" 
+            <button
+              type="button"
               className={`rv-cat-chip ${friendFilter === 'unread' ? 'active' : ''}`}
               onClick={() => setFriendFilter('unread')}
               style={{ fontSize: '13px', padding: '6px 14px', position: 'relative' }}
             >
               Chưa đọc
               {recentChats.some(c => c.unreadCount > 0) && (
-                <span style={{ 
-                  position: 'absolute', top: -2, right: -2, width: 8, height: 8, 
-                  background: '#ff4b4b', borderRadius: '50%', border: '2px solid white' 
+                <span style={{
+                  position: 'absolute', top: -2, right: -2, width: 8, height: 8,
+                  background: '#ff4b4b', borderRadius: '50%', border: '2px solid white'
                 }} />
               )}
             </button>
@@ -900,7 +903,7 @@ export function CommunityScreen({
               const avatarLetter = (nameParts[nameParts.length - 1] || 'U').slice(0, 1).toUpperCase();
               const displayStr = friend.displayName;
               const chatData = friendFilter !== 'discovery' ? (friend as any) : null;
-              
+
               return (
                 <article key={friend.id} className="community-friend-row">
                   <div className="community-avatar" onClick={() => setViewProfile(friend)} style={{ cursor: 'pointer' }}>
@@ -912,8 +915,8 @@ export function CommunityScreen({
                         {displayStr}
                       </strong>
                       {chatData?.unreadCount > 0 && (
-                        <span style={{ 
-                          background: '#2752ff', color: 'white', fontSize: '10px', 
+                        <span style={{
+                          background: '#2752ff', color: 'white', fontSize: '10px',
                           padding: '1px 6px', borderRadius: '10px', fontWeight: 'bold'
                         }}>
                           {chatData.unreadCount}
@@ -922,7 +925,7 @@ export function CommunityScreen({
                     </div>
 
                     {chatData ? (
-                      <p style={{ 
+                      <p style={{
                         color: chatData.unreadCount > 0 ? 'var(--text-main)' : 'var(--text-soft)',
                         fontWeight: chatData.unreadCount > 0 ? '600' : '400',
                         fontSize: '13px',
@@ -944,11 +947,11 @@ export function CommunityScreen({
                       </>
                     )}
                   </div>
-                  
-                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {!isFriend(friend.id) ? (
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         className={`community-request ${requested.includes(friend.id) ? 'sent' : ''} ${hasIncomingRequest(friend.id) ? 'incoming' : ''}`}
                         onClick={() => {
                           if (requireLogin()) onRequest(friend.id);
@@ -965,9 +968,9 @@ export function CommunityScreen({
                         )}
                       </button>
                     ) : (
-                      <button 
-                        type="button" 
-                        className="community-request" 
+                      <button
+                        type="button"
+                        className="community-request"
                         style={{ background: '#2752ff', color: 'white' }}
                         onClick={() => {
                           if (requireLogin()) setActiveChatPartner(friend);
@@ -978,8 +981,8 @@ export function CommunityScreen({
                     )}
                   </div>
                 </article>
-            );
-          })}
+              );
+            })}
           </div>
         </section>
       );
@@ -987,9 +990,9 @@ export function CommunityScreen({
 
     if (boardMode === 'reviews') {
       return (
-        <ReviewBoard 
-          session={session} 
-          displayName={displayName} 
+        <ReviewBoard
+          session={session}
+          displayName={displayName}
           isWriting={isWritingReview}
           setIsWriting={setIsWritingReview}
         />
@@ -1172,9 +1175,9 @@ export function CommunityScreen({
         {renderBoardBody()}
 
         <div className="cm-write-bar">
-          <button 
-            type="button" 
-            className="cm-write-bar-btn" 
+          <button
+            type="button"
+            className="cm-write-bar-btn"
             onClick={boardMode === 'reviews' ? () => { if (requireLogin()) setIsWritingReview(true); } : openComposer}
           >
             <Plus size={18} />
@@ -1190,10 +1193,10 @@ export function CommunityScreen({
         {viewProfile ? renderProfileModal() : null}
         {showLoginPrompt ? renderLoginPrompt() : null}
         {activeChatPartner && session && (
-          <ChatView 
-            session={session} 
-            partner={activeChatPartner} 
-            onBack={() => setActiveChatPartner(null)} 
+          <ChatView
+            session={session}
+            partner={activeChatPartner}
+            onBack={() => setActiveChatPartner(null)}
           />
         )}
       </>
@@ -1377,10 +1380,10 @@ export function CommunityScreen({
         {showDeleteConfirm ? renderDeleteConfirm() : null}
         {showLoginPrompt ? renderLoginPrompt() : null}
         {activeChatPartner && session && (
-          <ChatView 
-            session={session} 
-            partner={activeChatPartner} 
-            onBack={() => setActiveChatPartner(null)} 
+          <ChatView
+            session={session}
+            partner={activeChatPartner}
+            onBack={() => setActiveChatPartner(null)}
           />
         )}
       </div>
@@ -1480,30 +1483,30 @@ export function CommunityScreen({
     if (!viewProfile) return null;
     const nameParts = viewProfile.displayName.trim().split(' ');
     const avatarLetter = (nameParts[nameParts.length - 1] || 'U').slice(0, 1).toUpperCase();
-    
+
     return (
       <div className="custom-confirm-overlay" onClick={() => setViewProfile(null)}>
         <div className="custom-confirm-card" onClick={e => e.stopPropagation()} style={{ width: '90%', maxWidth: '400px', padding: '24px', textAlign: 'center', position: 'relative' }}>
           <button type="button" onClick={() => setViewProfile(null)} style={{ position: 'absolute', top: 16, right: 16, background: 'none', border: 'none', cursor: 'pointer' }}>
             <X size={20} color="#64748b" />
           </button>
-          
+
           <div style={{ width: 80, height: 80, borderRadius: 40, background: 'linear-gradient(135deg, #2752ff, #2146d9)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, fontWeight: 700, margin: '0 auto 16px' }}>
             {avatarLetter}
           </div>
-          
+
           <h2 style={{ margin: '0 0 8px', color: '#0f172a', fontSize: 22 }}>
             {viewProfile.displayName}
           </h2>
-          
+
           <p style={{ margin: '0 0 16px', color: '#64748b', fontSize: 14 }}>
             {viewProfile.school} • {viewProfile.region}
           </p>
-          
+
           <p style={{ margin: '0 0 20px', color: '#334155', fontSize: 15, lineHeight: 1.5 }}>
             {viewProfile.focus}
           </p>
-          
+
           {viewProfile.tags && viewProfile.tags.length > 0 && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center', marginBottom: 24 }}>
               {viewProfile.tags.map(tag => (
@@ -1513,9 +1516,9 @@ export function CommunityScreen({
               ))}
             </div>
           )}
-          
+
           {isFriend(viewProfile.id) ? (
-            <button 
+            <button
               type="button"
               className="community-request"
               style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 15, background: '#2752ff', color: 'white' }}
@@ -1529,11 +1532,11 @@ export function CommunityScreen({
               <MessageSquare size={18} /> Nhắn tin
             </button>
           ) : (
-            <button 
+            <button
               type="button"
               className={`community-request ${requested.includes(viewProfile.id) ? 'sent' : ''} ${hasIncomingRequest(viewProfile.id) ? 'incoming' : ''}`}
-              style={{ 
-                width: '100%', padding: '14px', borderRadius: 12, border: 'none', cursor: 'pointer', 
+              style={{
+                width: '100%', padding: '14px', borderRadius: 12, border: 'none', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 15,
                 background: hasIncomingRequest(viewProfile.id) ? '#4CAF50' : (requested.includes(viewProfile.id) ? '#f1f5f9' : '#2752ff'),
                 color: hasIncomingRequest(viewProfile.id) || !requested.includes(viewProfile.id) ? 'white' : '#64748b'
@@ -1569,9 +1572,9 @@ export function CommunityScreen({
             Bạn cần đăng nhập để thực hiện các tương tác như bình luận, thích bài viết hoặc chia sẻ bài đăng của riêng mình.
           </p>
           <div className="custom-confirm-actions" style={{ flexDirection: 'column', gap: 12 }}>
-            <button 
-              type="button" 
-              className="confirm-btn-delete" 
+            <button
+              type="button"
+              className="confirm-btn-delete"
               style={{ background: '#2752ff', width: '100%', margin: 0 }}
               onClick={() => {
                 setShowLoginPrompt(false);
@@ -1580,9 +1583,9 @@ export function CommunityScreen({
             >
               Đến trang hồ sơ
             </button>
-            <button 
-              type="button" 
-              className="confirm-btn-cancel" 
+            <button
+              type="button"
+              className="confirm-btn-cancel"
               style={{ width: '100%', margin: 0, border: '1px solid #e2e8f0' }}
               onClick={() => setShowLoginPrompt(false)}
             >
@@ -1599,13 +1602,13 @@ export function CommunityScreen({
 /* ReviewBoard - Standalone component           */
 /* ============================================ */
 
-function ReviewBoard({ 
-  session, 
+function ReviewBoard({
+  session,
   displayName,
   isWriting,
   setIsWriting
-}: { 
-  session: Session | null; 
+}: {
+  session: Session | null;
   displayName: string;
   isWriting: boolean;
   setIsWriting: (v: boolean) => void;
@@ -1729,12 +1732,12 @@ function ReviewBoard({
 
   const filtered = useMemo(() => {
     let result = reviews;
-    
+
     // 1. Filter by category
     if (catFilter !== 'all') {
       result = result.filter(r => r.category === catFilter);
     }
-    
+
     // 2. Filter by map view (Dynamic Discovery)
     if (mapBounds) {
       result = result.filter(r => {
@@ -1742,7 +1745,7 @@ function ReviewBoard({
         return mapBounds.contains([r.place_lat, r.place_lng]);
       });
     }
-    
+
     return result;
   }, [reviews, catFilter, mapBounds]);
 
@@ -1839,7 +1842,7 @@ function ReviewBoard({
     const count = reviews.length;
     const cat = reviews[0].category;
     const category = REVIEW_CATS[cat as keyof typeof REVIEW_CATS] || REVIEW_CATS.other;
-    
+
     return L.divIcon({
       className: `rv-custom-marker ${isSelected ? 'selected' : ''}`,
       html: `<div class="rv-marker-inner" style="background-color: ${isSelected ? '#2752ff' : category.color}; width: 44px; height: 44px;">
@@ -1872,25 +1875,25 @@ function ReviewBoard({
         <div className="rv-floating-search">
           <div className="rv-search-inner">
             <Search size={18} color="#64748b" />
-            <input 
-              type="text" 
-              placeholder="Tìm tên quán, địa chỉ..." 
+            <input
+              type="text"
+              placeholder="Tìm tên quán, địa chỉ..."
               className="rv-search-input-field"
               value={floatingSearch}
               onChange={e => setFloatingSearch(e.target.value)}
             />
             {isSearchingMap && <Loader2 size={16} className="cm-spin" color="#2752ff" />}
           </div>
-          
+
           {floatingResults.length > 0 && (
             <div className="rv-floating-results">
               {floatingResults.map((res, i) => {
                 const nameKo = res.namedetails?.name || res.namedetails?.['name:ko'] || '';
                 const nameEn = res.namedetails?.['name:en'] || '';
-                const displayName = nameKo && nameEn && nameKo !== nameEn 
-                  ? `${nameKo} (${nameEn})` 
+                const displayName = nameKo && nameEn && nameKo !== nameEn
+                  ? `${nameKo} (${nameEn})`
                   : res.display_name;
-                  
+
                 return (
                   <div key={i} className="rv-floating-item" onClick={() => handleFloatingSelect(res)}>
                     <MapPin size={14} />
@@ -1905,10 +1908,10 @@ function ReviewBoard({
         {/* Map Background */}
         <div className="rv-map-wrap">
           {reviews.length > 0 ? (
-            <MapContainer 
-              center={SEOUL_CENTER} 
-              zoom={12} 
-              scrollWheelZoom={true} 
+            <MapContainer
+              center={SEOUL_CENTER}
+              zoom={12}
+              scrollWheelZoom={true}
               style={{ height: '100%', width: '100%' }}
               zoomControl={false}
               ref={mapRef}
@@ -1918,8 +1921,11 @@ function ReviewBoard({
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
               <MapEvents />
-              <FitBounds positions={mapPositions.length > 0 ? mapPositions : [SEOUL_CENTER]} />
-              
+              <FitBounds 
+                positions={mapPositions.length > 0 ? mapPositions : [SEOUL_CENTER]} 
+                totalCount={reviews.length} 
+              />
+
               {userPos && (
                 <Marker position={userPos} icon={L.divIcon({ className: 'user-marker', html: '<div class="user-dot"></div>' })} />
               )}
@@ -1927,9 +1933,9 @@ function ReviewBoard({
               {groupedPlaces.map((group, idx) => {
                 const isSelected = group.reviews.some(r => r.id === selectedReviewId);
                 return (
-                  <Marker 
-                    key={idx} 
-                    position={[group.lat, group.lng]} 
+                  <Marker
+                    key={idx}
+                    position={[group.lat, group.lng]}
                     icon={createGroupIcon(group.reviews, isSelected)}
                     eventHandlers={{
                       click: () => handleMarkerClick(group.reviews[0].id)
@@ -1957,10 +1963,10 @@ function ReviewBoard({
         </div>
 
         {/* Bottom Sheet Review List */}
-        <motion.div 
+        <motion.div
           className="rv-bottom-sheet"
-          initial={{ y: '85%' }}
-          animate={{ y: sheetExpanded ? '10%' : '85%' }}
+          initial={{ y: '72%' }}
+          animate={{ y: sheetExpanded ? '10%' : '72%' }}
           transition={{ type: 'spring', damping: 25, stiffness: 180 }}
           drag="y"
           dragConstraints={{ top: 0, bottom: 600 }}
@@ -1968,7 +1974,7 @@ function ReviewBoard({
           onDragEnd={(_, info) => {
             const dragDistance = info.offset.y;
             const dragVelocity = info.velocity.y;
-            
+
             if (dragDistance < -50 || dragVelocity < -300) {
               setSheetExpanded(true);
             } else if (dragDistance > 50 || dragVelocity > 300) {
@@ -1993,21 +1999,21 @@ function ReviewBoard({
                 Viết review
               </button>
             </div>
-            
+
             {/* Categories inside the sheet */}
             <div className="rv-sheet-categories" onClick={e => e.stopPropagation()}>
-              <button 
-                type="button" 
-                className={`rv-cat-chip ${catFilter === 'all' ? 'active' : ''}`} 
+              <button
+                type="button"
+                className={`rv-cat-chip ${catFilter === 'all' ? 'active' : ''}`}
                 onClick={() => setCatFilter('all')}
               >
                 Tất cả
               </button>
               {(Object.keys(REVIEW_CATS) as Exclude<ReviewCategory, 'all'>[]).map(cat => (
-                <button 
-                  key={cat} 
-                  type="button" 
-                  className={`rv-cat-chip ${catFilter === cat ? 'active' : ''}`} 
+                <button
+                  key={cat}
+                  type="button"
+                  className={`rv-cat-chip ${catFilter === cat ? 'active' : ''}`}
                   onClick={() => setCatFilter(cat)}
                 >
                   {REVIEW_CATS[cat].label}
@@ -2032,8 +2038,8 @@ function ReviewBoard({
                 const cat = REVIEW_CATS[review.category as keyof typeof REVIEW_CATS] || REVIEW_CATS.other;
                 const isSelected = selectedReviewId === review.id;
                 return (
-                  <article 
-                    key={review.id} 
+                  <article
+                    key={review.id}
                     className={`rv-item-card ${isSelected ? 'selected' : ''}`}
                     ref={el => { if (el) reviewRefs.current.set(review.id, el); }}
                     onClick={() => setSelectedReviewId(review.id)}
