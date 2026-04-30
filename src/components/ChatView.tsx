@@ -85,7 +85,9 @@ export function ChatView({ session, partner, onBack }: ChatViewProps) {
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log(`Chat channel status for ${partner.id}:`, status);
+      });
 
     return () => {
       supabase?.removeChannel(channel);
@@ -118,6 +120,8 @@ export function ChatView({ session, partner, onBack }: ChatViewProps) {
     
     setMessages(prev => [...prev, tempMsg]);
 
+    console.log('Sending message to:', partner.id, 'from:', currentUserId);
+
     const { data, error } = await supabase
       .from('chat_messages')
       .insert({
@@ -129,9 +133,10 @@ export function ChatView({ session, partner, onBack }: ChatViewProps) {
       .single();
 
     if (error) {
-      console.error('Lỗi gửi tin nhắn:', error);
+      console.error('Lỗi gửi tin nhắn (Supabase Error):', error);
       setMessages(prev => prev.filter(m => m.id !== tempId));
     } else if (data) {
+      console.log('Message sent successfully:', data);
       setMessages(prev => prev.map(m => m.id === tempId ? (data as Message) : m));
     }
     setSending(false);

@@ -398,7 +398,8 @@ select {
 }
 
 .screen-shell:has(.cm-detail-screen),
-.screen-shell:has(.cm-write-fullscreen) {
+.screen-shell:has(.cm-write-fullscreen),
+.screen-shell:has(.chat-view-container) {
   z-index: 3000;
 }
 
