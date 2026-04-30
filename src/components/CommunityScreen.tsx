@@ -1716,16 +1716,22 @@ function ReviewBoard({
 
   // Search logic for floating bar
   useEffect(() => {
-    if (floatingSearch.length < 3) {
+    if (floatingSearch.length < 2) {
       setFloatingResults([]);
       return;
     }
     const timer = setTimeout(async () => {
       setIsSearchingMap(true);
       try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(floatingSearch)}&addressdetails=1&limit=5&countrycodes=kr`);
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(floatingSearch)}&addressdetails=1&limit=5&countrycodes=kr`, {
+          headers: {
+            'Accept-Language': 'vi,en-US;q=0.9,en;q=0.8',
+          }
+        });
         const data = await res.json();
-        setFloatingResults(data);
+        if (Array.isArray(data)) {
+          setFloatingResults(data);
+        }
       } catch (err) {
         console.error('Search error:', err);
       } finally {
@@ -1919,8 +1925,14 @@ function ReviewBoard({
           <div className="rv-sheet-header" onClick={() => setSheetExpanded(!sheetExpanded)} style={{ cursor: 'grab' }}>
             <div className="rv-sheet-handle" />
             <div className="rv-sheet-title-row">
-              <h3>Tìm thấy {filtered.length} địa điểm</h3>
-              <span className="rv-avg-score">★ {avgRating}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <h3>Tìm thấy {filtered.length} địa điểm</h3>
+                <span className="rv-avg-score">★ {avgRating}</span>
+              </div>
+              <button type="button" className="rv-sheet-write-btn" onClick={() => setIsWriting(true)}>
+                <PenLine size={14} />
+                Viết review
+              </button>
             </div>
             
             {/* Categories inside the sheet */}

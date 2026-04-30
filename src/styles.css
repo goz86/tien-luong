@@ -7037,6 +7037,29 @@ select {
 }
 
 /* Floating Search Results */
+.rv-floating-search {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  right: 16px;
+  z-index: 2000;
+}
+.rv-search-inner {
+  background: white;
+  border-radius: 12px;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+.rv-search-input-field {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 14px;
+  color: #0f172a;
+}
 .rv-floating-results {
   position: absolute;
   top: 100%;
@@ -7069,6 +7092,25 @@ select {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Header Write Button */
+.rv-sheet-write-btn {
+  background: #2752ff;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.rv-sheet-write-btn:active {
+  transform: scale(0.95);
 }
 
 /* GPS Button */
