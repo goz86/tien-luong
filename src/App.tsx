@@ -116,6 +116,78 @@ export default function App() {
   const [isAnonymousRank, setIsAnonymousRank] = useState(false);
   const [rankings, setRankings] = useState<any[]>([]);
 
+  const refreshRankings = useCallback(async () => {
+    if (!supabase) return;
+    const currentMonthKey = new Date().toISOString().slice(0, 7);
+    
+    // 1. Get Top 3
+    const { data: top3Data, error: top3Error } = await supabase
+      .from('monthly_rankings')
+      .select('*')
+      .eq('month_key', currentMonthKey)
+      .order('total_income', { ascending: false })
+      .limit(3);
+
+    if (top3Error) {
+      console.error('Error fetching top 3:', top3Error);
+      return;
+    }
+
+    let finalRankings = (top3Data || []).map((r, i) => ({ ...r, rank: i + 1 }));
+
+    // 2. If user is logged in, check if they are in top 3
+    if (session) {
+      const myId = session.user.id;
+      const isInTop3 = finalRankings.some(r => r.user_id === myId);
+
+      if (!isInTop3) {
+        // 3. Get user's own ranking info
+        const { data: userData, error: userError } = await supabase
+          .from('monthly_rankings')
+          .select('*')
+          .eq('month_key', currentMonthKey)
+          .eq('user_id', myId)
+          .maybeSingle();
+
+        if (userData) {
+          // 4. Calculate actual rank
+          const { count, error: countError } = await supabase
+            .from('monthly_rankings')
+            .select('*', { count: 'exact', head: true })
+            .eq('month_key', currentMonthKey)
+            .gt('total_income', userData.total_income);
+          
+          if (!countError) {
+            finalRankings = [...finalRankings, { ...userData, rank: (count || 0) + 1 }];
+          }
+        }
+      }
+    }
+
+    // 5. Fetch anonymity status for these users
+    const userIds = finalRankings.map(r => r.user_id);
+    if (userIds.length > 0) {
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('id, is_anonymous_rank')
+        .in('id', userIds);
+        
+      const profileMap = (profilesData || []).reduce((acc: any, p: any) => {
+        acc[p.id] = p.is_anonymous_rank;
+        return acc;
+      }, {});
+
+      const flattened = finalRankings.map((item: any) => ({
+        ...item,
+        is_anonymous_rank: profileMap[item.user_id] ?? item.is_anonymous_rank
+      }));
+      
+      setRankings(flattened);
+    } else {
+      setRankings([]);
+    }
+  }, [session]);
+
 
 
   const [draft, setDraft] = useState<ShiftDraft>(defaultDraft);
@@ -243,6 +315,7 @@ export default function App() {
         date: next.date,
         note: next.note
       });
+      void refreshRankings();
     }
   }
 
@@ -250,6 +323,7 @@ export default function App() {
     setExpenses((current) => current.filter((e) => e.id !== id));
     if (supabase && session) {
       await supabase!.from('expenses').delete().eq('id', id);
+      void refreshRankings();
     }
   }
 
@@ -337,39 +411,8 @@ export default function App() {
 
   // Fetch monthly rankings - Publicly available
   useEffect(() => {
-    if (!supabase) return;
-    const currentMonthKey = new Date().toISOString().slice(0, 7); // "YYYY-MM"
-    supabase.from('monthly_rankings').select('*').eq('month_key', currentMonthKey).order('total_income', { ascending: false }).limit(10)
-      .then(async ({ data: rankingsData, error: rankingsError }) => {
-        if (rankingsError) {
-          console.error('Error fetching rankings:', rankingsError);
-          return;
-        }
-        
-        if (rankingsData && rankingsData.length > 0) {
-          const userIds = rankingsData.map(r => r.user_id);
-          
-          // Fetch current anonymity status for these users from profiles
-          const { data: profilesData } = await supabase!.from('profiles')
-            .select('id, is_anonymous_rank')
-            .in('id', userIds);
-            
-          const profileMap = (profilesData || []).reduce((acc: any, p: any) => {
-            acc[p.id] = p.is_anonymous_rank;
-            return acc;
-          }, {});
-
-          const flattened = rankingsData.map((item: any) => ({
-            ...item,
-            is_anonymous_rank: profileMap[item.user_id] ?? item.is_anonymous_rank
-          }));
-          
-          setRankings(flattened);
-        } else {
-          setRankings([]);
-        }
-      });
-  }, []);
+    void refreshRankings();
+  }, [refreshRankings]);
 
 
   // Logic to check and award badges
@@ -588,6 +631,7 @@ export default function App() {
         tax_deduction: shift.taxDeduction,
         holiday_allowance: shift.holidayAllowance
       });
+      void refreshRankings();
     }
     setTab(nextTab);
   }
@@ -611,6 +655,7 @@ export default function App() {
         tax_deduction: nextShift.taxDeduction,
         holiday_allowance: nextShift.holidayAllowance
       });
+      void refreshRankings();
     }
   }
 
@@ -622,6 +667,7 @@ export default function App() {
     }
     if (supabase && session) {
       await supabase!.from('shift_entries').delete().eq('id', id);
+      void refreshRankings();
     }
   }
 

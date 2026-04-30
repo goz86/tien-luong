@@ -359,9 +359,9 @@ export function HomeScreen({
               <span>{myId ? 'Hãy ghi lại ca làm đầu tiên để lên hạng!' : 'Đăng nhập để ghi lại ca làm và lên hạng!'}</span>
             </div>
           ) : (
-            rankings.map((item, i) => {
+            rankings.map((item) => {
               const isMe = item.user_id === myId;
-              const rank = i + 1;
+              const rank = item.rank;
               const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : null;
               
               // Resolve display name for the list
@@ -387,7 +387,7 @@ export function HomeScreen({
               }
 
               return (
-                <div key={item.user_id} className={`rank-card ${isMe ? 'is-me' : ''}`}>
+                <div key={item.user_id} className={`rank-card ${isMe ? 'is-me' : ''} ${rank > 3 ? 'rank-outside' : ''}`}>
                   <div className="rank-number">
                     {medal ? <span className="medal">{medal}</span> : <span>{rank}</span>}
                   </div>
@@ -401,7 +401,6 @@ export function HomeScreen({
                     <span className="rank-amount">{formatKrw(item.total_income)}</span>
                   </div>
                 </div>
-
               );
             })
           )}
