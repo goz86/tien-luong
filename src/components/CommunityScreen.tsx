@@ -1716,7 +1716,7 @@ function ReviewBoard({
 
   // Search logic for floating bar
   useEffect(() => {
-    if (floatingSearch.length < 2) {
+    if (floatingSearch.length < 1) {
       setFloatingResults([]);
       return;
     }
