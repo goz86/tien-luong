@@ -32,7 +32,7 @@ import type { CompanionProfile } from '../lib/types';
 import { supabase } from '../lib/supabase';
 import { Logo } from './shared/Logo';
 import { ChatView } from './ChatView';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
@@ -1697,7 +1697,54 @@ function ReviewBoard({
     }
   };
 
-  const filtered = catFilter === 'all' ? reviews : reviews.filter(r => r.category === catFilter);
+  const [mapBounds, setMapBounds] = useState<L.LatLngBounds | null>(null);
+
+  const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
+  const MapEvents = () => {
+    const map = useMap();
+    useEffect(() => {
+      setMapBounds(map.getBounds());
+    }, [map]);
+
+    useMapEvents({
+      moveend: () => {
+        setMapBounds(map.getBounds());
+      },
+      zoomend: () => {
+        setMapBounds(map.getBounds());
+      },
+    });
+    return null;
+  };
+
+  const filtered = useMemo(() => {
+    let result = reviews;
+    
+    // 1. Filter by category
+    if (catFilter !== 'all') {
+      result = result.filter(r => r.category === catFilter);
+    }
+    
+    // 2. Filter by map view (Dynamic Discovery)
+    if (mapBounds) {
+      result = result.filter(r => {
+        if (!r.place_lat || !r.place_lng) return false;
+        return mapBounds.contains([r.place_lat, r.place_lng]);
+      });
+    }
+    
+    return result;
+  }, [reviews, catFilter, mapBounds]);
 
   const mapPositions: [number, number][] = filtered
     .filter(r => r.place_lat != null && r.place_lng != null)
@@ -1746,8 +1793,11 @@ function ReviewBoard({
     navigator.geolocation.getCurrentPosition((pos) => {
       const coords: [number, number] = [pos.coords.latitude, pos.coords.longitude];
       setUserPos(coords);
-      mapRef.current?.setView(coords, 15);
-    });
+      // Zoom into the location (level 14 is ~3-5km radius view)
+      mapRef.current?.setView(coords, 14);
+    }, (err) => {
+      console.error('GPS Error:', err);
+    }, { enableHighAccuracy: true });
   };
 
   const handleFloatingSelect = (res: any) => {
@@ -1854,7 +1904,7 @@ function ReviewBoard({
 
         {/* Map Background */}
         <div className="rv-map-wrap">
-          {mapPositions.length > 0 ? (
+          {reviews.length > 0 ? (
             <MapContainer 
               center={SEOUL_CENTER} 
               zoom={12} 
@@ -1867,7 +1917,8 @@ function ReviewBoard({
                 attribution='&copy; <a href="https://osm.org/copyright">OSM</a>'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
-              <FitBounds positions={mapPositions} />
+              <MapEvents />
+              <FitBounds positions={mapPositions.length > 0 ? mapPositions : [SEOUL_CENTER]} />
               
               {userPos && (
                 <Marker position={userPos} icon={L.divIcon({ className: 'user-marker', html: '<div class="user-dot"></div>' })} />
