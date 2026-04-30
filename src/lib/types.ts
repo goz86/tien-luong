@@ -31,7 +31,7 @@ export interface ProfileDraft {
 
 export interface Expense {
   id: string;
-  category: 'rent' | 'phone' | 'food' | 'other';
+  category: 'rent' | 'phone' | 'food' | 'transport' | 'shopping' | 'health' | 'entertainment' | 'other';
   amount: number;
   date: string;
   note: string;

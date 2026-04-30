@@ -21,11 +21,18 @@ import {
   TrendingUp,
   Utensils,
   WalletCards,
+  Smartphone,
+  Bus,
+  ShoppingBag,
+  HeartPulse,
+  Music,
+  ChevronDown,
   type LucideIcon,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { calculateShiftPay, formatKrw } from '../lib/salary';
 import type { Expense, RateState, Shift, VenueColors } from '../lib/types';
+import { DateWheelModal } from './shared/DateWheelModal';
 import { getVenueColor } from '../utils/helpers';
 
 type IncomeTab = 'overview' | 'expenses' | 'workplaces';
@@ -37,11 +44,15 @@ const incomeTabs: Array<{ id: IncomeTab; label: string; icon: IconComponent }> =
   { id: 'workplaces', label: 'Nơi làm', icon: Building2 },
 ];
 
-const categoryMeta: Record<Expense['category'], { label: string; icon: IconComponent; tone: string }> = {
+const categoryMeta: Record<Expense['category'], { label: string; icon: any; tone: string }> = {
   rent: { label: 'Tiền nhà', icon: Home, tone: 'blue' },
-  phone: { label: 'Điện thoại', icon: Phone, tone: 'green' },
-  food: { label: 'Ăn uống', icon: Utensils, tone: 'amber' },
-  other: { label: 'Chi phí khác', icon: ReceiptText, tone: 'coral' },
+  phone: { label: 'Điện thoại', icon: Smartphone, tone: 'green' },
+  food: { label: 'Ăn uống', icon: Utensils, tone: 'orange' },
+  transport: { label: 'Di chuyển', icon: Bus, tone: 'purple' },
+  shopping: { label: 'Mua sắm', icon: ShoppingBag, tone: 'pink' },
+  health: { label: 'Sức khỏe', icon: HeartPulse, tone: 'red' },
+  entertainment: { label: 'Giải trí', icon: Music, tone: 'cyan' },
+  other: { label: 'Khác', icon: ReceiptText, tone: 'gray' },
 };
 
 const weekdayLabels = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
@@ -84,6 +95,7 @@ export function IncomeScreen({
   const [tempTarget, setTempTarget] = useState(target.toString());
   const [isAddingExpense, setIsAddingExpense] = useState(false);
   const [isVnd, setIsVnd] = useState(false);
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [expenseForm, setExpenseForm] = useState<Omit<Expense, 'id'>>({
     category: 'food',
     amount: 0,
@@ -368,11 +380,14 @@ export function IncomeScreen({
                 </label>
                 <label>
                   <span>Ngày chi</span>
-                  <input
-                    type="date"
-                    value={expenseForm.date}
-                    onChange={(event) => setExpenseForm({ ...expenseForm, date: event.target.value })}
-                  />
+                  <button
+                    type="button"
+                    className="income-date-trigger"
+                    onClick={() => setIsDatePickerOpen(true)}
+                  >
+                    {new Date(expenseForm.date).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                    <ChevronDown size={16} />
+                  </button>
                 </label>
                 <label className="wide">
                   <span>Ghi chú</span>
@@ -459,6 +474,17 @@ export function IncomeScreen({
           </section>
         ) : null}
       </div>
+      {isDatePickerOpen && (
+        <DateWheelModal
+          title="Chọn ngày chi"
+          initialDate={expenseForm.date}
+          onClose={() => setIsDatePickerOpen(false)}
+          onConfirm={(date) => {
+            setExpenseForm({ ...expenseForm, date });
+            setIsDatePickerOpen(false);
+          }}
+        />
+      )}
     </>
   );
 }
