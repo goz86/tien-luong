@@ -128,14 +128,17 @@ export function IncomeScreen({
     shifts.forEach((s) => {
       const current = map.get(s.date) || { total: 0, hours: 0 };
       const pay = calculateShiftPay(s);
-      map.set(s.date, { total: current.total + pay.total, hours: current.hours + s.hours });
+      const h = Number(s.hours) || 0;
+      map.set(s.date, { total: current.total + pay.total, hours: current.hours + h });
     });
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [shifts]);
 
   const maxHoursInDay = useMemo(() => {
     if (dailyAggregated.length === 0) return 0;
-    return Math.max(...dailyAggregated.map(([, data]) => data.hours));
+    const hours = dailyAggregated.map(([, data]) => data.hours);
+    const max = Math.max(...hours);
+    return isNaN(max) ? 0 : max;
   }, [dailyAggregated]);
 
   const bestDayData = useMemo(() => {
