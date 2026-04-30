@@ -1723,9 +1723,9 @@ function ReviewBoard({
     const timer = setTimeout(async () => {
       setIsSearchingMap(true);
       try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(floatingSearch)}&addressdetails=1&limit=5&countrycodes=kr`, {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(floatingSearch)}&addressdetails=1&namedetails=1&limit=5&countrycodes=kr`, {
           headers: {
-            'Accept-Language': 'ko,en;q=0.9,vi;q=0.8',
+            'Accept-Language': 'ko,en;q=0.9',
           }
         });
         const data = await res.json();
@@ -1834,12 +1834,20 @@ function ReviewBoard({
           
           {floatingResults.length > 0 && (
             <div className="rv-floating-results">
-              {floatingResults.map((res, i) => (
-                <div key={i} className="rv-floating-item" onClick={() => handleFloatingSelect(res)}>
-                  <MapPin size={14} />
-                  <span>{res.display_name}</span>
-                </div>
-              ))}
+              {floatingResults.map((res, i) => {
+                const nameKo = res.namedetails?.name || res.namedetails?.['name:ko'] || '';
+                const nameEn = res.namedetails?.['name:en'] || '';
+                const displayName = nameKo && nameEn && nameKo !== nameEn 
+                  ? `${nameKo} (${nameEn})` 
+                  : res.display_name;
+                  
+                return (
+                  <div key={i} className="rv-floating-item" onClick={() => handleFloatingSelect(res)}>
+                    <MapPin size={14} />
+                    <span>{displayName}</span>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
