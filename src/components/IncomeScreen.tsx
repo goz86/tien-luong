@@ -440,8 +440,6 @@ export function IncomeScreen({
             </div>
           </section>
         ) : null}
-
-        ) : null}
       </div>
     </>
   );
