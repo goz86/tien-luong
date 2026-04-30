@@ -33,7 +33,6 @@ import confetti from 'canvas-confetti';
 import { calculateShiftPay, formatKrw } from '../lib/salary';
 import type { Expense, RateState, Shift, VenueColors } from '../lib/types';
 import { DateWheelModal } from './shared/DateWheelModal';
-import { CategoryWheelModal } from './shared/CategoryWheelModal';
 import { getVenueColor } from '../utils/helpers';
 
 type IncomeTab = 'overview' | 'expenses' | 'workplaces';
@@ -97,7 +96,7 @@ export function IncomeScreen({
   const [isAddingExpense, setIsAddingExpense] = useState(false);
   const [isVnd, setIsVnd] = useState(false);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
-  const [isCategoryPickerOpen, setIsCategoryPickerOpen] = useState(false);
+  const [activeSelect, setActiveSelect] = useState<string | null>(null);
   const [expenseForm, setExpenseForm] = useState<Omit<Expense, 'id'>>({
     category: 'food',
     amount: 0,
@@ -105,6 +104,21 @@ export function IncomeScreen({
     note: '',
   });
   const prevTotalRef = useRef(monthlyTotal);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as HTMLElement;
+      if (activeSelect && !target.closest('.income-select-wrap')) {
+        setActiveSelect(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [activeSelect]);
 
   const formatMoney = (val: number) => {
     if (isVnd) {
@@ -362,14 +376,32 @@ export function IncomeScreen({
               <div className="income-expense-form">
                 <label>
                   <span>Hạng mục</span>
-                  <button
-                    type="button"
-                    className="income-category-trigger"
-                    onClick={() => setIsCategoryPickerOpen(true)}
-                  >
-                    {categoryMeta[expenseForm.category].label}
-                    <ChevronDown size={16} />
-                  </button>
+                  <div className="income-select-wrap" style={{ position: 'relative' }}>
+                    <button
+                      type="button"
+                      className="income-category-trigger"
+                      onClick={() => setActiveSelect(activeSelect === 'category' ? null : 'category')}
+                    >
+                      {categoryMeta[expenseForm.category].label}
+                      <ChevronDown size={16} className={activeSelect === 'category' ? 'open' : ''} />
+                    </button>
+                    {activeSelect === 'category' && (
+                      <div className="settings-dropdown" style={{ top: '100%', left: 0, right: 0, marginTop: '4px', zIndex: 10 }}>
+                        {Object.entries(categoryMeta).map(([value, meta]) => (
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() => {
+                              setExpenseForm({ ...expenseForm, category: value as Expense['category'] });
+                              setActiveSelect(null);
+                            }}
+                          >
+                            {meta.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </label>
                 <label>
                   <span>Số tiền</span>
@@ -484,18 +516,6 @@ export function IncomeScreen({
           onConfirm={(date) => {
             setExpenseForm({ ...expenseForm, date });
             setIsDatePickerOpen(false);
-          }}
-        />
-      )}
-      {isCategoryPickerOpen && (
-        <CategoryWheelModal
-          title="Chọn hạng mục"
-          options={Object.entries(categoryMeta).map(([value, meta]) => ({ value, label: meta.label }))}
-          value={expenseForm.category}
-          onClose={() => setIsCategoryPickerOpen(false)}
-          onConfirm={(category) => {
-            setExpenseForm({ ...expenseForm, category: category as Expense['category'] });
-            setIsCategoryPickerOpen(false);
           }}
         />
       )}
