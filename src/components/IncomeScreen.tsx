@@ -5,6 +5,7 @@ import {
   Building2,
   CalendarDays,
   Check,
+  ChevronLeft,
   ChevronRight,
   Clock,
   Coins,
@@ -33,15 +34,16 @@ import confetti from 'canvas-confetti';
 import { calculateShiftPay, formatKrw } from '../lib/salary';
 import type { Expense, RateState, Shift, VenueColors } from '../lib/types';
 import { DateWheelModal } from './shared/DateWheelModal';
-import { getVenueColor } from '../utils/helpers';
+import { getVenueColor, shiftMonth } from '../utils/helpers';
 
+type AppLang = 'vi' | 'ko';
 type IncomeTab = 'overview' | 'expenses' | 'workplaces';
 type IconComponent = LucideIcon;
 
-const incomeTabs: Array<{ id: IncomeTab; label: string; icon: IconComponent }> = [
-  { id: 'overview', label: 'Tổng quan', icon: BarChart3 },
-  { id: 'expenses', label: 'Chi tiêu', icon: ReceiptText },
-  { id: 'workplaces', label: 'Nơi làm', icon: Building2 },
+const incomeTabs: Array<{ id: IncomeTab; icon: IconComponent }> = [
+  { id: 'overview', icon: BarChart3 },
+  { id: 'expenses', icon: ReceiptText },
+  { id: 'workplaces', icon: Building2 },
 ];
 
 const categoryMeta: Record<Expense['category'], { label: string; icon: any; tone: string }> = {
@@ -56,6 +58,11 @@ const categoryMeta: Record<Expense['category'], { label: string; icon: any; tone
 };
 
 const weekdayLabels = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+
+function currentMonthIso() {
+  const value = new Date();
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-01`;
+}
 
 function formatPercent(value: number) {
   return `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
@@ -75,6 +82,7 @@ export function IncomeScreen({
   onDeleteExpense,
   target,
   onSetTarget,
+  lang = 'vi',
 }: {
   monthlyTotal: number;
   monthlyHours: number;
@@ -89,7 +97,108 @@ export function IncomeScreen({
   onDeleteExpense: (id: string) => void;
   target: number;
   onSetTarget: (target: number) => void;
+  lang?: AppLang;
 }) {
+  const isKo = lang === 'ko';
+  const locale = isKo ? 'ko-KR' : 'vi-VN';
+  const ui = isKo ? {
+    tabs: { overview: '요약', expenses: '지출', workplaces: '근무지' },
+    netIncome: '이번 달 순수입',
+    grossIncome: '총 급여',
+    expenses: '지출',
+    totalHours: '총 시간',
+    monthlyGoal: '월 목표',
+    saveGoal: '목표 저장',
+    editGoal: '목표 수정',
+    needMore: (value: string) => `목표까지 ${value} 남았습니다.`,
+    goalDone: '이번 달 목표를 달성했습니다.',
+    incomeTabs: '수입 메뉴',
+    weeklyRhythm: '주간 근무 흐름',
+    weeklyIncome: '요일별 수입',
+    monthOverview: '월간 요약',
+    monthIncome: (days: number) => `${days}일 수입`,
+    prevMonth: '이전 달',
+    nextMonth: '다음 달',
+    avgHourly: '평균 시급',
+    shiftCount: '이번 달 근무 수',
+    bestHours: '최대 근무 시간',
+    bestDay: '최고 수입일',
+    expenseManage: '지출 관리',
+    expenseRecords: '기록된 지출',
+    addExpense: '지출 추가',
+    category: '카테고리',
+    amount: '금액',
+    expenseDate: '지출일',
+    note: '메모',
+    notePlaceholder: '예: 이번 주 식비',
+    saveExpense: '지출 저장',
+    noExpense: '지출 내역이 없습니다',
+    noExpenseHint: '월세, 식비, 통신비를 기록하면 순수입을 더 정확히 볼 수 있어요.',
+    workplace: '근무지',
+    byIncome: '수입순 정렬',
+    noWorkplace: '근무지가 없습니다',
+    noWorkplaceHint: '캘린더에 근무를 추가하면 근무지별로 자동 집계됩니다.',
+    deleteExpense: '지출 삭제',
+    shifts: '회',
+  } : {
+    tabs: { overview: 'Tổng quan', expenses: 'Chi tiêu', workplaces: 'Nơi làm' },
+    netIncome: 'Thu nhập ròng tháng này',
+    grossIncome: 'Tổng lương',
+    expenses: 'Chi tiêu',
+    totalHours: 'Tổng giờ',
+    monthlyGoal: 'Mục tiêu tháng',
+    saveGoal: 'Lưu mục tiêu',
+    editGoal: 'Sửa mục tiêu',
+    needMore: (value: string) => `Cần ${value} để đạt mục tiêu.`,
+    goalDone: 'Bạn đã vượt mục tiêu tháng này.',
+    incomeTabs: 'Mục thu nhập',
+    weeklyRhythm: 'Nhịp làm việc tuần',
+    weeklyIncome: 'Thu theo ngày trong tuần',
+    monthOverview: 'Tổng quan tháng',
+    monthIncome: (days: number) => `Thu nhập ${days} ngày`,
+    prevMonth: 'Tháng trước',
+    nextMonth: 'Tháng sau',
+    avgHourly: 'Lương TB/giờ',
+    shiftCount: 'Số ca tháng',
+    bestHours: 'Kỷ lục giờ làm',
+    bestDay: 'Ngày bội thu',
+    expenseManage: 'Quản lý chi tiêu',
+    expenseRecords: 'Khoản đã ghi',
+    addExpense: 'Thêm chi tiêu',
+    category: 'Hạng mục',
+    amount: 'Số tiền',
+    expenseDate: 'Ngày chi',
+    note: 'Ghi chú',
+    notePlaceholder: 'Ví dụ: tiền ăn tuần này',
+    saveExpense: 'Lưu chi tiêu',
+    noExpense: 'Chưa có chi tiêu',
+    noExpenseHint: 'Ghi tiền nhà, ăn uống và điện thoại để biết thu nhập ròng chính xác hơn.',
+    workplace: 'Nơi làm',
+    byIncome: 'Xếp theo thu nhập',
+    noWorkplace: 'Chưa có nơi làm',
+    noWorkplaceHint: 'Thêm ca làm trong lịch để app tự tổng hợp theo từng nơi.',
+    deleteExpense: 'Xóa chi tiêu',
+    shifts: 'ca',
+  };
+  const categoryLabels: Record<Expense['category'], string> = isKo ? {
+    rent: '월세',
+    phone: '통신비',
+    food: '식비',
+    transport: '교통비',
+    shopping: '쇼핑',
+    health: '건강',
+    entertainment: '여가',
+    other: '기타',
+  } : {
+    rent: 'Tiền nhà',
+    phone: 'Điện thoại',
+    food: 'Ăn uống',
+    transport: 'Di chuyển',
+    shopping: 'Mua sắm',
+    health: 'Sức khỏe',
+    entertainment: 'Giải trí',
+    other: 'Khác',
+  };
   const [activeTab, setActiveTab] = useState<IncomeTab>('overview');
   const [isEditingTarget, setIsEditingTarget] = useState(false);
   const [tempTarget, setTempTarget] = useState(target.toString());
@@ -97,6 +206,7 @@ export function IncomeScreen({
   const [isVnd, setIsVnd] = useState(false);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [activeSelect, setActiveSelect] = useState<string | null>(null);
+  const [chartMonth, setChartMonth] = useState(currentMonthIso);
   const [expenseForm, setExpenseForm] = useState<Omit<Expense, 'id'>>({
     category: 'food',
     amount: 0,
@@ -122,7 +232,7 @@ export function IncomeScreen({
 
   const formatMoney = (val: number) => {
     if (isVnd) {
-      return new Intl.DateTimeFormat('vi-VN').format(new Date()) && `${Math.round(val * rate.value).toLocaleString('vi-VN')}đ`;
+      return new Intl.DateTimeFormat(locale).format(new Date()) && `${Math.round(val * rate.value).toLocaleString(locale)}đ`;
     }
     return formatKrw(val);
   };
@@ -147,7 +257,11 @@ export function IncomeScreen({
   const progressPercentage = Math.min((monthlyTotal / (target || 1)) * 100, 100);
   const progressColor = progressPercentage >= 100 ? '#0d9b72' : progressPercentage >= 55 ? '#f59e0b' : '#ff6b7a';
   const missingTarget = Math.max(target - monthlyTotal, 0);
-  const monthLabel = new Intl.DateTimeFormat('vi-VN', { month: 'long', year: 'numeric' }).format(new Date());
+  const monthLabel = new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(new Date());
+  const chartMonthDate = useMemo(() => new Date(`${chartMonth}T00:00:00`), [chartMonth]);
+  const chartMonthNumber = chartMonthDate.getMonth() + 1;
+  const chartMonthTitle = new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(chartMonthDate);
+  const chartDaysInMonth = new Date(chartMonthDate.getFullYear(), chartMonthDate.getMonth() + 1, 0).getDate();
 
   const workplaceInsights = useMemo(
     () =>
@@ -183,16 +297,17 @@ export function IncomeScreen({
 
   // Monthly stats for the new chart (summarize by day of month)
   const monthlyChartData = useMemo(() => {
-    const daysInMonth = 31; // Simplified, or use actual days
-    const results = Array(daysInMonth).fill(0);
+    const results = Array(chartDaysInMonth).fill(0);
+    const selectedMonthKey = chartMonth.slice(0, 7);
     shifts.forEach(s => {
+      if (!s.date.startsWith(selectedMonthKey)) return;
       const d = new Date(`${s.date}T00:00:00`).getDate();
-      if (d <= daysInMonth) {
+      if (d >= 1 && d <= chartDaysInMonth) {
         results[d - 1] += calculateShiftPay(s).total;
       }
     });
     return results;
-  }, [shifts]);
+  }, [chartDaysInMonth, chartMonth, shifts]);
 
   const maxMonthlyDay = Math.max(...monthlyChartData, 1);
 
@@ -235,22 +350,22 @@ export function IncomeScreen({
       <section className="income-ledger-hero" onClick={() => setIsVnd(!isVnd)} style={{ cursor: 'pointer' }}>
         <div className="income-hero-top">
           <div>
-            <span>Thu nhập ròng tháng này {isVnd ? '(VND)' : '(KRW)'}</span>
+            <span>{ui.netIncome} {isVnd ? '(VND)' : '(KRW)'}</span>
             <h2>{formatMoney(netBalance)}</h2>
           </div>
           <WalletCards size={28} />
         </div>
         <div className="income-hero-metrics">
           <article>
-            <span>Tổng lương</span>
+            <span>{ui.grossIncome}</span>
             <strong>{formatMoney(monthlyTotal)}</strong>
           </article>
           <article>
-            <span>Chi tiêu</span>
+            <span>{ui.expenses}</span>
             <strong>{formatMoney(totalExpenses)}</strong>
           </article>
           <article>
-            <span>Tổng giờ</span>
+            <span>{ui.totalHours}</span>
             <strong>{monthlyHours.toFixed(1)}h</strong>
           </article>
         </div>
@@ -259,11 +374,11 @@ export function IncomeScreen({
       <section className="income-goal-panel">
         <div className="income-goal-head">
           <div>
-            <span>Mục tiêu tháng</span>
+            <span>{ui.monthlyGoal}</span>
             {isEditingTarget ? (
               <div className="income-target-edit">
                 <input type="number" value={tempTarget} onChange={(event) => setTempTarget(event.target.value)} autoFocus />
-                <button type="button" onClick={handleSaveTarget} aria-label="Lưu mục tiêu">
+                <button type="button" onClick={handleSaveTarget} aria-label={ui.saveGoal}>
                   <Check size={18} />
                 </button>
               </div>
@@ -271,18 +386,18 @@ export function IncomeScreen({
               <strong>{formatMoney(target)}</strong>
             )}
           </div>
-          <button type="button" className="income-edit-button" onClick={() => setIsEditingTarget(true)} aria-label="Sửa mục tiêu">
+          <button type="button" className="income-edit-button" onClick={() => setIsEditingTarget(true)} aria-label={ui.editGoal}>
             <Edit2 size={16} />
           </button>
         </div>
-        <div className="income-progress-track" aria-label={`Đã đạt ${progressPercentage.toFixed(0)}% mục tiêu`}>
+        <div className="income-progress-track" aria-label={isKo ? `목표의 ${progressPercentage.toFixed(0)}% 달성` : `Đã đạt ${progressPercentage.toFixed(0)}% mục tiêu`}>
           <span style={{ width: `${progressPercentage}%`, background: progressColor }} />
         </div>
-        <p>{missingTarget > 0 ? `Cần ${formatMoney(missingTarget)} để đạt mục tiêu.` : 'Bạn đã vượt mục tiêu tháng này.'}</p>
+        <p>{missingTarget > 0 ? ui.needMore(formatMoney(missingTarget)) : ui.goalDone}</p>
       </section>
 
-      <div className="income-subtabs" role="tablist" aria-label="Mục thu nhập">
-        {incomeTabs.map(({ id, label, icon: Icon }) => (
+      <div className="income-subtabs" role="tablist" aria-label={ui.incomeTabs}>
+        {incomeTabs.map(({ id, icon: Icon }) => (
           <button
             key={id}
             type="button"
@@ -292,7 +407,7 @@ export function IncomeScreen({
             onClick={() => setActiveTab(id)}
           >
             <Icon size={16} />
-            {label}
+            {ui.tabs[id]}
           </button>
         ))}
       </div>
@@ -303,8 +418,8 @@ export function IncomeScreen({
             <section className="income-chart-panel">
               <div className="income-section-head">
                 <div>
-                  <p>Nhịp làm việc tuần</p>
-                  <h2>Thu theo ngày trong tuần</h2>
+                  <p>{ui.weeklyRhythm}</p>
+                  <h2>{ui.weeklyIncome}</h2>
                 </div>
                 <TrendingUp size={22} />
               </div>
@@ -321,10 +436,19 @@ export function IncomeScreen({
             <section className="income-chart-panel monthly">
               <div className="income-section-head">
                 <div>
-                  <p>Tổng quan tháng</p>
-                  <h2>Thu nhập 31 ngày qua</h2>
+                  <p>{ui.monthOverview}</p>
+                  <h2>{ui.monthIncome(chartDaysInMonth)}</h2>
+                  <span className="income-month-caption">{chartMonthTitle}</span>
                 </div>
-                <BarChart3 size={22} />
+                <div className="income-month-switcher" aria-label={isKo ? '차트 월 선택' : 'Chọn tháng biểu đồ'}>
+                  <button type="button" onClick={() => setChartMonth((value) => shiftMonth(value, -1))} aria-label={ui.prevMonth}>
+                    <ChevronLeft size={17} />
+                  </button>
+                  <strong>{chartMonthNumber}</strong>
+                  <button type="button" onClick={() => setChartMonth((value) => shiftMonth(value, 1))} aria-label={ui.nextMonth}>
+                    <ChevronRight size={17} />
+                  </button>
+                </div>
               </div>
               <div className="income-month-bars">
                 {monthlyChartData.map((value, idx) => (
@@ -338,22 +462,22 @@ export function IncomeScreen({
             <section className="income-snapshot-grid">
               <article>
                 <Coins size={20} />
-                <span>Lương TB/giờ</span>
+                <span>{ui.avgHourly}</span>
                 <strong>{formatMoney(averageHourly)}</strong>
               </article>
               <article>
                 <CalendarDays size={20} />
-                <span>Số ca tháng</span>
-                <strong>{shifts.length} ca</strong>
+                <span>{ui.shiftCount}</span>
+                <strong>{shifts.length} {ui.shifts}</strong>
               </article>
               <article>
                 <Clock size={20} />
-                <span>Kỷ lục giờ làm</span>
+                <span>{ui.bestHours}</span>
                 <strong>{maxHoursInDay.toFixed(1)}h</strong>
               </article>
               <article className="gold">
                 <Trophy size={20} />
-                <span>Ngày bội thu</span>
+                <span>{ui.bestDay}</span>
                 <strong>{bestDayData ? new Date(bestDayData[0]).getDate() + '/' + (new Date(bestDayData[0]).getMonth() + 1) : '--'}</strong>
               </article>
             </section>
@@ -364,10 +488,10 @@ export function IncomeScreen({
           <section className="income-expense-panel">
             <div className="income-section-head">
               <div>
-                <p>Quản lý chi tiêu</p>
-                <h2>Khoản đã ghi</h2>
+                <p>{ui.expenseManage}</p>
+                <h2>{ui.expenseRecords}</h2>
               </div>
-              <button type="button" className="income-mini-action" onClick={() => setIsAddingExpense((value) => !value)} aria-label="Thêm chi tiêu">
+              <button type="button" className="income-mini-action" onClick={() => setIsAddingExpense((value) => !value)} aria-label={ui.addExpense}>
                 <Plus size={18} />
               </button>
             </div>
@@ -375,19 +499,19 @@ export function IncomeScreen({
             {isAddingExpense ? (
               <div className="income-expense-form">
                 <label>
-                  <span>Hạng mục</span>
+                  <span>{ui.category}</span>
                   <div className="income-select-wrap" style={{ position: 'relative' }}>
                     <button
                       type="button"
                       className="income-category-trigger"
                       onClick={() => setActiveSelect(activeSelect === 'category' ? null : 'category')}
                     >
-                      {categoryMeta[expenseForm.category].label}
+                      {categoryLabels[expenseForm.category]}
                       <ChevronDown size={16} className={activeSelect === 'category' ? 'open' : ''} />
                     </button>
                     {activeSelect === 'category' && (
                       <div className="settings-dropdown" style={{ top: '100%', left: 0, right: 0, marginTop: '4px', zIndex: 10 }}>
-                        {Object.entries(categoryMeta).map(([value, meta]) => (
+                        {Object.entries(categoryMeta).map(([value]) => (
                           <button
                             key={value}
                             type="button"
@@ -396,7 +520,7 @@ export function IncomeScreen({
                               setActiveSelect(null);
                             }}
                           >
-                            {meta.label}
+                            {categoryLabels[value as Expense['category']]}
                           </button>
                         ))}
                       </div>
@@ -404,7 +528,7 @@ export function IncomeScreen({
                   </div>
                 </label>
                 <label>
-                  <span>Số tiền</span>
+                  <span>{ui.amount}</span>
                   <input
                     type="number"
                     value={expenseForm.amount || ''}
@@ -413,26 +537,26 @@ export function IncomeScreen({
                   />
                 </label>
                 <label>
-                  <span>Ngày chi</span>
+                  <span>{ui.expenseDate}</span>
                   <button
                     type="button"
                     className="income-date-trigger"
                     onClick={() => setIsDatePickerOpen(true)}
                   >
-                    {new Date(expenseForm.date).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                    {new Date(expenseForm.date).toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' })}
                     <ChevronDown size={16} />
                   </button>
                 </label>
                 <label className="wide">
-                  <span>Ghi chú</span>
+                  <span>{ui.note}</span>
                   <input
                     type="text"
                     value={expenseForm.note}
-                    placeholder="Ví dụ: tiền ăn tuần này"
+                    placeholder={ui.notePlaceholder}
                     onChange={(event) => setExpenseForm({ ...expenseForm, note: event.target.value })}
                   />
                 </label>
-                <button type="button" className="income-save-btn" onClick={handleAddExpense}>Lưu chi tiêu</button>
+                <button type="button" className="income-save-btn" onClick={handleAddExpense}>{ui.saveExpense}</button>
               </div>
             ) : null}
 
@@ -447,12 +571,12 @@ export function IncomeScreen({
                         <Icon size={18} />
                       </div>
                       <div>
-                        <strong>{expense.note || meta.label}</strong>
-                        <span>{meta.label} • {new Date(expense.date).getDate()}/{new Date(expense.date).getMonth() + 1}</span>
+                        <strong>{expense.note || categoryLabels[expense.category]}</strong>
+                        <span>{categoryLabels[expense.category]} • {new Date(expense.date).getDate()}/{new Date(expense.date).getMonth() + 1}</span>
                       </div>
                       <div className="income-expense-amount">
                         <b>{formatMoney(expense.amount)}</b>
-                        <button type="button" onClick={() => onDeleteExpense(expense.id)} aria-label="Xóa chi tiêu">
+                        <button type="button" onClick={() => onDeleteExpense(expense.id)} aria-label={ui.deleteExpense}>
                           <Trash2 size={15} />
                         </button>
                       </div>
@@ -462,8 +586,8 @@ export function IncomeScreen({
               ) : (
                 <div className="income-empty">
                   <ReceiptText size={34} />
-                  <strong>Chưa có chi tiêu</strong>
-                  <p>Ghi tiền nhà, ăn uống và điện thoại để biết thu nhập ròng chính xác hơn.</p>
+                  <strong>{ui.noExpense}</strong>
+                  <p>{ui.noExpenseHint}</p>
                 </div>
               )}
             </div>
@@ -474,8 +598,8 @@ export function IncomeScreen({
           <section className="income-workplace-panel">
             <div className="income-section-head">
               <div>
-                <p>Nơi làm</p>
-                <h2>Xếp theo thu nhập</h2>
+                <p>{ui.workplace}</p>
+                <h2>{ui.byIncome}</h2>
               </div>
               <Building2 size={22} />
             </div>
@@ -486,7 +610,7 @@ export function IncomeScreen({
                     <span className="income-venue-dot" style={{ background: getVenueColor(workplace.label, venueColors) }} />
                     <div>
                       <strong>{workplace.label}</strong>
-                      <small>{workplace.count} ca • {workplace.hours.toFixed(1)}h • {workplace.share.toFixed(0)}%</small>
+                      <small>{workplace.count} {ui.shifts} • {workplace.hours.toFixed(1)}h • {workplace.share.toFixed(0)}%</small>
                       <div className="income-workplace-track">
                         <span style={{ width: `${Math.min(workplace.share, 100)}%`, background: getVenueColor(workplace.label, venueColors) }} />
                       </div>
@@ -500,8 +624,8 @@ export function IncomeScreen({
               ) : (
                 <div className="income-empty">
                   <Building2 size={34} />
-                  <strong>Chưa có nơi làm</strong>
-                  <p>Thêm ca làm trong lịch để app tự tổng hợp theo từng nơi.</p>
+                  <strong>{ui.noWorkplace}</strong>
+                  <p>{ui.noWorkplaceHint}</p>
                 </div>
               )}
             </div>
@@ -510,7 +634,7 @@ export function IncomeScreen({
       </div>
       {isDatePickerOpen && (
         <DateWheelModal
-          title="Chọn ngày chi"
+          title={ui.expenseDate}
           initialDate={expenseForm.date}
           onClose={() => setIsDatePickerOpen(false)}
           onConfirm={(date) => {

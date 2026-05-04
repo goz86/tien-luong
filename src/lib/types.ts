@@ -18,6 +18,11 @@ export interface CompanionProfile {
   focus: string;
   availability?: string;
   tags: string[];
+  latitude?: number | null;
+  longitude?: number | null;
+  locationUpdatedAt?: string | null;
+  lastSeenAt?: string | null;
+  isOnline?: boolean;
 }
 
 export interface ProfileDraft {
@@ -27,6 +32,10 @@ export interface ProfileDraft {
   note: string;
   avatarUrl?: string;
   tags?: string[];
+  latitude?: number | null;
+  longitude?: number | null;
+  locationUpdatedAt?: string | null;
+  lastSeenAt?: string | null;
 }
 
 export interface Expense {

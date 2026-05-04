@@ -5,7 +5,9 @@ import {
   Bookmark,
   BookmarkCheck,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   Eye,
   Flame,
   Loader2,
@@ -60,16 +62,18 @@ type CommunityView = 'feed' | 'detail';
 type CategoryFilter = CommunityCategory | 'all';
 type FeedFilter = 'all' | 'mine' | 'saved';
 type BoardMode = 'feed' | 'friends' | 'reviews';
+type AppLang = 'vi' | 'ko';
 
 const LOCAL_COMMUNITY_KEY = 'duhoc-mate-community-local';
 
-const boardTabs: Array<{ id: BoardMode; label: string; icon: any }> = [
-  { id: 'feed', label: 'Bảng tin', icon: MessageSquare },
-  { id: 'friends', label: 'Bạn bè', icon: Users },
-  { id: 'reviews', label: 'Review', icon: Star },
+const boardTabs: Array<{ id: BoardMode; icon: any }> = [
+  { id: 'feed', icon: MessageSquare },
+  { id: 'friends', icon: Users },
+  { id: 'reviews', icon: Star },
 ];
 
 type ReviewCategory = 'all' | 'work' | 'housing' | 'food' | 'service' | 'other';
+type ReviewVoteType = 'up' | 'down';
 
 const REVIEW_CATS: Record<Exclude<ReviewCategory, 'all'>, { label: string; color: string; bg: string }> = {
   work: { label: 'Việc làm', color: '#2563eb', bg: '#dbeafe' },
@@ -97,6 +101,12 @@ interface PlaceReview {
   downvotes_count: number;
   images: string[] | null;
   created_at: string;
+}
+
+interface PlaceReviewVote {
+  review_id: string;
+  user_id: string;
+  vote_type: ReviewVoteType;
 }
 
 interface NominatimResult {
@@ -152,6 +162,34 @@ function shortText(value: string, length: number) {
   return value.length > length ? `${value.slice(0, length).trim()}...` : value;
 }
 
+const NEARBY_RADIUS_KM = 3;
+const ONLINE_WINDOW_MS = 5 * 60 * 1000;
+
+function validCoordinate(lat?: number | null, lng?: number | null) {
+  return typeof lat === 'number' && Number.isFinite(lat) && typeof lng === 'number' && Number.isFinite(lng);
+}
+
+function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const radius = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) ** 2;
+  return radius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function formatDistance(km: number) {
+  return km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`;
+}
+
+function isOnlineNow(lastSeenAt?: string | null, fallback?: boolean) {
+  if (fallback) return true;
+  if (!lastSeenAt) return false;
+  const timestamp = new Date(lastSeenAt).getTime();
+  return Number.isFinite(timestamp) && Date.now() - timestamp <= ONLINE_WINDOW_MS;
+}
+
 function readLocalCommunity(): LocalCommunitySnapshot | null {
   if (typeof window === 'undefined') return null;
   try {
@@ -187,17 +225,77 @@ export function CommunityScreen({
   unreadCount,
   friendships,
   onNavigateToProfile,
+  lang = 'vi',
 }: {
   companions: CompanionProfile[];
   requested: string[];
   onRequest: (id: string) => void;
   session: Session | null;
-  profile?: { displayName?: string };
+  profile?: { displayName?: string; latitude?: number | null; longitude?: number | null };
   onOpenNotifications: () => void;
   unreadCount: number;
   friendships: any[];
   onNavigateToProfile: () => void;
+  lang?: AppLang;
 }) {
+  const isKo = lang === 'ko';
+  const ui = isKo ? {
+    search: '검색',
+    myPosts: '내 글',
+    savedPosts: '저장한 글',
+    notifications: '알림',
+    searchPlaceholder: '게시글, 질문, 리뷰 검색...',
+    communityArea: '커뮤니티 영역',
+    tabs: { feed: '피드', friends: '친구', reviews: '리뷰' },
+    writeReview: '리뷰 쓰기',
+    writePost: '글쓰기',
+    connect: '연결',
+    nearbyFriends: '내 주변 친구',
+    discovery: '찾아보기',
+    all: '전체',
+    unread: '안 읽음',
+    noUnread: '읽지 않은 메시지가 없습니다',
+    noNearby: `반경 ${NEARBY_RADIUS_KM}km 안에 친구가 없습니다`,
+    enableLocation: '위치 권한을 켜면 반경 3km 안의 친구를 찾을 수 있어요',
+    noChats: '대화가 없습니다',
+    you: '나: ',
+    online: '온라인',
+    activeAgo: (value: string) => `${value} 활동`,
+    noOnline: '온라인 정보 없음',
+    accept: '수락',
+    loadingPosts: '게시글을 불러오는 중...',
+    emptyFeed: '필터를 바꾸거나 첫 글을 작성해보세요.',
+    loginNeeded: '댓글, 좋아요, 내 글 공유 등 커뮤니티 기능을 사용하려면 로그인해주세요.',
+    categories: { work: '아르바이트', life: '생활', study: '학업', visa: '비자/법률', food: '맛집', free: '자유' } as Record<CommunityCategory, string>,
+  } : {
+    search: 'Tìm kiếm',
+    myPosts: 'Bài của tôi',
+    savedPosts: 'Bài đã lưu',
+    notifications: 'Thông báo',
+    searchPlaceholder: 'Tìm bài viết, câu hỏi, review...',
+    communityArea: 'Khu vực cộng đồng',
+    tabs: { feed: 'Bảng tin', friends: 'Bạn bè', reviews: 'Review' },
+    writeReview: 'Viết Review',
+    writePost: 'Viết bài',
+    connect: 'Kết nối',
+    nearbyFriends: 'Bạn bè quanh bạn',
+    discovery: 'Khám phá',
+    all: 'Tất cả',
+    unread: 'Chưa đọc',
+    noUnread: 'Không có tin nhắn chưa đọc',
+    noNearby: `Chưa có bạn nào trong bán kính ${NEARBY_RADIUS_KM}km`,
+    enableLocation: 'Bật quyền vị trí để tìm bạn gần bạn trong bán kính 3km',
+    noChats: 'Chưa có cuộc hội thoại nào',
+    you: 'Bạn: ',
+    online: 'Đang online',
+    activeAgo: (value: string) => `Hoạt động ${value}`,
+    noOnline: 'Chưa cập nhật online',
+    accept: 'Chấp nhận',
+    loadingPosts: 'Đang tải bài viết...',
+    emptyFeed: 'Đổi bộ lọc hoặc viết bài đầu tiên cho chủ đề này.',
+    loginNeeded: 'Bạn cần đăng nhập để thực hiện các tương tác như bình luận, thích bài viết hoặc chia sẻ bài đăng của riêng mình.',
+    categories: { work: 'Việc làm thêm', life: 'Sinh hoạt', study: 'Học tập', visa: 'Visa & pháp lý', food: 'Ẩm thực', free: 'Tự do' } as Record<CommunityCategory, string>,
+  };
   const [view, setView] = useState<CommunityView>('feed');
   const [boardMode, setBoardMode] = useState<BoardMode>('feed');
   const [activeCategory, setActiveCategory] = useState<CategoryFilter>('all');
@@ -237,11 +335,15 @@ export function CommunityScreen({
   const displayName = session ? (profile?.displayName?.trim() || session.user.email?.split('@')[0] || 'Du học sinh') : 'Du học sinh';
 
   const isFriend = useCallback((id: string) => {
+    if (!currentUserId) return false;
     return friendships.some(f =>
-      (f.requester_id === id || f.target_profile_id === id) &&
-      f.status === 'accepted'
+      f.status === 'accepted' &&
+      (
+        (f.requester_id === currentUserId && f.target_profile_id === id) ||
+        (f.requester_id === id && f.target_profile_id === currentUserId)
+      )
     );
-  }, [friendships]);
+  }, [currentUserId, friendships]);
 
   const hasIncomingRequest = useCallback((id: string) => {
     return friendships.some(f =>
@@ -250,6 +352,35 @@ export function CommunityScreen({
       f.status === 'pending'
     );
   }, [friendships, currentUserId]);
+
+  const currentCoords = useMemo(() => {
+    if (!validCoordinate(profile?.latitude, profile?.longitude)) return null;
+    return { lat: profile!.latitude!, lng: profile!.longitude! };
+  }, [profile?.latitude, profile?.longitude]);
+
+  const companionsWithDistance = useMemo(() => {
+    return companions.map((companion) => {
+      const companionCoordsReady = validCoordinate(companion.latitude, companion.longitude);
+      const computedDistance = currentCoords && companionCoordsReady
+        ? distanceKm(currentCoords.lat, currentCoords.lng, companion.latitude!, companion.longitude!)
+        : null;
+
+      return {
+        ...companion,
+        distanceKm: computedDistance,
+        isOnline: isOnlineNow(companion.lastSeenAt, companion.isOnline),
+      };
+    });
+  }, [companions, currentCoords]);
+
+  const nearbyCompanions = useMemo(() => {
+    return companionsWithDistance
+      .filter((companion) => typeof companion.distanceKm === 'number' && companion.distanceKm <= NEARBY_RADIUS_KM)
+      .sort((a, b) => {
+        if (a.isOnline !== b.isOnline) return a.isOnline ? -1 : 1;
+        return (a.distanceKm ?? Number.MAX_SAFE_INTEGER) - (b.distanceKm ?? Number.MAX_SAFE_INTEGER);
+      });
+  }, [companionsWithDistance]);
 
   useEffect(() => {
     let alive = true;
@@ -440,6 +571,24 @@ export function CommunityScreen({
       fetchRecentChats();
     }
   }, [boardMode, fetchRecentChats]);
+
+  useEffect(() => {
+    if (!supabase || !currentUserId) return;
+
+    const channel = supabase
+      .channel(`chat-list:${currentUserId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages' }, (payload) => {
+        const row = ((payload as any).new ?? (payload as any).old) as any;
+        if (row?.sender_id === currentUserId || row?.receiver_id === currentUserId) {
+          void fetchRecentChats();
+        }
+      })
+      .subscribe();
+
+    return () => {
+      void supabase?.removeChannel(channel);
+    };
+  }, [currentUserId, fetchRecentChats]);
 
   const requireLogin = useCallback(() => {
     if (!session) {
@@ -842,21 +991,28 @@ export function CommunityScreen({
   function renderBoardBody() {
     if (boardMode === 'friends') {
       const displayList = friendFilter === 'discovery'
-        ? companions
+        ? nearbyCompanions
         : recentChats
           .filter(c => friendFilter === 'chats' || (friendFilter === 'unread' && c.unreadCount > 0))
           .map(c => {
-            const profile = companions.find(p => p.id === c.partnerId);
+            const profile = companionsWithDistance.find(p => p.id === c.partnerId);
             return profile ? { ...profile, lastMessage: c.lastMessage, unreadCount: c.unreadCount, isMe: c.isMe } : null;
           })
           .filter(Boolean) as (CompanionProfile & { lastMessage: string, unreadCount: number, isMe: boolean })[];
+      const emptyMessage = friendFilter === 'unread'
+        ? ui.noUnread
+        : friendFilter === 'discovery'
+          ? currentCoords
+            ? ui.noNearby
+            : ui.enableLocation
+          : ui.noChats;
 
       return (
         <section className="cm-service-panel">
           <div className="cm-service-head">
             <div>
-              <p>Kết nối</p>
-              <h2>Bạn bè quanh bạn</h2>
+              <p>{ui.connect}</p>
+              <h2>{ui.nearbyFriends}</h2>
             </div>
             <Users size={22} />
           </div>
@@ -868,7 +1024,7 @@ export function CommunityScreen({
               onClick={() => setFriendFilter('discovery')}
               style={{ fontSize: '13px', padding: '6px 14px' }}
             >
-              Khám phá
+              {ui.discovery}
             </button>
             <button
               type="button"
@@ -876,7 +1032,7 @@ export function CommunityScreen({
               onClick={() => setFriendFilter('chats')}
               style={{ fontSize: '13px', padding: '6px 14px' }}
             >
-              Tất cả
+              {ui.all}
             </button>
             <button
               type="button"
@@ -884,7 +1040,7 @@ export function CommunityScreen({
               onClick={() => setFriendFilter('unread')}
               style={{ fontSize: '13px', padding: '6px 14px', position: 'relative' }}
             >
-              Chưa đọc
+              {ui.unread}
               {recentChats.some(c => c.unreadCount > 0) && (
                 <span style={{
                   position: 'absolute', top: -2, right: -2, width: 8, height: 8,
@@ -898,7 +1054,7 @@ export function CommunityScreen({
               <div className="rv-empty" style={{ padding: '40px 20px' }}>
                 <Users size={40} style={{ opacity: 0.3 }} />
                 <p style={{ marginTop: 12, color: 'var(--text-soft)' }}>
-                  {friendFilter === 'unread' ? 'Không có tin nhắn chưa đọc' : 'Chưa có cuộc hội thoại nào'}
+                  {emptyMessage}
                 </p>
               </div>
             ) : displayList.map((friend) => {
@@ -906,6 +1062,9 @@ export function CommunityScreen({
               const avatarLetter = (nameParts[nameParts.length - 1] || 'U').slice(0, 1).toUpperCase();
               const displayStr = friend.displayName;
               const chatData = friendFilter !== 'discovery' ? (friend as any) : null;
+              const rawDistance = (friend as any).distanceKm;
+              const friendDistance = typeof rawDistance === 'number' ? rawDistance : null;
+              const friendOnline = Boolean((friend as any).isOnline);
 
               return (
                 <article key={friend.id} className="community-friend-row">
@@ -938,10 +1097,15 @@ export function CommunityScreen({
                         textOverflow: 'ellipsis',
                         maxWidth: '200px'
                       }}>
-                        {chatData.isMe ? 'Bạn: ' : ''}{chatData.lastMessage}
+                        {chatData.isMe ? ui.you : ''}{chatData.lastMessage}
                       </p>
                     ) : (
                       <>
+                        <div className="community-nearby-meta">
+                          <span className={`community-presence-dot ${friendOnline ? 'online' : ''}`} />
+                          <span>{friendOnline ? ui.online : friend.lastSeenAt ? ui.activeAgo(timeAgo(friend.lastSeenAt)) : ui.noOnline}</span>
+                          {friendDistance != null ? <span>• {formatDistance(friendDistance)}</span> : null}
+                        </div>
                         <span>{friend.school} • {friend.region}</span>
                         <p>{friend.focus}</p>
                         <div className="community-chip-row">
@@ -963,7 +1127,7 @@ export function CommunityScreen({
                         style={hasIncomingRequest(friend.id) ? { width: 'auto', minWidth: '85px', padding: '0 12px', background: '#4CAF50', color: 'white', whiteSpace: 'nowrap' } : {}}
                       >
                         {hasIncomingRequest(friend.id) ? (
-                          <span style={{ fontSize: '12px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>Chấp nhận</span>
+                          <span style={{ fontSize: '12px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>{ui.accept}</span>
                         ) : requested.includes(friend.id) ? (
                           <CheckCircle2 size={18} />
                         ) : (
@@ -998,6 +1162,7 @@ export function CommunityScreen({
           displayName={displayName}
           isWriting={isWritingReview}
           setIsWriting={setIsWritingReview}
+          lang={lang}
         />
       );
     }
@@ -1008,8 +1173,8 @@ export function CommunityScreen({
           <section className="cm-trending" onClick={() => openPost(trendingPost)}>
             <div className="cm-trending-head">
               <div>
-                <p className="cm-trending-kicker">Đang hot</p>
-                <h2 className="cm-trending-title">Bài đang nổi</h2>
+                <p className="cm-trending-kicker">{isKo ? '인기' : 'Đang hot'}</p>
+                <h2 className="cm-trending-title">{isKo ? '인기 게시글' : 'Bài đang nổi'}</h2>
               </div>
               <Flame size={24} color="#64748b" />
             </div>
@@ -1017,7 +1182,7 @@ export function CommunityScreen({
               className="cm-cat-badge"
               style={{ color: CATEGORIES[trendingPost.category].color, background: CATEGORIES[trendingPost.category].bg }}
             >
-              {CATEGORIES[trendingPost.category].label}
+              {ui.categories[trendingPost.category]}
             </span>
             <h3 className="cm-trending-post-title">{trendingPost.title}</h3>
             <p className="cm-trending-preview">{shortText(trendingPost.content, 110)}</p>
@@ -1039,7 +1204,7 @@ export function CommunityScreen({
             className={activeCategory === 'all' ? 'active' : ''}
             onClick={() => setActiveCategory('all')}
           >
-            Tất cả
+            {ui.all}
           </button>
           {(Object.keys(CATEGORIES) as CommunityCategory[]).map((category) => (
             <button
@@ -1048,7 +1213,7 @@ export function CommunityScreen({
               className={activeCategory === category ? 'active' : ''}
               onClick={() => setActiveCategory(category)}
             >
-              {CATEGORIES[category].label}
+              {ui.categories[category]}
             </button>
           ))}
         </div>
@@ -1057,7 +1222,7 @@ export function CommunityScreen({
           {loading ? (
             <div className="cm-empty-state">
               <Loader2 size={26} className="cm-spin" />
-              <p>Đang tải bài viết...</p>
+                <p>{ui.loadingPosts}</p>
             </div>
           ) : filteredPosts.length ? (
             filteredPosts.map((post) => (
@@ -1066,7 +1231,7 @@ export function CommunityScreen({
                   className="cm-cat-badge"
                   style={{ color: CATEGORIES[post.category].color, background: CATEGORIES[post.category].bg }}
                 >
-                  {CATEGORIES[post.category].label}
+                  {ui.categories[post.category]}
                 </span>
                 <h3 className="cm-post-title">{post.title}</h3>
                 <p className="cm-post-preview">{shortText(post.content, 90)}</p>
@@ -1084,8 +1249,8 @@ export function CommunityScreen({
           ) : (
             <div className="cm-empty-state">
               <MessageCircle size={30} />
-              <strong>Chưa có bài phù hợp</strong>
-              <p>Đổi bộ lọc hoặc viết bài đầu tiên cho chủ đề này.</p>
+              <strong>{isKo ? '조건에 맞는 글이 없습니다' : 'Chưa có bài phù hợp'}</strong>
+              <p>{ui.emptyFeed}</p>
             </div>
           )}
         </div>
@@ -1101,13 +1266,13 @@ export function CommunityScreen({
             <>
               <Logo />
               <div className="cm-header-actions">
-                <button type="button" className="cm-icon-btn" onClick={() => setShowSearch(true)} aria-label="Tìm kiếm">
+                <button type="button" className="cm-icon-btn" onClick={() => setShowSearch(true)} aria-label={ui.search}>
                   <Search size={20} />
                 </button>
                 <button
                   type="button"
                   className={`cm-icon-btn ${feedFilter === 'mine' ? 'active' : ''}`}
-                  aria-label="Bài của tôi"
+                  aria-label={ui.myPosts}
                   onClick={() => setFeedFilter(feedFilter === 'mine' ? 'all' : 'mine')}
                 >
                   <PenLine size={19} />
@@ -1115,12 +1280,12 @@ export function CommunityScreen({
                 <button
                   type="button"
                   className={`cm-icon-btn ${feedFilter === 'saved' ? 'active' : ''}`}
-                  aria-label="Bài đã lưu"
+                  aria-label={ui.savedPosts}
                   onClick={() => setFeedFilter(feedFilter === 'saved' ? 'all' : 'saved')}
                 >
                   <BookmarkCheck size={19} />
                 </button>
-                <button type="button" className="cm-icon-btn" aria-label="Thông báo" onClick={onOpenNotifications}>
+                <button type="button" className="cm-icon-btn" aria-label={ui.notifications} onClick={onOpenNotifications}>
                   <Bell size={22} color="#64748b" />
                   {unreadCount > 0 ? <span className="cm-notification-badge">{unreadCount}</span> : null}
                 </button>
@@ -1133,7 +1298,7 @@ export function CommunityScreen({
                 autoFocus
                 type="text"
                 className="cm-search-input"
-                placeholder="Tìm bài viết, câu hỏi, review..."
+                placeholder={ui.searchPlaceholder}
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 onBlur={() => {
@@ -1159,8 +1324,8 @@ export function CommunityScreen({
           {syncMessage}
         </div>
 
-        <div className="cm-board-tabs" role="tablist" aria-label="Khu vực cộng đồng">
-          {boardTabs.map(({ id, label, icon: Icon }) => (
+        <div className="cm-board-tabs" role="tablist" aria-label={ui.communityArea}>
+          {boardTabs.map(({ id, icon: Icon }) => (
             <button
               key={id}
               type="button"
@@ -1170,7 +1335,7 @@ export function CommunityScreen({
               onClick={() => setBoardMode(id)}
             >
               <Icon size={15} />
-              {label}
+              {ui.tabs[id]}
             </button>
           ))}
         </div>
@@ -1184,7 +1349,7 @@ export function CommunityScreen({
             onClick={boardMode === 'reviews' ? () => { if (requireLogin()) setIsWritingReview(true); } : openComposer}
           >
             <Plus size={18} />
-            {boardMode === 'reviews' ? 'Viết Review' : 'Viết bài'}
+            {boardMode === 'reviews' ? ui.writeReview : ui.writePost}
           </button>
         </div>
 
@@ -1199,6 +1364,7 @@ export function CommunityScreen({
           <ChatView
             session={session}
             partner={activeChatPartner}
+            senderName={displayName}
             onBack={() => setActiveChatPartner(null)}
           />
         )}
@@ -1230,18 +1396,18 @@ export function CommunityScreen({
           <button type="button" onClick={goBack} className="cm-icon-btn" aria-label="Quay lại">
             <ArrowLeft size={22} />
           </button>
-          <span className="cm-detail-cat">{category.label}</span>
+          <span className="cm-detail-cat">{ui.categories[selectedPost.category]}</span>
           <div className="cm-detail-actions">
             {selectedPost.user_id === (currentUserId || 'local-user') ? (
               <>
-                <button type="button" className="cm-icon-btn" onClick={() => startEditing(selectedPost)} aria-label="Sửa bài">
+                <button type="button" className="cm-icon-btn" onClick={() => startEditing(selectedPost)} aria-label={isKo ? '글 수정' : 'Sửa bài'}>
                   <PenLine size={18} />
                 </button>
                 <button
                   type="button"
                   className="cm-icon-btn danger"
                   onClick={() => setShowDeleteConfirm(selectedPost.id)}
-                  aria-label="Xóa bài"
+                  aria-label={isKo ? '글 삭제' : 'Xóa bài'}
                 >
                   <X size={22} />
                 </button>
@@ -1291,17 +1457,17 @@ export function CommunityScreen({
               className={`cm-action-btn bookmark ${bookmarkedPosts.has(selectedPost.id) ? 'active' : ''}`}
               onClick={() => void handleBookmark(selectedPost.id)}
             >
-              <Bookmark size={16} /> Lưu
+              <Bookmark size={16} /> {isKo ? '저장' : 'Lưu'}
             </button>
           </div>
 
           <div className="cm-comments-section">
             <div className="cm-comments-header">
-              <strong>Bình luận {postComments.length}</strong>
+              <strong>{isKo ? `댓글 ${postComments.length}` : `Bình luận ${postComments.length}`}</strong>
             </div>
 
             {rootComments.length === 0 ? (
-              <p className="cm-no-comments">Chưa có bình luận nào. Hãy mở màn trước nhé.</p>
+              <p className="cm-no-comments">{isKo ? '아직 댓글이 없습니다. 첫 댓글을 남겨보세요.' : 'Chưa có bình luận nào. Hãy mở màn trước nhé.'}</p>
             ) : (
               rootComments.map((comment) => {
                 const replies = getReplies(comment.id);
@@ -1349,13 +1515,13 @@ export function CommunityScreen({
             >
               <span className="cm-comment-switch" />
               <span className="cm-comment-anon-text">
-                {isAnonymous ? <><ShieldCheck size={12} /> Ẩn danh</> : <><User size={12} /> {displayName}</>}
+                {isAnonymous ? <><ShieldCheck size={12} /> {isKo ? '익명' : 'Ẩn danh'}</> : <><User size={12} /> {displayName}</>}
               </span>
             </button>
             {replyTo ? (
               <div className="cm-replying-to">
                 <span>Đang trả lời...</span>
-                <button type="button" onClick={() => setReplyTo(null)} aria-label="Hủy trả lời">
+                <button type="button" onClick={() => setReplyTo(null)} aria-label={isKo ? '답글 취소' : 'Hủy trả lời'}>
                   <X size={14} />
                 </button>
               </div>
@@ -1368,7 +1534,7 @@ export function CommunityScreen({
               className="cm-comment-input"
               value={newComment}
               onChange={(event) => setNewComment(event.target.value)}
-              placeholder="Viết bình luận..."
+              placeholder={isKo ? '댓글을 입력하세요...' : 'Viết bình luận...'}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') void addComment();
               }}
@@ -1386,6 +1552,7 @@ export function CommunityScreen({
           <ChatView
             session={session}
             partner={activeChatPartner}
+            senderName={displayName}
             onBack={() => setActiveChatPartner(null)}
           />
         )}
@@ -1399,17 +1566,17 @@ export function CommunityScreen({
     return (
       <div className="cm-write-fullscreen">
         <header className="cm-write-fs-header">
-          <button type="button" onClick={closeComposer} className="cm-icon-btn" aria-label="Đóng">
+          <button type="button" onClick={closeComposer} className="cm-icon-btn" aria-label={isKo ? '닫기' : 'Đóng'}>
             <X size={22} />
           </button>
-          <span className="cm-write-fs-title">{editingPostId ? 'Sửa bài viết' : 'Tạo bài viết'}</span>
+          <span className="cm-write-fs-title">{editingPostId ? (isKo ? '글 수정' : 'Sửa bài viết') : (isKo ? '글 작성' : 'Tạo bài viết')}</span>
           <button
             type="button"
             className="cm-write-fs-submit"
             onClick={() => void addPost()}
             disabled={!newTitle.trim() || !newContent.trim()}
           >
-            Đăng
+            {isKo ? '등록' : 'Đăng'}
           </button>
         </header>
 
@@ -1423,7 +1590,7 @@ export function CommunityScreen({
                 onClick={() => setNewCategory(category)}
                 style={{ '--cat-color': CATEGORIES[category].color, '--cat-bg': CATEGORIES[category].bg } as CSSProperties}
               >
-                {CATEGORIES[category].label}
+                {ui.categories[category]}
               </button>
             ))}
           </div>
@@ -1432,7 +1599,7 @@ export function CommunityScreen({
             className="cm-write-fs-title-input"
             value={newTitle}
             onChange={(event) => setNewTitle(event.target.value)}
-            placeholder="Tiêu đề bài viết"
+            placeholder={isKo ? '글 제목' : 'Tiêu đề bài viết'}
             maxLength={100}
           />
 
@@ -1442,7 +1609,7 @@ export function CommunityScreen({
             className="cm-write-fs-content"
             value={newContent}
             onChange={(event) => setNewContent(event.target.value)}
-            placeholder="Chia sẻ kinh nghiệm, câu hỏi, cảnh báo hoặc review hữu ích cho cộng đồng..."
+            placeholder={isKo ? '경험, 질문, 주의할 점, 유용한 리뷰를 커뮤니티에 공유해보세요...' : 'Chia sẻ kinh nghiệm, câu hỏi, cảnh báo hoặc review hữu ích cho cộng đồng...'}
             maxLength={2000}
           />
 
@@ -1455,9 +1622,9 @@ export function CommunityScreen({
               <span className="cm-write-fs-switch" />
               <span className="cm-write-fs-anon-label">
                 <span className="cm-write-fs-anon-title">
-                  {isAnonymous ? <><ShieldCheck size={14} /> Đăng ẩn danh</> : <><User size={14} /> {displayName}</>}
+                  {isAnonymous ? <><ShieldCheck size={14} /> {isKo ? '익명으로 등록' : 'Đăng ẩn danh'}</> : <><User size={14} /> {displayName}</>}
                 </span>
-                {isAnonymous ? <span className="cm-write-fs-anon-subtitle">Danh tính của bạn được giữ kín</span> : null}
+                {isAnonymous ? <span className="cm-write-fs-anon-subtitle">{isKo ? '내 정보가 공개되지 않습니다' : 'Danh tính của bạn được giữ kín'}</span> : null}
               </span>
             </button>
             <span className="cm-write-fs-count">{newContent.length}/2000</span>
@@ -1471,11 +1638,11 @@ export function CommunityScreen({
     return (
       <div className="custom-confirm-overlay" onClick={() => setShowDeleteConfirm(null)}>
         <div className="custom-confirm-card" onClick={(event) => event.stopPropagation()}>
-          <h3>Xác nhận xóa</h3>
-          <p>Bài viết và toàn bộ bình luận sẽ bị xóa. Hành động này không thể hoàn tác.</p>
+          <h3>{isKo ? '삭제 확인' : 'Xác nhận xóa'}</h3>
+          <p>{isKo ? '게시글과 모든 댓글이 삭제됩니다. 이 작업은 되돌릴 수 없습니다.' : 'Bài viết và toàn bộ bình luận sẽ bị xóa. Hành động này không thể hoàn tác.'}</p>
           <div className="custom-confirm-actions">
-            <button type="button" className="confirm-btn-cancel" onClick={() => setShowDeleteConfirm(null)}>Hủy</button>
-            <button type="button" className="confirm-btn-delete" onClick={() => void handleConfirmDelete()}>Xóa ngay</button>
+            <button type="button" className="confirm-btn-cancel" onClick={() => setShowDeleteConfirm(null)}>{isKo ? '취소' : 'Hủy'}</button>
+            <button type="button" className="confirm-btn-delete" onClick={() => void handleConfirmDelete()}>{isKo ? '삭제' : 'Xóa ngay'}</button>
           </div>
         </div>
       </div>
@@ -1550,11 +1717,11 @@ export function CommunityScreen({
               disabled={requested.includes(viewProfile.id) && !hasIncomingRequest(viewProfile.id)}
             >
               {hasIncomingRequest(viewProfile.id) ? (
-                <>Chấp nhận kết bạn</>
+                <>{isKo ? '친구 요청 수락' : 'Chấp nhận kết bạn'}</>
               ) : requested.includes(viewProfile.id) ? (
-                <><CheckCircle2 size={18} /> Đã gửi lời mời</>
+                <><CheckCircle2 size={18} /> {isKo ? '요청 보냄' : 'Đã gửi lời mời'}</>
               ) : (
-                <><Plus size={18} /> Kết bạn</>
+                <><Plus size={18} /> {isKo ? '친구 추가' : 'Kết bạn'}</>
               )}
             </button>
           )}
@@ -1570,9 +1737,9 @@ export function CommunityScreen({
           <div style={{ width: 64, height: 64, borderRadius: 32, background: 'rgba(39, 82, 255, 0.1)', color: '#2752ff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
             <User size={32} />
           </div>
-          <h3 style={{ fontSize: 20, marginBottom: 12, color: '#0f172a' }}>Yêu cầu đăng nhập</h3>
+          <h3 style={{ fontSize: 20, marginBottom: 12, color: '#0f172a' }}>{isKo ? '로그인이 필요합니다' : 'Yêu cầu đăng nhập'}</h3>
           <p style={{ color: '#64748b', marginBottom: 28, lineHeight: 1.5 }}>
-            Bạn cần đăng nhập để thực hiện các tương tác như bình luận, thích bài viết hoặc chia sẻ bài đăng của riêng mình.
+            {ui.loginNeeded}
           </p>
           <div className="custom-confirm-actions" style={{ flexDirection: 'column', gap: 12 }}>
             <button
@@ -1628,16 +1795,56 @@ function ReviewBoard({
   session,
   displayName,
   isWriting,
-  setIsWriting
+  setIsWriting,
+  lang = 'vi'
 }: {
   session: Session | null;
   displayName: string;
   isWriting: boolean;
   setIsWriting: (v: boolean) => void;
+  lang?: AppLang;
 }) {
+  const isKo = lang === 'ko';
+  const reviewUi = isKo ? {
+    categories: {
+      work: '일자리',
+      housing: '주거',
+      food: '맛집',
+      service: '서비스',
+      other: '기타',
+    } as Record<Exclude<ReviewCategory, 'all'>, string>,
+    searchPlaceholder: '가게, 주소 검색...',
+    emptyMap: '지도에 표시할 리뷰가 없습니다',
+    foundPlaces: (count: number) => `${count}곳 발견`,
+    writeReview: '리뷰 쓰기',
+    all: '전체',
+    loading: '불러오는 중...',
+    empty: '이 카테고리에 리뷰가 없습니다',
+    loginVote: '리뷰에 투표하려면 로그인해주세요.',
+    voteError: '투표를 저장하지 못했습니다. Supabase에서 review_votes_patch.sql을 실행한 뒤 다시 시도해주세요.',
+  } : {
+    categories: {
+      work: 'Việc làm',
+      housing: 'Nhà ở',
+      food: 'Ẩm thực',
+      service: 'Dịch vụ',
+      other: 'Khác',
+    } as Record<Exclude<ReviewCategory, 'all'>, string>,
+    searchPlaceholder: 'Tìm tên quán, địa chỉ...',
+    emptyMap: 'Chưa có review nào trên bản đồ',
+    foundPlaces: (count: number) => `Tìm thấy ${count} địa điểm`,
+    writeReview: 'Viết review',
+    all: 'Tất cả',
+    loading: 'Đang tải...',
+    empty: 'Chưa có review nào trong danh mục này',
+    loginVote: 'Bạn cần đăng nhập để vote review.',
+    voteError: 'Vote chưa lưu được. Bạn hãy chạy file supabase/review_votes_patch.sql trong Supabase rồi thử lại.',
+  };
   const [reviews, setReviews] = useState<PlaceReview[]>([]);
+  const [reviewVotes, setReviewVotes] = useState<Record<string, ReviewVoteType>>({});
   const [loading, setLoading] = useState(true);
   const [catFilter, setCatFilter] = useState<ReviewCategory>('all');
+  const currentUserId = session?.user.id ?? null;
 
   // Write form state
   const [searchQuery, setSearchQuery] = useState('');
@@ -1749,6 +1956,94 @@ function ReviewBoard({
       });
   }, []);
 
+  useEffect(() => {
+    if (!supabase || !currentUserId) {
+      setReviewVotes({});
+      return;
+    }
+
+    let cancelled = false;
+
+    supabase
+      .from('place_review_votes')
+      .select('review_id, user_id, vote_type')
+      .eq('user_id', currentUserId)
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          console.warn('Unable to load review votes:', error);
+          setReviewVotes({});
+          return;
+        }
+
+        const nextVotes: Record<string, ReviewVoteType> = {};
+        (data as PlaceReviewVote[] | null)?.forEach((vote) => {
+          if (vote.vote_type === 'up' || vote.vote_type === 'down') {
+            nextVotes[vote.review_id] = vote.vote_type;
+          }
+        });
+        setReviewVotes(nextVotes);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUserId]);
+
+  useEffect(() => {
+    if (!supabase) return;
+
+    const channel = supabase
+      .channel('place-reviews-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'place_reviews' }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          const review = payload.new as PlaceReview;
+          setReviews((current) => current.some((item) => item.id === review.id) ? current : [review, ...current]);
+        } else if (payload.eventType === 'UPDATE') {
+          const review = payload.new as PlaceReview;
+          setReviews((current) => current.map((item) => item.id === review.id ? review : item));
+        } else if (payload.eventType === 'DELETE') {
+          setReviews((current) => current.filter((item) => item.id !== (payload.old as Partial<PlaceReview>).id));
+        }
+      })
+      .subscribe();
+
+    return () => {
+      void supabase?.removeChannel(channel);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!supabase || !currentUserId) return;
+
+    const channel = supabase
+      .channel(`place-review-votes-${currentUserId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'place_review_votes' }, (payload) => {
+        const nextRow = payload.new as Partial<PlaceReviewVote>;
+        const oldRow = payload.old as Partial<PlaceReviewVote>;
+        const rowUserId = nextRow.user_id ?? oldRow.user_id;
+        if (rowUserId !== currentUserId) return;
+
+        const reviewId = nextRow.review_id ?? oldRow.review_id;
+        if (!reviewId) return;
+
+        setReviewVotes((current) => {
+          const next = { ...current };
+          if (payload.eventType === 'DELETE') {
+            delete next[reviewId];
+          } else if (nextRow.vote_type === 'up' || nextRow.vote_type === 'down') {
+            next[reviewId] = nextRow.vote_type;
+          }
+          return next;
+        });
+      })
+      .subscribe();
+
+    return () => {
+      void supabase?.removeChannel(channel);
+    };
+  }, [currentUserId]);
+
   // Nominatim search with debounce
   const searchPlaces = useCallback((q: string) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -1785,32 +2080,56 @@ function ReviewBoard({
   };
 
   const handleReviewReaction = async (reviewId: string, type: 'up' | 'down') => {
-    if (!session || !supabase) return;
+    if (!session || !supabase) {
+      alert(reviewUi.loginVote);
+      return;
+    }
     const target = reviews.find(r => r.id === reviewId);
     if (!target) return;
+    const previousVote = reviewVotes[reviewId];
 
-    let upDelta = 0;
-    let downDelta = 0;
+    const upDelta = (type === 'up' ? 1 : 0) - (previousVote === 'up' ? 1 : 0);
+    const downDelta = (type === 'down' ? 1 : 0) - (previousVote === 'down' ? 1 : 0);
 
-    // Simplified logic: just increment/decrement for now (can be expanded to track per-user)
-    if (type === 'up') upDelta = 1;
-    else downDelta = 1;
+    setReviewVotes(prev => ({ ...prev, [reviewId]: type }));
+    if (previousVote !== type) {
+      setReviews(prev => prev.map(r => r.id === reviewId ? {
+        ...r,
+        upvotes_count: Math.max(0, (r.upvotes_count || 0) + upDelta),
+        downvotes_count: Math.max(0, (r.downvotes_count || 0) + downDelta)
+      } : r));
+    }
 
-    setReviews(prev => prev.map(r => r.id === reviewId ? {
-      ...r,
-      upvotes_count: r.upvotes_count + upDelta,
-      downvotes_count: r.downvotes_count + downDelta
-    } : r));
-
-    // Update DB
-    const { error } = await supabase.rpc(type === 'up' ? 'increment_review_upvote' : 'increment_review_downvote', { row_id: reviewId });
-    
-    // If RPC doesn't exist, fallback to direct update
+    const { data, error } = await supabase.rpc('set_review_vote', { row_id: reviewId, next_vote: type });
     if (error) {
-       await supabase.from('place_reviews').update({
-         upvotes_count: target.upvotes_count + upDelta,
-         downvotes_count: target.downvotes_count + downDelta
-       }).eq('id', reviewId);
+      console.error('Unable to save review vote:', error);
+      setReviewVotes(prev => {
+        const next = { ...prev };
+        if (previousVote) next[reviewId] = previousVote;
+        else delete next[reviewId];
+        return next;
+      });
+      if (previousVote !== type) {
+        setReviews(prev => prev.map(r => r.id === reviewId ? {
+          ...r,
+          upvotes_count: target.upvotes_count || 0,
+          downvotes_count: target.downvotes_count || 0
+        } : r));
+      }
+      alert(reviewUi.voteError);
+      return;
+    }
+
+    const updated = Array.isArray(data) ? data[0] : data;
+    if (updated) {
+      setReviews(prev => prev.map(r => r.id === reviewId ? {
+        ...r,
+        upvotes_count: Number(updated.upvotes_count) || 0,
+        downvotes_count: Number(updated.downvotes_count) || 0,
+      } : r));
+      if (updated.vote_type === 'up' || updated.vote_type === 'down') {
+        setReviewVotes(prev => ({ ...prev, [reviewId]: updated.vote_type }));
+      }
     }
   };
 
@@ -1857,7 +2176,7 @@ function ReviewBoard({
       closeWriter();
     } else if (error) {
       console.error('Submit error:', error);
-      alert('Có lỗi xảy ra khi đăng review. Vui lòng kiểm tra cấu trúc bảng images.');
+      alert(isKo ? '리뷰 등록 중 오류가 발생했습니다. images 컬럼 구성을 확인해주세요.' : 'Có lỗi xảy ra khi đăng review. Vui lòng kiểm tra cấu trúc bảng images.');
     }
   };
 
@@ -1896,6 +2215,9 @@ function ReviewBoard({
       const scoreA = (a.upvotes_count || 0) - (a.downvotes_count || 0);
       const scoreB = (b.upvotes_count || 0) - (b.downvotes_count || 0);
       if (scoreA !== scoreB) return scoreB - scoreA;
+      const ratingA = Number(a.rating) || 0;
+      const ratingB = Number(b.rating) || 0;
+      if (ratingA !== ratingB) return ratingB - ratingA;
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
   }, [reviews, catFilter, mapBounds]);
@@ -1914,6 +2236,7 @@ function ReviewBoard({
   const [userPos, setUserPos] = useState<[number, number] | null>(null);
   const reviewRefs = useRef<Map<string, HTMLElement>>(new Map());
   const mapRef = useRef<L.Map | null>(null);
+  const dragControls = useDragControls();
 
   // Search logic for floating bar
   useEffect(() => {
@@ -2028,7 +2351,7 @@ function ReviewBoard({
             <Search size={18} color="#64748b" />
             <input
               type="text"
-              placeholder="Tìm tên quán, địa chỉ..."
+              placeholder={reviewUi.searchPlaceholder}
               className="rv-search-input-field"
               value={floatingSearch}
               onChange={e => setFloatingSearch(e.target.value)}
@@ -2096,7 +2419,7 @@ function ReviewBoard({
                       <div className="rv-popup-content">
                         <strong>{group.name}</strong>
                         <div className="rv-popup-meta">
-                          <span>{group.reviews.length} đánh giá</span>
+                          <span>{group.reviews.length} {isKo ? '개 리뷰' : 'đánh giá'}</span>
                           <span>★ {(group.reviews.reduce((s, r) => s + Number(r.rating), 0) / group.reviews.length).toFixed(1)}</span>
                         </div>
                       </div>
@@ -2108,7 +2431,7 @@ function ReviewBoard({
           ) : (
             <div className="rv-map-empty">
               <MapPin size={32} />
-              <span>Chưa có review nào trên bản đồ</span>
+              <span>{reviewUi.emptyMap}</span>
             </div>
           )}
         </div>
@@ -2116,10 +2439,12 @@ function ReviewBoard({
         {/* Bottom Sheet Review List */}
         <motion.div
           className="rv-bottom-sheet"
-          initial={{ y: '72%' }}
-          animate={{ y: sheetExpanded ? '10%' : '72%' }}
+          initial={{ y: '58%' }}
+          animate={{ y: sheetExpanded ? '6%' : '58%' }}
           transition={{ type: 'spring', damping: 25, stiffness: 180 }}
           drag="y"
+          dragControls={dragControls}
+          dragListener={false}
           dragConstraints={{ top: 0, bottom: 600 }}
           dragElastic={0.1}
           onDragEnd={(_, info) => {
@@ -2138,27 +2463,44 @@ function ReviewBoard({
             <Navigation size={20} />
           </button>
 
-          <div className="rv-sheet-header" onClick={() => setSheetExpanded(!sheetExpanded)} style={{ cursor: 'grab' }}>
+          <div
+            className="rv-sheet-header"
+            onPointerDown={(event) => dragControls.start(event)}
+            onClick={() => setSheetExpanded(!sheetExpanded)}
+            style={{ cursor: 'grab' }}
+          >
             <div className="rv-sheet-handle" />
             <div className="rv-sheet-title-row">
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <h3>Tìm thấy {filtered.length} địa điểm</h3>
+                <h3>{reviewUi.foundPlaces(filtered.length)}</h3>
                 <span className="rv-avg-score">★ {avgRating}</span>
               </div>
-              <button type="button" className="rv-sheet-write-btn" onClick={() => setIsWriting(true)}>
+              <button
+                type="button"
+                className="rv-sheet-write-btn"
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setIsWriting(true);
+                }}
+              >
                 <PenLine size={14} />
-                Viết review
+                {reviewUi.writeReview}
               </button>
             </div>
 
             {/* Categories inside the sheet */}
-            <div className="rv-sheet-categories" onClick={e => e.stopPropagation()}>
+            <div
+              className="rv-sheet-categories"
+              onPointerDown={e => e.stopPropagation()}
+              onClick={e => e.stopPropagation()}
+            >
               <button
                 type="button"
                 className={`rv-cat-chip ${catFilter === 'all' ? 'active' : ''}`}
                 onClick={() => setCatFilter('all')}
               >
-                Tất cả
+                {reviewUi.all}
               </button>
               {(Object.keys(REVIEW_CATS) as Exclude<ReviewCategory, 'all'>[]).map(cat => (
                 <button
@@ -2167,7 +2509,7 @@ function ReviewBoard({
                   className={`rv-cat-chip ${catFilter === cat ? 'active' : ''}`}
                   onClick={() => setCatFilter(cat)}
                 >
-                  {REVIEW_CATS[cat].label}
+                  {reviewUi.categories[cat]}
                 </button>
               ))}
             </div>
@@ -2177,17 +2519,18 @@ function ReviewBoard({
             {loading ? (
               <div className="rv-sheet-loading">
                 <Loader2 size={24} className="cm-spin" />
-                <p>Đang tải...</p>
+                <p>{reviewUi.loading}</p>
               </div>
             ) : filtered.length === 0 ? (
               <div className="rv-sheet-empty">
                 <Star size={32} />
-                <p>Chưa có review nào trong danh mục này</p>
+                <p>{reviewUi.empty}</p>
               </div>
             ) : (
               filtered.map((review, idx) => {
                 const cat = REVIEW_CATS[review.category as keyof typeof REVIEW_CATS] || REVIEW_CATS.other;
                 const isSelected = selectedReviewId === review.id;
+                const userVote = reviewVotes[review.id];
                 return (
                   <article
                     key={review.id}
@@ -2202,7 +2545,7 @@ function ReviewBoard({
                       <div className="rv-item-info">
                         <div className="rv-item-place-row">
                           <h4 className="rv-item-place">{review.place_name}</h4>
-                          <span className="rv-item-cat-label">{cat.label}</span>
+                          <span className="rv-item-cat-label">{reviewUi.categories[review.category as Exclude<ReviewCategory, 'all'>] || cat.label}</span>
                         </div>
                         <p className="rv-item-address">{review.place_address.split(',').slice(0, 2).join(', ')}</p>
                         <div className="rv-item-meta">
@@ -2218,18 +2561,20 @@ function ReviewBoard({
                         <div className="rv-item-votes">
                           <button 
                             type="button" 
-                            className="rv-vote-btn up" 
+                            className={`rv-vote-btn up ${userVote === 'up' ? 'active' : ''}`}
+                            aria-pressed={userVote === 'up'}
                             onClick={(e) => { e.stopPropagation(); handleReviewReaction(review.id, 'up'); }}
                           >
-                            <Plus size={14} />
+                            <ChevronUp size={16} strokeWidth={2.8} />
                             <span>{review.upvotes_count || 0}</span>
                           </button>
                           <button 
                             type="button" 
-                            className="rv-vote-btn down"
+                            className={`rv-vote-btn down ${userVote === 'down' ? 'active' : ''}`}
+                            aria-pressed={userVote === 'down'}
                             onClick={(e) => { e.stopPropagation(); handleReviewReaction(review.id, 'down'); }}
                           >
-                            <X size={14} style={{ transform: 'rotate(45deg)' }} />
+                            <ChevronDown size={16} strokeWidth={2.8} />
                             <span>{review.downvotes_count || 0}</span>
                           </button>
                         </div>
@@ -2264,21 +2609,21 @@ function ReviewBoard({
         <div className="rv-write-overlay">
           <header className="rv-write-header">
             <button type="button" className="cm-icon-btn" onClick={closeWriter}><X size={22} /></button>
-            <span className="rv-write-header-title">Viết Review</span>
+            <span className="rv-write-header-title">{reviewUi.writeReview}</span>
             <button
               type="button"
               className="rv-write-submit"
               disabled={!selectedPlace || !writeTitle.trim() || !writeContent.trim() || writeRating === 0 || submitting}
               onClick={() => void handleSubmitReview()}
             >
-              {submitting ? 'Đang đăng...' : 'Đăng'}
+              {submitting ? (isKo ? '등록 중...' : 'Đang đăng...') : (isKo ? '등록' : 'Đăng')}
             </button>
           </header>
 
           <div className="rv-write-body">
             {/* Place search */}
             <div className="rv-write-section">
-              <label className="rv-write-label">📍 Địa điểm</label>
+              <label className="rv-write-label">{isKo ? '📍 장소' : '📍 Địa điểm'}</label>
               {selectedPlace ? (
                 <div className="rv-write-place-selected">
                   <MapPin size={20} color="#2752ff" />
@@ -2295,14 +2640,14 @@ function ReviewBoard({
                   <Search size={16} className="rv-search-icon" />
                   <input
                     className="rv-search-input"
-                    placeholder="Tìm kiếm địa điểm tại Hàn Quốc..."
+                    placeholder={isKo ? '한국 내 장소 검색...' : 'Tìm kiếm địa điểm tại Hàn Quốc...'}
                     value={searchQuery}
                     onChange={e => handleSearchChange(e.target.value)}
                   />
                   {(searchResults.length > 0 || searching) && (
                     <div className="rv-search-results">
                       {searching ? (
-                        <div className="rv-search-loading">Đang tìm kiếm...</div>
+                        <div className="rv-search-loading">{isKo ? '검색 중...' : 'Đang tìm kiếm...'}</div>
                       ) : (
                         searchResults.map(result => (
                           <div key={result.place_id} className="rv-search-item" onClick={() => selectPlace(result)}>
@@ -2319,11 +2664,11 @@ function ReviewBoard({
 
             {/* Category */}
             <div className="rv-write-section">
-              <label className="rv-write-label">🏷️ Danh mục</label>
+              <label className="rv-write-label">{isKo ? '🏷️ 카테고리' : '🏷️ Danh mục'}</label>
               <div className="rv-cat-chips">
                 {(Object.keys(REVIEW_CATS) as Exclude<ReviewCategory, 'all'>[]).map(cat => (
                   <button key={cat} type="button" className={`rv-cat-chip ${writeCat === cat ? 'active' : ''}`} onClick={() => setWriteCat(cat)}>
-                    {REVIEW_CATS[cat].label}
+                    {reviewUi.categories[cat]}
                   </button>
                 ))}
               </div>
@@ -2344,10 +2689,10 @@ function ReviewBoard({
 
             {/* Title */}
             <div className="rv-write-section">
-              <label className="rv-write-label">✏️ Tiêu đề</label>
+              <label className="rv-write-label">{isKo ? '✏️ 제목' : '✏️ Tiêu đề'}</label>
               <input
                 className="rv-write-input"
-                placeholder="Tóm tắt trải nghiệm của bạn"
+                placeholder={isKo ? '경험을 한 줄로 요약해주세요' : 'Tóm tắt trải nghiệm của bạn'}
                 value={writeTitle}
                 onChange={e => setWriteTitle(e.target.value)}
                 maxLength={100}
@@ -2356,10 +2701,10 @@ function ReviewBoard({
 
             {/* Content */}
             <div className="rv-write-section">
-              <label className="rv-write-label">📝 Nội dung chi tiết</label>
+              <label className="rv-write-label">{isKo ? '📝 상세 내용' : '📝 Nội dung chi tiết'}</label>
               <textarea
                 className="rv-write-textarea"
-                placeholder="Chia sẻ chi tiết trải nghiệm thực tế: chất lượng, giá cả, thái độ phục vụ, lời khuyên cho du học sinh..."
+                placeholder={isKo ? '품질, 가격, 서비스 태도, 유학생에게 줄 팁 등 실제 경험을 자세히 공유해주세요...' : 'Chia sẻ chi tiết trải nghiệm thực tế: chất lượng, giá cả, thái độ phục vụ, lời khuyên cho du học sinh...'}
                 value={writeContent}
                 onChange={e => setWriteContent(e.target.value)}
                 maxLength={2000}
@@ -2371,7 +2716,7 @@ function ReviewBoard({
 
             {/* Images */}
             <div className="rv-write-section">
-              <label className="rv-write-label">🖼️ Hình ảnh (Tối đa 3)</label>
+              <label className="rv-write-label">{isKo ? '🖼️ 사진 (최대 3장)' : '🖼️ Hình ảnh (Tối đa 3)'}</label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8 }}>
                 {imagePreviews.map((url, idx) => (
                   <div key={idx} style={{ width: 80, height: 80, borderRadius: 12, overflow: 'hidden', position: 'relative', border: '1px solid #e2e8f0' }}>
@@ -2404,7 +2749,7 @@ function ReviewBoard({
                 <span className="cm-write-fs-switch" />
                 <span className="cm-write-fs-anon-label">
                   <span className="cm-write-fs-anon-title">
-                    {isAnon ? <><ShieldCheck size={14} /> Đăng ẩn danh</> : <><User size={14} /> {displayName}</>}
+                    {isAnon ? <><ShieldCheck size={14} /> {isKo ? '익명으로 등록' : 'Đăng ẩn danh'}</> : <><User size={14} /> {displayName}</>}
                   </span>
                 </span>
               </button>

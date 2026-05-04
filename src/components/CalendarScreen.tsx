@@ -19,6 +19,8 @@ import { TimeWheelModal } from './shared/TimeWheelModal';
 import { MinuteWheelModal } from './shared/MinuteWheelModal';
 import { DateWheelModal } from './shared/DateWheelModal';
 
+type AppLang = 'vi' | 'ko';
+
 export function CalendarScreen({
   shifts,
   selectedDate,
@@ -38,7 +40,8 @@ export function CalendarScreen({
   onUpdateShift,
   onDeleteShift,
   venueColors,
-  onSetVenueColor
+  onSetVenueColor,
+  lang = 'vi'
 }: {
   shifts: Shift[];
   selectedDate: string;
@@ -59,7 +62,111 @@ export function CalendarScreen({
   onDeleteShift: (id: string) => void;
   venueColors: VenueColors;
   onSetVenueColor: (venue: string, color: string) => void;
+  lang?: AppLang;
 }) {
+  const isKo = lang === 'ko';
+  const locale = isKo ? 'ko-KR' : 'vi-VN';
+  const ui = isKo ? {
+    today: '오늘',
+    downloadCalendar: '달력 이미지 저장',
+    settings: '달력 설정',
+    prevMonth: '이전 달',
+    nextMonth: '다음 달',
+    sunday: '일',
+    weekdays: ['일', '월', '화', '수', '목', '금', '토'],
+    moreShifts: (count: number) => `+${count}개`,
+    cancel: '취소',
+    confirm: '확인',
+    monthOption: (monthNumber: number) => `${monthNumber}월`,
+    calendarSettings: '달력 설정',
+    displayMode: '표시 방식',
+    workDuration: '근무 시간 (예: 4h)',
+    timeRange: '시작-종료 (예: 09:00-18:00)',
+    venueColors: '근무지 색상',
+    historyTitle: '근무 내역',
+    shifts: '회',
+    edit: '수정',
+    delete: '삭제',
+    shiftHistory: '근무 내역',
+    editShift: '근무 수정',
+    addShift: '근무 추가',
+    totalDay: '일 합계',
+    addNewShift: '이 날짜에 새 근무 추가',
+    workplace: '근무지',
+    quickNote: '간단 메모',
+    notePlaceholder: '메모 입력...',
+    start: '시작',
+    end: '종료',
+    hourlyWage: '시급',
+    minWage: '최저시급: 10,320',
+    breakTime: '휴게 시간',
+    minutes: '분',
+    paySettings: '급여 계산 설정 (한국 기준)',
+    tax: '3.3% 세금',
+    taxHint: '프리랜서/알바용',
+    night: '야간수당 (x1.5)',
+    nightHint: '보통 22:00 이후 적용',
+    holiday: '휴일/주휴수당',
+    holidayPlaceholder: '수당 금액 입력 (있는 경우)',
+    saveChanges: '변경 저장',
+    saveShift: '이 날짜에 근무 저장',
+    deleteTitle: '확인',
+    deleteBody: '이 근무 기록을 삭제할까요? 삭제한 데이터는 복구할 수 없습니다.',
+    datePicker: '날짜 선택',
+    startTime: '시작 시간',
+    endTime: '종료 시간',
+    breakPicker: '휴게 시간',
+  } : {
+    today: 'TODAY',
+    downloadCalendar: 'Tải ảnh lịch',
+    settings: 'Cài đặt lịch',
+    prevMonth: 'Tháng trước',
+    nextMonth: 'Tháng sau',
+    sunday: 'CN',
+    weekdays: ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'],
+    moreShifts: (count: number) => `+${count} ca`,
+    cancel: 'Huỷ',
+    confirm: 'Xác nhận',
+    monthOption: (monthNumber: number) => `Tháng ${monthNumber}`,
+    calendarSettings: 'Cài đặt lịch',
+    displayMode: 'Kiểu hiển thị',
+    workDuration: 'Thời gian làm (ví dụ: 4h)',
+    timeRange: 'Khung giờ (ví dụ: 09:00-18:00)',
+    venueColors: 'Màu nơi làm',
+    historyTitle: 'Lịch sử làm việc',
+    shifts: 'ca',
+    edit: 'Sửa',
+    delete: 'Xoá',
+    shiftHistory: 'Lịch sử ca làm',
+    editShift: 'Sửa giờ làm',
+    addShift: 'Thêm giờ làm thêm',
+    totalDay: 'Tổng ngày',
+    addNewShift: 'Thêm ca làm mới cho ngày này',
+    workplace: 'Nơi làm',
+    quickNote: 'Ghi chú nhanh',
+    notePlaceholder: 'Nhập ghi chú...',
+    start: 'Bắt đầu',
+    end: 'Kết thúc',
+    hourlyWage: 'Lương giờ',
+    minWage: 'Mức tối thiểu: 10,320',
+    breakTime: 'Thời gian nghỉ',
+    minutes: 'phút',
+    paySettings: 'Cài đặt tính lương (Luật HQ)',
+    tax: 'Thuế 3.3%',
+    taxHint: 'Dành cho freelancer/Alba',
+    night: 'Phụ cấp ca đêm (x1.5)',
+    nightHint: 'Thường áp dụng sau 22:00',
+    holiday: 'Phụ cấp nghỉ / Cuối tuần (주휴수당)',
+    holidayPlaceholder: 'Nhập số tiền phụ cấp (nếu có)',
+    saveChanges: 'Lưu thay đổi',
+    saveShift: 'Lưu ca cho ngày này',
+    deleteTitle: 'Xác nhận',
+    deleteBody: 'Bạn có chắc chắn muốn xoá ca làm việc này không? Dữ liệu đã xoá sẽ không thể khôi phục.',
+    datePicker: 'Chọn ngày',
+    startTime: 'Chọn giờ bắt đầu',
+    endTime: 'Chọn giờ kết thúc',
+    breakPicker: 'Chọn thời gian nghỉ',
+  };
   const VENUE_PALETTE = ['#2752ff', '#0d9b72', '#ff6b7a', '#f59e0b', '#9333ea', '#0891b2', '#e11d48', '#16a34a'];
   const monthShifts = shifts.filter((shift) => shift.date.startsWith(month.slice(0, 7)));
   const [selectedVenue, setSelectedVenue] = useState('all');
@@ -339,16 +446,16 @@ export function CalendarScreen({
                   flexShrink: 0
                 }}
               >
-                TODAY
+                  {ui.today}
               </button>
             )}
           </div>
         </div>
         <div className="calendar-head-actions">
-          <button type="button" className="calendar-icon-button" onClick={downloadCalendarImage} aria-label="Tải ảnh lịch">
+          <button type="button" className="calendar-icon-button" onClick={downloadCalendarImage} aria-label={ui.downloadCalendar}>
             <Download size={22} />
           </button>
-          <button type="button" className="calendar-icon-button" onClick={() => setIsSettingsOpen(true)} aria-label="Cài đặt lịch">
+          <button type="button" className="calendar-icon-button" onClick={() => setIsSettingsOpen(true)} aria-label={ui.settings}>
             <Settings2 size={22} />
           </button>
         </div>
@@ -361,7 +468,7 @@ export function CalendarScreen({
         onTouchEnd={(event) => handleCalendarSwipe(event.changedTouches[0]?.clientX ?? 0, event.changedTouches[0]?.clientY ?? 0)}
       >
         <div className="calendar-toolbar">
-          <button type="button" className="calendar-month-nav" onClick={onPrevMonth} aria-label="Tháng trước">
+          <button type="button" className="calendar-month-nav" onClick={onPrevMonth} aria-label={ui.prevMonth}>
             <ChevronLeft size={18} />
           </button>
           <div className="calendar-chip-track">
@@ -390,13 +497,13 @@ export function CalendarScreen({
             })}
           </div>
           <strong className="calendar-total-fixed">{formatCalendarKrw(monthTotal)}</strong>
-          <button type="button" className="calendar-month-nav" onClick={onNextMonth} aria-label="Tháng sau">
+          <button type="button" className="calendar-month-nav" onClick={onNextMonth} aria-label={ui.nextMonth}>
             <ChevronRight size={18} />
           </button>
         </div>
 
         <div className="calendar-weekdays">
-          {['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'].map((day) => (
+          {ui.weekdays.map((day) => (
             <span key={day}>{day}</span>
           ))}
         </div>
@@ -429,7 +536,7 @@ export function CalendarScreen({
                       {getCalendarShiftLine(shift)}
                     </span>
                   ))}
-                  {cell.items.length > 2 ? <span className="calendar-shift-more">+{cell.items.length - 2} ca</span> : null}
+                  {cell.items.length > 2 ? <span className="calendar-shift-more">{ui.moreShifts(cell.items.length - 2)}</span> : null}
                 </div>
                 {cell.total > 0 ? <strong className="calendar-amount">{formatCalendarKrw(cell.total)}</strong> : <span className="calendar-placeholder" />}
               </button>
@@ -442,14 +549,14 @@ export function CalendarScreen({
         <section className="calendar-modal-backdrop" onClick={() => { setIsMonthPickerOpen(false); setActiveSelect(null); }}>
           <div className="calendar-modal month-wheel-modal" onClick={(event) => event.stopPropagation()}>
             <div className="month-wheel-actions">
-              <button type="button" onClick={() => setIsMonthPickerOpen(false)}>Huỷ</button>
-              <button type="button" onClick={confirmMonthPicker}>Xác nhận</button>
+              <button type="button" onClick={() => setIsMonthPickerOpen(false)}>{ui.cancel}</button>
+              <button type="button" onClick={confirmMonthPicker}>{ui.confirm}</button>
             </div>
             <div className="month-wheel-picker">
               <div className="wheel-column" ref={monthColRef}>
                 {monthOptions.map((monthNumber) => (
                   <button key={monthNumber} type="button" className={pickerMonth === monthNumber ? 'active' : ''} onClick={() => setPickerMonth(monthNumber)}>
-                    Tháng {monthNumber}
+                    {ui.monthOption(monthNumber)}
                   </button>
                 ))}
               </div>
@@ -469,23 +576,23 @@ export function CalendarScreen({
         <section className="calendar-modal-backdrop" onClick={() => { setIsSettingsOpen(false); setActiveSelect(null); }}>
           <div className="calendar-modal settings-modal" onClick={(event) => event.stopPropagation()} style={{ paddingBottom: 'calc(100px + env(safe-area-inset-bottom))' }}>
             <div className="sheet-handle" />
-            <h3 className="settings-title">Cài đặt lịch</h3>
+            <h3 className="settings-title">{ui.calendarSettings}</h3>
 
             <div className="settings-group">
-              <label className="settings-label">Kiểu hiển thị giờ làm</label>
+              <label className="settings-label">{ui.displayMode}</label>
               <div className="settings-select-wrap">
                 <button
                   type="button"
                   className="settings-select-trigger"
                   onClick={() => setActiveSelect(activeSelect === 'display' ? null : 'display')}
                 >
-                  {calendarDisplay === 'duration' ? 'Thời gian làm (ví dụ: 4h)' : 'Khung giờ (ví dụ: 18:00-22:00)'}
+                  {calendarDisplay === 'duration' ? ui.workDuration : ui.timeRange}
                   <ChevronDown size={16} className={`select-chevron ${activeSelect === 'display' ? 'open' : ''}`} />
                 </button>
                 {activeSelect === 'display' && (
                   <div className="settings-dropdown">
-                    <button type="button" onClick={() => { setCalendarDisplay('duration'); setActiveSelect(null); }}>Thời gian làm (ví dụ: 4h)</button>
-                    <button type="button" onClick={() => { setCalendarDisplay('range'); setActiveSelect(null); }}>Khung giờ (ví dụ: 18:00-22:00)</button>
+                    <button type="button" onClick={() => { setCalendarDisplay('duration'); setActiveSelect(null); }}>{ui.workDuration}</button>
+                    <button type="button" onClick={() => { setCalendarDisplay('range'); setActiveSelect(null); }}>{ui.timeRange}</button>
                   </div>
                 )}
               </div>
@@ -493,7 +600,7 @@ export function CalendarScreen({
 
             {monthWorkplaces.length > 0 ? (
               <div className="settings-group">
-                <label className="settings-label">Màu nơi làm</label>
+                <label className="settings-label">{ui.venueColors}</label>
                 <div className="venue-color-list">
                   {monthWorkplaces.map((venue) => {
                     const currentColor = getVenueColor(venue, venueColors);
@@ -502,7 +609,7 @@ export function CalendarScreen({
                       <div key={venue} className="venue-color-item">
                         <div className="venue-color-row" onClick={() => setActiveSelect(isOpen ? null : venue)} style={{ cursor: 'pointer' }}>
                           <span style={{ flex: 1, minWidth: 0, fontSize: '15px', fontWeight: 'bold', color: '#000', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {venue || 'Không có tên'}
+                            {venue || (isKo ? '이름 없음' : 'Không có tên')}
                           </span>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
                             <div className="venue-color-dot" style={{ background: currentColor, width: '18px', height: '18px' }} />
@@ -538,8 +645,8 @@ export function CalendarScreen({
           <div className="calendar-modal history-modal" onClick={(event) => event.stopPropagation()}>
             <div className="sheet-handle" />
             <div className="calendar-modal-head">
-              <strong>{effectiveVenue || 'Lịch sử làm việc'}</strong>
-              <span>{filteredLedger.length} ca</span>
+              <strong>{effectiveVenue || ui.historyTitle}</strong>
+              <span>{filteredLedger.length} {ui.shifts}</span>
             </div>
             <div className="history-list">
               {filteredLedger.map((shift) => (
@@ -552,8 +659,8 @@ export function CalendarScreen({
                   </button>
                   <strong className="history-pay">{formatCalendarKrw(calculateShiftPay(shift).total)}</strong>
                   <div className="history-actions">
-                    <button type="button" onClick={() => startEditShift(shift)}>Sửa</button>
-                    <button type="button" className="danger" onClick={() => setDeleteConfirmId(shift.id)}>Xoá</button>
+                    <button type="button" onClick={() => startEditShift(shift)}>{ui.edit}</button>
+                    <button type="button" className="danger" onClick={() => setDeleteConfirmId(shift.id)}>{ui.delete}</button>
                   </div>
                 </article>
               ))}
@@ -569,7 +676,7 @@ export function CalendarScreen({
             <div className="sheet-head" style={{ alignItems: 'flex-end' }}>
               <div>
                 <p className="section-kicker">
-                  {sheetMode === 'history' ? 'Lịch sử ca làm' : (editingShiftId ? 'Sửa giờ làm' : 'Thêm giờ làm thêm')}
+                  {sheetMode === 'history' ? ui.shiftHistory : (editingShiftId ? ui.editShift : ui.addShift)}
                 </p>
                 {sheetMode === 'form' ? (
                   <button
@@ -581,18 +688,18 @@ export function CalendarScreen({
                     }}
                   >
                     <h3 style={{ fontSize: '24px', fontWeight: 900, color: '#08162b', margin: 0 }}>
-                      {formatSelectedDate(draft.date)}
+                      {isKo ? new Intl.DateTimeFormat(locale, { weekday: 'long', month: '2-digit', day: '2-digit' }).format(new Date(`${draft.date}T00:00:00`)) : formatSelectedDate(draft.date)}
                     </h3>
                     <ChevronDown size={20} color="#64748b" />
                   </button>
                 ) : (
                   <h3 style={{ fontSize: '24px', fontWeight: 900, color: '#08162b', margin: 0 }}>
-                    {formatSelectedDate(selectedDate)}
+                    {isKo ? new Intl.DateTimeFormat(locale, { weekday: 'long', month: '2-digit', day: '2-digit' }).format(new Date(`${selectedDate}T00:00:00`)) : formatSelectedDate(selectedDate)}
                   </h3>
                 )}
               </div>
               <div className="sheet-preview">
-                {sheetMode === 'history' && <span>Tổng ngày</span>}
+                {sheetMode === 'history' && <span>{ui.totalDay}</span>}
                 <strong style={{ marginTop: 0 }}>
                   {formatKrw(sheetMode === 'history' ? shifts.filter(s => s.date === selectedDate).reduce((sum, s) => sum + calculateShiftPay(s).total, 0) : quickPreview)}
                 </strong>
@@ -613,7 +720,7 @@ export function CalendarScreen({
                             {shift.startTime}-{shift.endTime} • {formatCalendarKrw(calculateShiftPay(shift).total)}
                           </span>
                         </button>
-                        <button type="button" className="danger" onClick={() => setDeleteConfirmId(shift.id)}>Xoá</button>
+                        <button type="button" className="danger" onClick={() => setDeleteConfirmId(shift.id)}>{ui.delete}</button>
                       </article>
                     ))}
                 </div>
@@ -628,7 +735,7 @@ export function CalendarScreen({
                   }}
                 >
                   <Plus size={16} />
-                  Thêm ca làm mới cho ngày này
+                  {ui.addNewShift}
                 </button>
               </div>
             ) : (
@@ -665,23 +772,23 @@ export function CalendarScreen({
 
                 <div className="quick-grid">
                   <label className="micro-field wide">
-                    <span>Nơi làm</span>
+                    <span>{ui.workplace}</span>
                     <input value={draft.venue} onChange={(event) => setDraft({ ...draft, venue: event.target.value })} />
                   </label>
                   <label className="micro-field wide">
-                    <span>Ghi chú nhanh</span>
+                    <span>{ui.quickNote}</span>
                     <input
                       className="premium-input"
                       value={draft.note}
                       onChange={(event) => setDraft({ ...draft, note: event.target.value })}
-                      placeholder="Nhập ghi chú..."
+                      placeholder={ui.notePlaceholder}
                     />
                   </label>
                 </div>
 
                 <div className="sheet-row">
                   <label className="micro-field">
-                    <span className="field-label">Bắt đầu</span>
+                    <span className="field-label">{ui.start}</span>
                     <button
                       type="button"
                       className="premium-input"
@@ -693,7 +800,7 @@ export function CalendarScreen({
                     </button>
                   </label>
                   <label className="micro-field">
-                    <span className="field-label">Kết thúc</span>
+                    <span className="field-label">{ui.end}</span>
                     <button
                       type="button"
                       className="premium-input"
@@ -708,7 +815,7 @@ export function CalendarScreen({
 
                 <div className="sheet-row">
                   <label className="micro-field">
-                    <span className="field-label">Lương giờ</span>
+                    <span className="field-label">{ui.hourlyWage}</span>
                     <div className="settings-select-wrap">
                       <input
                         type="number"
@@ -724,11 +831,11 @@ export function CalendarScreen({
                       onClick={() => setDraft({ ...draft, hourlyWage: 10320 })}
                       style={{ marginTop: '2px' }}
                     >
-                      Mức tối thiểu: 10,320
+                      {ui.minWage}
                     </button>
                   </label>
                   <label className="micro-field">
-                    <span className="field-label">Thời gian nghỉ</span>
+                    <span className="field-label">{ui.breakTime}</span>
                     <div className="settings-select-wrap">
                       <button
                         type="button"
@@ -737,19 +844,19 @@ export function CalendarScreen({
                         onClick={() => setIsBreakTimeOpen(true)}
                       >
                         <span style={{ fontSize: '15px', fontWeight: 700, color: '#08162b' }}>{draft.breakMinutes}</span>
-                        <span className="input-unit" style={{ position: 'static', transform: 'none' }}>phút</span>
+                        <span className="input-unit" style={{ position: 'static', transform: 'none' }}>{ui.minutes}</span>
                       </button>
                     </div>
                   </label>
                 </div>
 
                 <div className="korean-law-fields" style={{ marginTop: '16px', background: '#f5f7fa', padding: '16px', borderRadius: '16px' }}>
-                  <p style={{ fontSize: '13px', fontWeight: 800, color: '#08162b', marginBottom: '12px' }}>Cài đặt tính lương (Luật HQ)</p>
+                  <p style={{ fontSize: '13px', fontWeight: 800, color: '#08162b', marginBottom: '12px' }}>{ui.paySettings}</p>
 
                   <label className="korean-law-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <strong style={{ fontSize: '14px', color: '#08162b' }}>Thuế 3.3%</strong>
-                      <span style={{ fontSize: '12px', color: '#657080' }}>Dành cho freelancer/Alba</span>
+                      <strong style={{ fontSize: '14px', color: '#08162b' }}>{ui.tax}</strong>
+                      <span style={{ fontSize: '12px', color: '#657080' }}>{ui.taxHint}</span>
                     </div>
                     <input
                       type="checkbox"
@@ -761,8 +868,8 @@ export function CalendarScreen({
 
                   <label className="korean-law-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <strong style={{ fontSize: '14px', color: '#08162b' }}>Phụ cấp ca đêm (x1.5)</strong>
-                      <span style={{ fontSize: '12px', color: '#657080' }}>Thường áp dụng sau 22:00</span>
+                      <strong style={{ fontSize: '14px', color: '#08162b' }}>{ui.night}</strong>
+                      <span style={{ fontSize: '12px', color: '#657080' }}>{ui.nightHint}</span>
                     </div>
                     <input
                       type="checkbox"
@@ -773,14 +880,14 @@ export function CalendarScreen({
                   </label>
 
                   <label className="korean-law-row" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <strong style={{ fontSize: '14px', color: '#08162b' }}>Phụ cấp nghỉ / Cuối tuần (주휴수당)</strong>
+                    <strong style={{ fontSize: '14px', color: '#08162b' }}>{ui.holiday}</strong>
                     <div className="settings-select-wrap">
                       <input
                         type="number"
                         className="premium-input"
                         value={draft.holidayAllowance || ''}
                         onChange={(event) => setDraft({ ...draft, holidayAllowance: Number(event.target.value) })}
-                        placeholder="Nhập số tiền phụ cấp (nếu có)"
+                        placeholder={ui.holidayPlaceholder}
                       />
                       <span style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', color: '#657080', fontSize: '13px', fontWeight: 700 }}>KRW</span>
                     </div>
@@ -789,7 +896,7 @@ export function CalendarScreen({
 
                 <button type="button" className="quick-save-button" onClick={saveSheetShift} style={{ marginTop: '16px' }}>
                   <Plus size={16} />
-                  {editingShiftId ? 'Lưu thay đổi' : 'Lưu ca cho ngày này'}
+                  {editingShiftId ? ui.saveChanges : ui.saveShift}
                 </button>
               </div>
             )}
@@ -801,11 +908,11 @@ export function CalendarScreen({
         <section className="calendar-modal-backdrop confirm-backdrop" onClick={() => setDeleteConfirmId(null)}>
           <div className="confirm-dialog" onClick={(event) => event.stopPropagation()}>
             <div className="confirm-content">
-              <h3>Xác nhận</h3>
-              <p>Bạn có chắc chắn muốn xoá ca làm việc này không? Dữ liệu đã xoá sẽ không thể khôi phục.</p>
+              <h3>{ui.deleteTitle}</h3>
+              <p>{ui.deleteBody}</p>
             </div>
             <div className="confirm-footer">
-              <button type="button" className="confirm-btn cancel" onClick={() => setDeleteConfirmId(null)}>Hủy bỏ</button>
+              <button type="button" className="confirm-btn cancel" onClick={() => setDeleteConfirmId(null)}>{ui.cancel}</button>
               <button
                 type="button"
                 className="confirm-btn danger"
@@ -814,7 +921,7 @@ export function CalendarScreen({
                   setDeleteConfirmId(null);
                 }}
               >
-                Đồng ý
+                {ui.confirm}
               </button>
             </div>
           </div>
@@ -824,7 +931,7 @@ export function CalendarScreen({
       {isStartTimeOpen && (
         <TimeWheelModal
           initialTime={draft.startTime}
-          title="Bắt đầu"
+          title={ui.startTime}
           onClose={() => setIsStartTimeOpen(false)}
           onConfirm={(time) => {
             setDraft({ ...draft, startTime: time });
@@ -835,7 +942,7 @@ export function CalendarScreen({
       {isEndTimeOpen && (
         <TimeWheelModal
           initialTime={draft.endTime}
-          title="Kết thúc"
+          title={ui.endTime}
           onClose={() => setIsEndTimeOpen(false)}
           onConfirm={(time) => {
             setDraft({ ...draft, endTime: time });
@@ -846,7 +953,7 @@ export function CalendarScreen({
       {isBreakTimeOpen && (
         <MinuteWheelModal
           initialMinutes={draft.breakMinutes}
-          title="Thời gian nghỉ"
+          title={ui.breakPicker}
           onClose={() => setIsBreakTimeOpen(false)}
           onConfirm={(minutes) => {
             setDraft({ ...draft, breakMinutes: minutes });
@@ -856,7 +963,7 @@ export function CalendarScreen({
       )}
       {isDatePickerOpen && (
         <DateWheelModal
-          title="Chọn ngày"
+          title={ui.datePicker}
           initialDate={draft.date}
           onClose={() => setIsDatePickerOpen(false)}
           onConfirm={(date) => {

@@ -17,10 +17,11 @@ interface Message {
 interface ChatViewProps {
   session: Session;
   partner: CompanionProfile;
+  senderName?: string;
   onBack: () => void;
 }
 
-export function ChatView({ session, partner, onBack }: ChatViewProps) {
+export function ChatView({ session, partner, senderName, onBack }: ChatViewProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
@@ -138,6 +139,13 @@ export function ChatView({ session, partner, onBack }: ChatViewProps) {
     } else if (data) {
       console.log('Message sent successfully:', data);
       setMessages(prev => prev.map(m => m.id === tempId ? (data as Message) : m));
+      void supabase.from('community_notifications').insert({
+        recipient_id: partner.id,
+        actor_id: currentUserId,
+        type: 'message',
+        title: 'Tin nhắn mới',
+        body: `${senderName?.trim() || session.user.email?.split('@')[0] || 'Một người bạn'}: ${content.slice(0, 80)}`,
+      });
     }
     setSending(false);
   }

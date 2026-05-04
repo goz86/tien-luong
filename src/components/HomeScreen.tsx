@@ -25,6 +25,7 @@ export function HomeScreen({
   onOpenNotifications,
   unreadCount,
   profile,
+  lang = 'vi',
   isAnonymousRank,
   onToggleAnonymous,
   rankings,
@@ -48,11 +49,53 @@ export function HomeScreen({
   onOpenNotifications: () => void;
   unreadCount: number;
   profile: any;
+  lang?: 'vi' | 'ko';
   isAnonymousRank: boolean;
   onToggleAnonymous: (val: boolean) => void;
   rankings: any[];
   myId: string;
 }) {
+  const ui = lang === 'ko' ? {
+    notifications: '알림',
+    currencyHint: '탭하면 통화가 바뀝니다',
+    monthlyIncome: '이번 달 수입',
+    totalHours: '총 근무시간',
+    averageHourly: '평균 시급',
+    exchangeRate: '환율',
+    cachedRate: '캐시 사용',
+    addShift: '근무 추가',
+    workplacesThisMonth: '이번 달 근무지',
+    noWorkData: '근무 데이터가 없습니다',
+    shiftHistory: '근무 내역',
+    community: 'Duhoc Mate 커뮤니티',
+    incomeRanking: '수입 랭킹',
+    noRanking: '이번 달 랭킹 데이터가 없습니다',
+    deleteConfirm: '이 근무 기록을 삭제할까요? 삭제한 데이터는 복구할 수 없습니다.',
+    cancel: '취소',
+    confirm: '확인',
+    edit: '수정',
+    delete: '삭제',
+  } : {
+    notifications: 'Thông báo',
+    currencyHint: 'Nhấn để đổi tiền tệ',
+    monthlyIncome: 'Thu nhập tháng này',
+    totalHours: 'Tổng số giờ',
+    averageHourly: 'Lương TB/ giờ',
+    exchangeRate: 'Tỷ giá',
+    cachedRate: 'Dùng cache',
+    addShift: 'Thêm ca',
+    workplacesThisMonth: 'Nơi làm tháng này',
+    noWorkData: 'Chưa có dữ liệu làm việc',
+    shiftHistory: 'Lịch sử ca làm',
+    community: 'Cộng đồng Duhoc Mate',
+    incomeRanking: 'Bảng xếp hạng thu nhập',
+    noRanking: `Chưa có dữ liệu xếp hạng tháng`,
+    deleteConfirm: 'Bạn có chắc chắn muốn xoá ca làm việc này không? Dữ liệu đã xoá sẽ không thể khôi phục.',
+    cancel: 'Hủy bỏ',
+    confirm: 'Đồng ý',
+    edit: 'Sửa',
+    delete: 'Xoá',
+  };
   const [selectedWorkplace, setSelectedWorkplace] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [isVND, setIsVND] = useState(false);
@@ -71,7 +114,7 @@ export function HomeScreen({
         <Logo />
         <button 
           type="button" 
-          aria-label="Thông báo"
+          aria-label={ui.notifications}
           onClick={onOpenNotifications}
           style={{
             background: 'white',
@@ -96,8 +139,8 @@ export function HomeScreen({
 
       <section className="hero-balance-card">
         <div className="hero-topline">
-          <div onClick={() => setIsVND(!isVND)} style={{ cursor: 'pointer', flex: 1, minWidth: 0 }} title="Nhấn để đổi tiền tệ">
-            <p>Thu nhập tháng này</p>
+          <div onClick={() => setIsVND(!isVND)} style={{ cursor: 'pointer', flex: 1, minWidth: 0 }} title={ui.currencyHint}>
+            <p>{ui.monthlyIncome}</p>
             <h2 style={{ 
               whiteSpace: 'nowrap', 
               fontSize: isVND ? '28px' : '35px',
@@ -123,14 +166,14 @@ export function HomeScreen({
         </div>
 
         <div className="hero-metrics">
-          <FinanceMetric label="Tổng số giờ" value={`${monthlyHours.toFixed(1)}h`} />
-          <FinanceMetric label="Lương TB/ giờ" value={formatKrw(averageHourly)} />
-          <FinanceMetric label="Tỷ giá" value={rate.source === 'live' ? `${rate.value.toFixed(2)} VND` : 'Dùng cache'} />
+          <FinanceMetric label={ui.totalHours} value={`${monthlyHours.toFixed(1)}h`} />
+          <FinanceMetric label={ui.averageHourly} value={formatKrw(averageHourly)} />
+          <FinanceMetric label={ui.exchangeRate} value={rate.source === 'live' ? `${rate.value.toFixed(2)} VND` : ui.cachedRate} />
         </div>
 
         <button type="button" className="primary-cta" onClick={onOpenAdd}>
           <Plus size={18} />
-          Thêm ca
+          {ui.addShift}
         </button>
       </section>
 
@@ -253,7 +296,7 @@ export function HomeScreen({
       <section className="section-block">
         <div className="section-head">
           <div>
-            <p className="section-kicker">Nơi làm tháng này ({workplaces.length})</p>
+            <p className="section-kicker">{ui.workplacesThisMonth} ({workplaces.length})</p>
           </div>
         </div>
 
@@ -275,7 +318,7 @@ export function HomeScreen({
               <strong className="workplace-amount">{formatKrw(workplace.total)}</strong>
             </div>
           )) : (
-            <div style={{ padding: '20px 0', fontSize: '14px', color: '#94a3b8', textAlign: 'center' }}>Chưa có dữ liệu làm việc</div>
+            <div style={{ padding: '20px 0', fontSize: '14px', color: '#94a3b8', textAlign: 'center' }}>{ui.noWorkData}</div>
           )}
         </div>
       </section>
@@ -286,7 +329,7 @@ export function HomeScreen({
             <div className="modal-handle" />
             <div className="modal-header">
               <div>
-                <p style={{ fontSize: '13px', fontWeight: 700, color: '#2752ff', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Lịch sử ca làm</p>
+                <p style={{ fontSize: '13px', fontWeight: 700, color: '#2752ff', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{ui.shiftHistory}</p>
                 <h3 style={{ fontSize: '24px', fontWeight: 900, color: 'var(--text-main)' }}>{selectedWorkplace}</h3>
               </div>
               <button onClick={() => setSelectedWorkplace(null)} style={{ border: 'none', background: '#f1f5f9', borderRadius: '16px', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -332,7 +375,7 @@ export function HomeScreen({
                 }}
               >
                 <Plus size={18} />
-                Thêm ca làm mới
+                {ui.addShift}
               </button>
             </div>
           </div>
@@ -343,11 +386,11 @@ export function HomeScreen({
       <section className="section-block">
         <div className="section-head">
           <div>
-            <p className="section-kicker">Cộng đồng Duhoc Mate</p>
-            <h3>Bảng xếp hạng thu nhập</h3>
+            <p className="section-kicker">{ui.community}</p>
+            <h3>{ui.incomeRanking}</h3>
           </div>
           <div className="rank-month-badge">
-            Tháng {new Date().getMonth() + 1}
+            {lang === 'ko' ? `${new Date().getMonth() + 1}월` : `Tháng ${new Date().getMonth() + 1}`}
           </div>
         </div>
         
@@ -355,8 +398,8 @@ export function HomeScreen({
           {rankings.length === 0 ? (
             <div className="rank-empty-state">
               <TrendingUp size={24} style={{ opacity: 0.2, marginBottom: '8px' }} />
-              <p>Chưa có dữ liệu xếp hạng tháng {monthNumber}</p>
-              <span>{myId ? 'Hãy ghi lại ca làm đầu tiên để lên hạng!' : 'Đăng nhập để ghi lại ca làm và lên hạng!'}</span>
+              <p>{lang === 'ko' ? `${monthNumber}월 랭킹 데이터가 없습니다` : `${ui.noRanking} ${monthNumber}`}</p>
+              <span>{myId ? (lang === 'ko' ? '첫 근무를 기록하고 랭킹에 올라보세요!' : 'Hãy ghi lại ca làm đầu tiên để lên hạng!') : (lang === 'ko' ? '로그인하고 근무를 기록하면 랭킹에 참여할 수 있어요!' : 'Đăng nhập để ghi lại ca làm và lên hạng!')}</span>
             </div>
           ) : (
             rankings.map((item) => {
@@ -368,11 +411,9 @@ export function HomeScreen({
               let displayName = item.display_name;
               
               // Cute names list
-              const cuteNames = [
-                "Gấu Trúc Chăm Chỉ 🐼", "Mèo Con Cần Mẫn 🐱", "Thỏ Ngọc May Mắn 🐰", 
-                "Sóc Nhỏ Năng Động 🐿️", "Cánh Cụt Đáng Yêu 🐧", "Hươu Sao Tốt Bụng 🦌",
-                "Vịt Vàng Lon Ton 🐥", "Cún Con Tinh Nghịch 🐶"
-              ];
+              const cuteNames = lang === 'ko'
+                ? ["성실한 랭커", "꾸준한 알바생", "행운의 유학생", "열정 가득 멤버", "친절한 친구", "노력형 멤버", "활기찬 랭커", "부지런한 메이트"]
+                : ["Gấu Trúc Chăm Chỉ 🐼", "Mèo Con Cần Mẫn 🐱", "Thỏ Ngọc May Mắn 🐰", "Sóc Nhỏ Năng Động 🐿️", "Cánh Cụt Đáng Yêu 🐧", "Hươu Sao Tốt Bụng 🦌", "Vịt Vàng Lon Ton 🐥", "Cún Con Tinh Nghịch 🐶"];
 
               const getCuteName = (uid: string) => {
                 const index = uid ? uid.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0) % cuteNames.length : 0;
@@ -416,7 +457,7 @@ export function HomeScreen({
             <div className="privacy-copy">
               <ShieldCheck size={16} color={isAnonymousRank ? '#2752ff' : '#64748b'} />
               <span style={{ color: isAnonymousRank ? '#2752ff' : '#64748b' }}>
-                {isAnonymousRank ? 'Bạn đang ẩn danh' : 'Chế độ ẩn danh'}
+                {isAnonymousRank ? (lang === 'ko' ? '익명으로 표시 중' : 'Bạn đang ẩn danh') : (lang === 'ko' ? '익명 모드' : 'Chế độ ẩn danh')}
               </span>
             </div>
           </div>
@@ -428,7 +469,7 @@ export function HomeScreen({
       <section className="section-block">
         <div className="section-head">
           <div>
-            <p className="section-kicker">lịch sử gần đây</p>
+            <p className="section-kicker">{lang === 'ko' ? '최근 근무 내역' : 'lịch sử gần đây'}</p>
           </div>
         </div>
 
@@ -451,11 +492,11 @@ export function HomeScreen({
         <section className="calendar-modal-backdrop confirm-backdrop" style={{ zIndex: 3500 }} onClick={() => setDeleteConfirmId(null)}>
           <div className="confirm-dialog" onClick={(event) => event.stopPropagation()}>
             <div className="confirm-content">
-              <h3>Xác nhận</h3>
-              <p>Bạn có chắc chắn muốn xoá ca làm việc này không? Dữ liệu đã xoá sẽ không thể khôi phục.</p>
+              <h3>{lang === 'ko' ? '확인' : 'Xác nhận'}</h3>
+              <p>{ui.deleteConfirm}</p>
             </div>
             <div className="confirm-footer">
-              <button type="button" className="confirm-btn cancel" onClick={() => setDeleteConfirmId(null)}>Hủy bỏ</button>
+              <button type="button" className="confirm-btn cancel" onClick={() => setDeleteConfirmId(null)}>{ui.cancel}</button>
               <button 
                 type="button" 
                 className="confirm-btn danger" 
@@ -464,7 +505,7 @@ export function HomeScreen({
                   setDeleteConfirmId(null);
                 }}
               >
-                Đồng ý
+                {ui.confirm}
               </button>
             </div>
           </div>

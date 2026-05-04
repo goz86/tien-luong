@@ -141,6 +141,9 @@ export function ProfileScreen({
   }, [session]);
 
   const isKo = lang === 'ko';
+  const profileTags = isKo
+    ? ['TOPIK', '카페', '스터디', '절약', '맛집', '입국 초기', '한국어', '여행', '사진', '운동', '요리', '음악', '산책']
+    : ['TOPIK', 'Cafe', 'Học nhóm', 'Budget', 'Ăn uống', 'Mới sang', 'Tiếng Hàn', 'Du lịch', 'Chụp ảnh', 'Thể thao', 'Nấu ăn', 'Âm nhạc', 'Dạo phố'];
 
   async function handleAuth(event: FormEvent) {
     event.preventDefault();
@@ -200,7 +203,7 @@ export function ProfileScreen({
       });
       if (error) throw error;
     } catch (err: any) {
-      setAuthMessage(err.message || 'Lỗi đăng nhập mạng xã hội');
+      setAuthMessage(err.message || (isKo ? '소셜 로그인 오류' : 'Lỗi đăng nhập mạng xã hội'));
     } finally {
       setLoading(false);
     }
@@ -695,7 +698,7 @@ export function ProfileScreen({
                   <div className="pf-pop-field">
                     <span>{isKo ? '관심사 (태그)' : 'Sở thích / Mục tiêu (Thẻ)'}</span>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px' }}>
-                      {['TOPIK', 'Cafe', 'Học nhóm', 'Budget', 'Ăn uống', 'Mới sang', 'Tiếng Hàn', 'Du lịch', 'Chụp ảnh', 'Thể thao', 'Nấu ăn', 'Âm nhạc', 'Dạo phố'].map(tag => {
+                      {profileTags.map(tag => {
                         const isSelected = profile.tags?.includes(tag);
                         return (
                           <button

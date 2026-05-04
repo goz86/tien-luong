@@ -22,6 +22,74 @@ const getLocalDateString = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 const todayIso = getLocalDateString();
+const ONLINE_WINDOW_MS = 5 * 60 * 1000;
+
+type FriendshipRow = {
+  id?: string;
+  requester_id: string;
+  target_profile_id: string;
+  status: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+function optionalNumber(value: unknown): number | null {
+  const next = Number(value);
+  return Number.isFinite(next) ? next : null;
+}
+
+function isRecentlyOnline(lastSeenAt?: string | null) {
+  if (!lastSeenAt) return false;
+  const timestamp = new Date(lastSeenAt).getTime();
+  return Number.isFinite(timestamp) && Date.now() - timestamp <= ONLINE_WINDOW_MS;
+}
+
+function profilePatchFromRow(row: any): Partial<ProfileDraft> {
+  return {
+    displayName: row.display_name || '',
+    school: row.school || '',
+    region: row.region || '',
+    note: row.note || '',
+    avatarUrl: row.avatar_url || '',
+    tags: Array.isArray(row.tags) ? row.tags : [],
+    latitude: optionalNumber(row.latitude),
+    longitude: optionalNumber(row.longitude),
+    locationUpdatedAt: row.location_updated_at || null,
+    lastSeenAt: row.last_seen_at || null,
+  };
+}
+
+function companionFromRow(row: any): CompanionProfile {
+  const lastSeenAt = row.last_seen_at || null;
+  return {
+    id: row.id,
+    displayName: row.display_name || 'Người dùng ẩn danh',
+    school: row.school || 'Chưa cập nhật',
+    region: row.region || 'Chưa cập nhật',
+    focus: row.note || '',
+    availability: isRecentlyOnline(lastSeenAt)
+      ? 'Đang online'
+      : lastSeenAt
+        ? `Hoạt động ${timeAgo(lastSeenAt)}`
+        : 'Chưa cập nhật online',
+    tags: Array.isArray(row.tags) ? row.tags : [],
+    latitude: optionalNumber(row.latitude),
+    longitude: optionalNumber(row.longitude),
+    locationUpdatedAt: row.location_updated_at || null,
+    lastSeenAt,
+    isOnline: isRecentlyOnline(lastSeenAt),
+  };
+}
+
+function getPendingOutgoingIds(rows: FriendshipRow[], userId: string) {
+  return rows
+    .filter((friendship) => friendship.requester_id === userId && friendship.status === 'pending')
+    .map((friendship) => friendship.target_profile_id);
+}
+
+function isFriendshipForUser(row: FriendshipRow | null | undefined, userId: string) {
+  return Boolean(row && (row.requester_id === userId || row.target_profile_id === userId));
+}
 
 const tabLabels: Record<AppLang, Record<Tab, string>> = {
   vi: { home: 'Trang chủ', calendar: 'Lịch', income: 'Thu nhập', friends: 'Cộng đồng', profile: 'Hồ sơ' },
@@ -511,14 +579,7 @@ export default function App() {
         })));
       }
       if (profileRes.data) {
-        setProfile({
-          displayName: profileRes.data.display_name || '',
-          school: profileRes.data.school || '',
-          region: profileRes.data.region || '',
-          note: profileRes.data.note || '',
-          avatarUrl: profileRes.data.avatar_url || '',
-          tags: Array.isArray(profileRes.data.tags) ? profileRes.data.tags : []
-        });
+        setProfile((current) => ({ ...current, ...profilePatchFromRow(profileRes.data) }));
       }
       if (expensesRes.data) {
         setExpenses(expensesRes.data.map(row => ({
@@ -530,25 +591,146 @@ export default function App() {
         })));
       }
       if (companionsRes.data) {
-        setCompanions(companionsRes.data.map(row => ({
-          id: row.id,
-          displayName: row.display_name || 'Người dùng Ẩn danh',
-          school: row.school || 'Chưa cập nhật',
-          region: row.region || 'Chưa cập nhật',
-          focus: row.note || '',
-          availability: 'Đang cập nhật...', // Fallback since we don't have this column yet
-          tags: Array.isArray(row.tags) ? row.tags : []
-        })));
+        setCompanions(companionsRes.data.map(companionFromRow));
       }
       if (friendsRes.data) {
-        setFriendships(friendsRes.data);
-        const reqIds = friendsRes.data
-          .filter(f => f.requester_id === session.user.id)
-          .map(f => f.target_profile_id);
-        setRequested(reqIds);
+        const rows = friendsRes.data as FriendshipRow[];
+        setFriendships(rows);
+        setRequested(getPendingOutgoingIds(rows, session.user.id));
       }
     });
     return () => { isMounted = false; };
+  }, [session]);
+
+  useEffect(() => {
+    if (!session) return;
+    setRequested(getPendingOutgoingIds(friendships as FriendshipRow[], session.user.id));
+  }, [friendships, session]);
+
+  useEffect(() => {
+    if (!supabase || !session) return;
+    const client = supabase;
+    const userId = session.user.id;
+    let cancelled = false;
+
+    const touchPresence = async (coords?: GeolocationCoordinates) => {
+      const now = new Date().toISOString();
+      const patch: Record<string, unknown> = {
+        id: userId,
+        last_seen_at: now,
+      };
+
+      if (coords) {
+        patch.latitude = coords.latitude;
+        patch.longitude = coords.longitude;
+        patch.location_updated_at = now;
+      }
+
+      const { error } = await client.from('profiles').upsert(patch);
+      if (error) {
+        console.warn('Unable to update presence/location:', error);
+        return;
+      }
+
+      if (!cancelled) {
+        setProfile((current) => ({
+          ...current,
+          ...(coords
+            ? {
+                latitude: coords.latitude,
+                longitude: coords.longitude,
+                locationUpdatedAt: now,
+              }
+            : {}),
+          lastSeenAt: now,
+        }));
+      }
+    };
+
+    const updateWithLocation = () => {
+      if (!navigator.geolocation) {
+        void touchPresence();
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => void touchPresence(position.coords),
+        () => void touchPresence(),
+        { enableHighAccuracy: true, maximumAge: 120000, timeout: 8000 }
+      );
+    };
+
+    updateWithLocation();
+    const intervalId = window.setInterval(() => void touchPresence(), 60000);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') updateWithLocation();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [session]);
+
+  useEffect(() => {
+    if (!supabase || !session) return;
+    const client = supabase;
+    const userId = session.user.id;
+
+    const profilesChannel = client
+      .channel(`profiles-community-${userId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, (payload) => {
+        const row = ((payload as any).new ?? (payload as any).old) as any;
+        if (!row?.id) return;
+
+        if (row.id === userId) {
+          if ((payload as any).eventType !== 'DELETE') {
+            setProfile((current) => ({ ...current, ...profilePatchFromRow(row) }));
+          }
+          return;
+        }
+
+        if ((payload as any).eventType === 'DELETE') {
+          setCompanions((current) => current.filter((companion) => companion.id !== row.id));
+          return;
+        }
+
+        const nextCompanion = companionFromRow(row);
+        setCompanions((current) => {
+          const exists = current.some((companion) => companion.id === nextCompanion.id);
+          return exists
+            ? current.map((companion) => (companion.id === nextCompanion.id ? { ...companion, ...nextCompanion } : companion))
+            : [nextCompanion, ...current];
+        });
+      })
+      .subscribe();
+
+    const friendshipsChannel = client
+      .channel(`friend-requests-${userId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'friend_requests' }, (payload) => {
+        const row = (((payload as any).new ?? (payload as any).old) || null) as FriendshipRow | null;
+        if (!row || !isFriendshipForUser(row, userId)) return;
+
+        if ((payload as any).eventType === 'DELETE') {
+          setFriendships((current) => current.filter((friendship) => friendship.id !== row.id));
+          return;
+        }
+
+        setFriendships((current) => {
+          const exists = current.some((friendship) => friendship.id === row.id);
+          return exists
+            ? current.map((friendship) => (friendship.id === row.id ? row : friendship))
+            : [row, ...current];
+        });
+      })
+      .subscribe();
+
+    return () => {
+      void client.removeChannel(profilesChannel);
+      void client.removeChannel(friendshipsChannel);
+    };
   }, [session]);
 
   const monthKey = calendarMonth.slice(0, 7);
@@ -722,40 +904,134 @@ export default function App() {
 
   async function requestConnection(id: string) {
     if (!supabase || !session) return;
-    
-    setRequested((current) => [...new Set([...current, id])]);
+    const userId = session.user.id;
+    const actorName = profile.displayName?.trim() || session.user.email?.split('@')[0] || 'Một người bạn';
+    const localExisting = (friendships as FriendshipRow[]).find((friendship) =>
+      (friendship.requester_id === userId && friendship.target_profile_id === id) ||
+      (friendship.requester_id === id && friendship.target_profile_id === userId)
+    );
 
-    // Check if there is an existing incoming request from this user
-    const { data: existingIncoming } = await supabase
+    const mergeFriendship = (row: FriendshipRow) => {
+      setFriendships((current) => {
+        const exists = current.some((friendship) => friendship.id === row.id);
+        return exists
+          ? current.map((friendship) => (friendship.id === row.id ? row : friendship))
+          : [row, ...current];
+      });
+    };
+
+    const notify = async (recipientId: string, type: string, title: string, body: string) => {
+      const { error } = await supabase!.from('community_notifications').insert({
+        recipient_id: recipientId,
+        actor_id: userId,
+        type,
+        title,
+        body,
+      });
+      if (error) console.warn('Unable to send social notification:', error);
+    };
+
+    if (localExisting?.requester_id === id && localExisting.target_profile_id === userId && localExisting.status === 'pending') {
+      const acceptedFriendship: FriendshipRow = {
+        ...localExisting,
+        status: 'accepted',
+        updated_at: new Date().toISOString(),
+      };
+      mergeFriendship(acceptedFriendship);
+      setRequested((current) => current.filter((requestId) => requestId !== id));
+
+      const { data, error } = await supabase
+        .from('friend_requests')
+        .update({ status: 'accepted', updated_at: acceptedFriendship.updated_at })
+        .eq('id', localExisting.id)
+        .select()
+        .maybeSingle();
+
+      if (error) {
+        console.error('Unable to accept friend request:', error);
+        mergeFriendship(localExisting);
+        return;
+      }
+
+      if (data) mergeFriendship(data as FriendshipRow);
+      await notify(id, 'friend_accept', 'Đã trở thành bạn bè', `${actorName} đã chấp nhận lời mời kết bạn.`);
+      return;
+    }
+
+    const { data: existingFromDb, error: existingError } = await supabase
       .from('friend_requests')
       .select('*')
-      .eq('requester_id', id)
-      .eq('target_profile_id', session.user.id)
+      .or(`and(requester_id.eq.${userId},target_profile_id.eq.${id}),and(requester_id.eq.${id},target_profile_id.eq.${userId})`)
+      .limit(1)
       .maybeSingle();
+    const existing = (existingFromDb as FriendshipRow | null) ?? localExisting;
 
-    if (existingIncoming) {
-      // If they already requested us, just accept it
-      const { error } = await supabase
+    if (existingError && !existing) {
+      console.error('Unable to read friend request:', existingError);
+      return;
+    }
+
+    if (existing?.status === 'accepted') {
+      mergeFriendship(existing as FriendshipRow);
+      return;
+    }
+
+    if (existing && existing.requester_id === id && existing.target_profile_id === userId) {
+      const acceptedFriendship: FriendshipRow = {
+        ...existing,
+        status: 'accepted',
+        updated_at: new Date().toISOString(),
+      };
+      mergeFriendship(acceptedFriendship);
+      setRequested((current) => current.filter((requestId) => requestId !== id));
+
+      const { data, error } = await supabase
         .from('friend_requests')
-        .update({ status: 'accepted' })
-        .eq('id', existingIncoming.id);
-      
-      if (!error) {
-        setFriendships(prev => prev.map(f => 
-          f.id === existingIncoming.id ? { ...f, status: 'accepted' } : f
-        ));
-      }
-    } else {
-      // Otherwise, create a new pending request
-      const { data: newReq, error } = await supabase.from('friend_requests').insert({ 
-        requester_id: session.user.id, 
-        target_profile_id: id,
-        status: 'pending'
-      }).select().single();
+        .update({ status: 'accepted', updated_at: acceptedFriendship.updated_at })
+        .eq('id', existing.id)
+        .select()
+        .maybeSingle();
 
-      if (!error && newReq) {
-        setFriendships(prev => [...prev, newReq]);
+      if (error) {
+        console.error('Unable to accept friend request:', error);
+        mergeFriendship(existing);
+        return;
       }
+
+      if (data) {
+        mergeFriendship(data as FriendshipRow);
+      }
+      await notify(id, 'friend_accept', 'Đã trở thành bạn bè', `${actorName} đã chấp nhận lời mời kết bạn.`);
+      return;
+    }
+
+    setRequested((current) => [...new Set([...current, id])]);
+
+    if (existing && existing.requester_id === userId) {
+      if (existing.status === 'pending') return;
+      const { data, error } = await supabase
+        .from('friend_requests')
+        .update({ status: 'pending' })
+        .eq('id', existing.id)
+        .select()
+        .single();
+
+      if (!error && data) mergeFriendship(data as FriendshipRow);
+      return;
+    }
+
+    const { data: newReq, error } = await supabase.from('friend_requests').insert({
+      requester_id: userId,
+      target_profile_id: id,
+      status: 'pending',
+    }).select().single();
+
+    if (!error && newReq) {
+      mergeFriendship(newReq as FriendshipRow);
+      await notify(id, 'friend_request', 'Lời mời kết bạn mới', `${actorName} muốn kết bạn với bạn.`);
+    } else if (error) {
+      console.error('Unable to create friend request:', error);
+      setRequested((current) => current.filter((requestId) => requestId !== id));
     }
   }
 
@@ -847,6 +1123,7 @@ export default function App() {
               onOpenNotifications={handleOpenNotifications}
               unreadCount={unreadCount}
               profile={profile}
+              lang={lang}
               isAnonymousRank={isAnonymousRank}
               onToggleAnonymous={handleToggleAnonymous}
               rankings={rankings}
@@ -856,7 +1133,7 @@ export default function App() {
 
 
           ) : null}
-          {tab === 'calendar' ? <CalendarScreen shifts={shifts} selectedDate={selectedDate} month={calendarMonth} venueSuggestions={[...new Set(workplaceSummary.map((item) => item.label))].slice(0, 4)} draft={draft} setDraft={setDraft} editingShiftId={editingShiftId} setEditingShiftId={setEditingShiftId} isSheetOpen={isDaySheetOpen} onCloseSheet={() => setIsDaySheetOpen(false)} onPrevMonth={() => { const nextMonth = shiftMonth(calendarMonth, -1); setCalendarMonth(nextMonth); setSelectedDate(nextMonth); setDraft((current) => ({ ...current, date: nextMonth })); }} onNextMonth={() => { const nextMonth = shiftMonth(calendarMonth, 1); setCalendarMonth(nextMonth); setSelectedDate(nextMonth); setDraft((current) => ({ ...current, date: nextMonth })); }} onSetMonth={(nextMonth) => { setCalendarMonth(nextMonth); setSelectedDate(nextMonth); setDraft((current) => ({ ...current, date: nextMonth })); }} onSelectDate={(date) => { setEditingShiftId(null); setSelectedDate(date); setDraft((current) => ({ ...current, date, note: '' })); setIsDaySheetOpen(true); }} onQuickSave={() => void addShift('calendar')} onUpdateShift={(shift) => void updateShift(shift)} onDeleteShift={(id) => void deleteShift(id)} venueColors={venueColors} onSetVenueColor={setVenueColor} /> : null}
+          {tab === 'calendar' ? <CalendarScreen shifts={shifts} selectedDate={selectedDate} month={calendarMonth} venueSuggestions={[...new Set(workplaceSummary.map((item) => item.label))].slice(0, 4)} draft={draft} setDraft={setDraft} editingShiftId={editingShiftId} setEditingShiftId={setEditingShiftId} isSheetOpen={isDaySheetOpen} onCloseSheet={() => setIsDaySheetOpen(false)} onPrevMonth={() => { const nextMonth = shiftMonth(calendarMonth, -1); setCalendarMonth(nextMonth); setSelectedDate(nextMonth); setDraft((current) => ({ ...current, date: nextMonth })); }} onNextMonth={() => { const nextMonth = shiftMonth(calendarMonth, 1); setCalendarMonth(nextMonth); setSelectedDate(nextMonth); setDraft((current) => ({ ...current, date: nextMonth })); }} onSetMonth={(nextMonth) => { setCalendarMonth(nextMonth); setSelectedDate(nextMonth); setDraft((current) => ({ ...current, date: nextMonth })); }} onSelectDate={(date) => { setEditingShiftId(null); setSelectedDate(date); setDraft((current) => ({ ...current, date, note: '' })); setIsDaySheetOpen(true); }} onQuickSave={() => void addShift('calendar')} onUpdateShift={(shift) => void updateShift(shift)} onDeleteShift={(id) => void deleteShift(id)} venueColors={venueColors} onSetVenueColor={setVenueColor} lang={lang} /> : null}
           {tab === 'income' ? (
             <IncomeScreen
               minimumWage={MINIMUM_WAGE_2026}
@@ -872,6 +1149,7 @@ export default function App() {
               onDeleteExpense={deleteExpense}
               target={incomeTarget}
               onSetTarget={setIncomeTarget}
+              lang={lang}
             />
           ) : null}
           {tab === 'friends' ? (
@@ -885,6 +1163,7 @@ export default function App() {
               onOpenNotifications={handleOpenNotifications}
               unreadCount={unreadCount}
               onNavigateToProfile={() => setTab('profile')}
+              lang={lang}
             />
           ) : null}
           {tab === 'profile' ? (
@@ -906,7 +1185,7 @@ export default function App() {
 
         </main>
 
-        <nav className="bottom-tabs" aria-label="Điều hướng chính">
+        <nav className="bottom-tabs" aria-label={lang === 'ko' ? '주요 내비게이션' : 'Điều hướng chính'}>
           {tabIcons.map(({ id, icon: Icon }) => (
             <button key={id} type="button" onClick={() => changeTab(id)} className={tab === id ? 'tab-item active' : 'tab-item'}>
               <span className="tab-icon-wrap">

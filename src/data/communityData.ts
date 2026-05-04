@@ -36,7 +36,7 @@ export interface CommunityNotification {
   actor_id: string | null;
   post_id: string | null;
   comment_id: string | null;
-  type: 'like' | 'comment' | 'reply' | 'system';
+  type: 'like' | 'comment' | 'reply' | 'system' | 'friend_request' | 'friend_accept' | 'message';
   title: string;
   body: string;
   is_read: boolean;
