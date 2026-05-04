@@ -1,6 +1,6 @@
 import { Shift } from './salary';
 
-export type Tab = 'home' | 'calendar' | 'income' | 'friends' | 'profile';
+export type Tab = 'home' | 'calendar' | 'income' | 'friends' | 'profile' | 'admin';
 
 export type RateState = {
   value: number;

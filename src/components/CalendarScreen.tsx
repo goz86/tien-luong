@@ -574,7 +574,7 @@ export function CalendarScreen({
 
       {isSettingsOpen ? (
         <section className="calendar-modal-backdrop" onClick={() => { setIsSettingsOpen(false); setActiveSelect(null); }}>
-          <div className="calendar-modal settings-modal" onClick={(event) => event.stopPropagation()} style={{ paddingBottom: 'calc(100px + env(safe-area-inset-bottom))' }}>
+          <div className="calendar-modal settings-modal" onClick={(event) => event.stopPropagation()}>
             <div className="sheet-handle" />
             <h3 className="settings-title">{ui.calendarSettings}</h3>
 

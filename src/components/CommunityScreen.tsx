@@ -22,6 +22,7 @@ import {
   Star,
   ThumbsDown,
   ThumbsUp,
+  Trash2,
   User,
   Users,
   X,
@@ -99,7 +100,7 @@ interface PlaceReview {
   helpful_count: number;
   upvotes_count: number;
   downvotes_count: number;
-  images: string[] | null;
+  images: string[] | string | null;
   created_at: string;
 }
 
@@ -117,6 +118,7 @@ interface NominatimResult {
 }
 
 const SEOUL_CENTER: [number, number] = [37.5665, 126.978];
+const REVIEW_ADMIN_EMAILS = new Set(['michintashop@gmail.com']);
 
 const markerIcon = new L.Icon({
   iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
@@ -160,6 +162,47 @@ function isUuid(id: string) {
 
 function shortText(value: string, length: number) {
   return value.length > length ? `${value.slice(0, length).trim()}...` : value;
+}
+
+function normalizeReviewImages(value: PlaceReview['images']) {
+  if (Array.isArray(value)) {
+    return value.filter((url): url is string => typeof url === 'string' && url.trim().length > 0);
+  }
+  if (typeof value !== 'string' || !value.trim()) return [];
+
+  const trimmed = value.trim();
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (Array.isArray(parsed)) {
+      return parsed.filter((url): url is string => typeof url === 'string' && url.trim().length > 0);
+    }
+  } catch {
+    // Supabase normally returns text[] as arrays, but older rows may arrive as Postgres literals.
+  }
+
+  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+    return trimmed
+      .slice(1, -1)
+      .split(',')
+      .map((part) => part.trim().replace(/^"|"$/g, ''))
+      .filter(Boolean);
+  }
+
+  return [trimmed];
+}
+
+function getReviewImageStoragePaths(urls: string[]) {
+  const marker = '/storage/v1/object/public/review-images/';
+  return urls.flatMap((url) => {
+    try {
+      const parsed = new URL(url);
+      const index = parsed.pathname.indexOf(marker);
+      if (index === -1) return [];
+      return [decodeURIComponent(parsed.pathname.slice(index + marker.length))];
+    } catch {
+      return [];
+    }
+  });
 }
 
 const NEARBY_RADIUS_KM = 3;
@@ -229,7 +272,7 @@ export function CommunityScreen({
 }: {
   companions: CompanionProfile[];
   requested: string[];
-  onRequest: (id: string) => void;
+  onRequest: (id: string) => void | Promise<void>;
   session: Session | null;
   profile?: { displayName?: string; latitude?: number | null; longitude?: number | null };
   onOpenNotifications: () => void;
@@ -328,6 +371,8 @@ export function CommunityScreen({
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [activeChatPartner, setActiveChatPartner] = useState<CompanionProfile | null>(null);
   const [friendFilter, setFriendFilter] = useState<'discovery' | 'chats' | 'unread'>('discovery');
+  const [friendActionId, setFriendActionId] = useState<string | null>(null);
+  const [optimisticFriendIds, setOptimisticFriendIds] = useState<Set<string>>(new Set());
   const [recentChats, setRecentChats] = useState<any[]>([]);
   const commentInputRef = useRef<HTMLInputElement>(null);
 
@@ -336,6 +381,7 @@ export function CommunityScreen({
 
   const isFriend = useCallback((id: string) => {
     if (!currentUserId) return false;
+    if (optimisticFriendIds.has(id)) return true;
     return friendships.some(f =>
       f.status === 'accepted' &&
       (
@@ -343,15 +389,16 @@ export function CommunityScreen({
         (f.requester_id === id && f.target_profile_id === currentUserId)
       )
     );
-  }, [currentUserId, friendships]);
+  }, [currentUserId, friendships, optimisticFriendIds]);
 
   const hasIncomingRequest = useCallback((id: string) => {
+    if (optimisticFriendIds.has(id)) return false;
     return friendships.some(f =>
       f.requester_id === id &&
       f.target_profile_id === currentUserId &&
       f.status === 'pending'
     );
-  }, [friendships, currentUserId]);
+  }, [friendships, currentUserId, optimisticFriendIds]);
 
   const currentCoords = useMemo(() => {
     if (!validCoordinate(profile?.latitude, profile?.longitude)) return null;
@@ -597,6 +644,33 @@ export function CommunityScreen({
     }
     return true;
   }, [session]);
+
+  const handleFriendAction = useCallback(async (id: string) => {
+    if (!requireLogin() || friendActionId) return;
+    const accepting = hasIncomingRequest(id);
+    setFriendActionId(id);
+    try {
+      await Promise.resolve(onRequest(id));
+      if (accepting) {
+        setOptimisticFriendIds((current) => new Set(current).add(id));
+      }
+      setSyncMessage(accepting
+        ? (isKo ? '친구 요청을 수락했습니다.' : 'Đã chấp nhận lời mời kết bạn.')
+        : (isKo ? '친구 요청을 보냈습니다.' : 'Đã gửi lời mời kết bạn.'));
+    } catch (error) {
+      console.error(error);
+      setOptimisticFriendIds((current) => {
+        const next = new Set(current);
+        next.delete(id);
+        return next;
+      });
+      setSyncMessage(accepting
+        ? (isKo ? '친구 요청을 수락하지 못했습니다. Supabase 패치를 확인해주세요.' : 'Chưa chấp nhận được. Hãy chạy lại patch Supabase cho bạn bè.')
+        : (isKo ? '친구 요청을 보내지 못했습니다.' : 'Chưa gửi được lời mời kết bạn.'));
+    } finally {
+      setFriendActionId(null);
+    }
+  }, [friendActionId, hasIncomingRequest, isKo, onRequest, requireLogin]);
 
   useEffect(() => {
     if (loading || !isLocalMode) return;
@@ -1120,13 +1194,13 @@ export function CommunityScreen({
                       <button
                         type="button"
                         className={`community-request ${requested.includes(friend.id) ? 'sent' : ''} ${hasIncomingRequest(friend.id) ? 'incoming' : ''}`}
-                        onClick={() => {
-                          if (requireLogin()) onRequest(friend.id);
-                        }}
-                        disabled={requested.includes(friend.id) && !hasIncomingRequest(friend.id)}
+                        onClick={() => void handleFriendAction(friend.id)}
+                        disabled={friendActionId === friend.id || (requested.includes(friend.id) && !hasIncomingRequest(friend.id))}
                         style={hasIncomingRequest(friend.id) ? { width: 'auto', minWidth: '85px', padding: '0 12px', background: '#4CAF50', color: 'white', whiteSpace: 'nowrap' } : {}}
                       >
-                        {hasIncomingRequest(friend.id) ? (
+                        {friendActionId === friend.id ? (
+                          <Loader2 size={16} className="cm-spin" />
+                        ) : hasIncomingRequest(friend.id) ? (
                           <span style={{ fontSize: '12px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>{ui.accept}</span>
                         ) : requested.includes(friend.id) ? (
                           <CheckCircle2 size={18} />
@@ -1711,12 +1785,12 @@ export function CommunityScreen({
                 background: hasIncomingRequest(viewProfile.id) ? '#4CAF50' : (requested.includes(viewProfile.id) ? '#f1f5f9' : '#2752ff'),
                 color: hasIncomingRequest(viewProfile.id) || !requested.includes(viewProfile.id) ? 'white' : '#64748b'
               }}
-              onClick={() => {
-                onRequest(viewProfile.id);
-              }}
-              disabled={requested.includes(viewProfile.id) && !hasIncomingRequest(viewProfile.id)}
+              onClick={() => void handleFriendAction(viewProfile.id)}
+              disabled={friendActionId === viewProfile.id || (requested.includes(viewProfile.id) && !hasIncomingRequest(viewProfile.id))}
             >
-              {hasIncomingRequest(viewProfile.id) ? (
+              {friendActionId === viewProfile.id ? (
+                <Loader2 size={18} className="cm-spin" />
+              ) : hasIncomingRequest(viewProfile.id) ? (
                 <>{isKo ? '친구 요청 수락' : 'Chấp nhận kết bạn'}</>
               ) : requested.includes(viewProfile.id) ? (
                 <><CheckCircle2 size={18} /> {isKo ? '요청 보냄' : 'Đã gửi lời mời'}</>
@@ -1821,7 +1895,12 @@ function ReviewBoard({
     loading: '불러오는 중...',
     empty: '이 카테고리에 리뷰가 없습니다',
     loginVote: '리뷰에 투표하려면 로그인해주세요.',
-    voteError: '투표를 저장하지 못했습니다. Supabase에서 review_votes_patch.sql을 실행한 뒤 다시 시도해주세요.',
+    voteError: '투표를 저장하지 못했습니다. Supabase에서 community_review_friend_patch.sql을 실행한 뒤 다시 시도해주세요.',
+    imageUploadError: '사진을 업로드하지 못했습니다. review-images Storage 정책을 확인해주세요.',
+    submitError: '리뷰를 등록하지 못했습니다. Supabase 컬럼과 Storage 설정을 확인해주세요.',
+    deleteConfirm: '이 리뷰를 삭제할까요?',
+    deleteSuccess: '리뷰를 삭제했습니다.',
+    deleteError: '리뷰를 삭제하지 못했습니다. Supabase 권한 패치를 실행해주세요.',
   } : {
     categories: {
       work: 'Việc làm',
@@ -1838,13 +1917,38 @@ function ReviewBoard({
     loading: 'Đang tải...',
     empty: 'Chưa có review nào trong danh mục này',
     loginVote: 'Bạn cần đăng nhập để vote review.',
-    voteError: 'Vote chưa lưu được. Bạn hãy chạy file supabase/review_votes_patch.sql trong Supabase rồi thử lại.',
+    voteError: 'Vote chưa lưu được. Bạn hãy chạy file supabase/community_review_friend_patch.sql trong Supabase rồi thử lại.',
+    imageUploadError: 'Chưa tải ảnh lên được. Hãy kiểm tra bucket/policy review-images trong Supabase.',
+    submitError: 'Chưa đăng được review. Hãy kiểm tra cột images và Storage trong Supabase.',
+    deleteConfirm: 'Xoá review này nhé?',
+    deleteSuccess: 'Đã xoá review.',
+    deleteError: 'Chưa xoá được review. Hãy chạy patch quyền Supabase.',
   };
   const [reviews, setReviews] = useState<PlaceReview[]>([]);
   const [reviewVotes, setReviewVotes] = useState<Record<string, ReviewVoteType>>({});
+  const [reviewNotice, setReviewNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [catFilter, setCatFilter] = useState<ReviewCategory>('all');
   const currentUserId = session?.user.id ?? null;
+  const isReviewAdmin = REVIEW_ADMIN_EMAILS.has((session?.user.email ?? '').toLowerCase());
+  const [deletingReviewId, setDeletingReviewId] = useState<string | null>(null);
+  const reviewNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showReviewNotice = useCallback((message: string) => {
+    setReviewNotice(message);
+    if (reviewNoticeTimerRef.current) {
+      clearTimeout(reviewNoticeTimerRef.current);
+    }
+    reviewNoticeTimerRef.current = setTimeout(() => setReviewNotice(null), 3200);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (reviewNoticeTimerRef.current) {
+        clearTimeout(reviewNoticeTimerRef.current);
+      }
+    };
+  }, []);
 
   // Write form state
   const [searchQuery, setSearchQuery] = useState('');
@@ -2081,7 +2185,7 @@ function ReviewBoard({
 
   const handleReviewReaction = async (reviewId: string, type: 'up' | 'down') => {
     if (!session || !supabase) {
-      alert(reviewUi.loginVote);
+      showReviewNotice(reviewUi.loginVote);
       return;
     }
     const target = reviews.find(r => r.id === reviewId);
@@ -2116,7 +2220,7 @@ function ReviewBoard({
           downvotes_count: target.downvotes_count || 0
         } : r));
       }
-      alert(reviewUi.voteError);
+      showReviewNotice(reviewUi.voteError);
       return;
     }
 
@@ -2133,6 +2237,38 @@ function ReviewBoard({
     }
   };
 
+  const handleDeleteReview = async (review: PlaceReview) => {
+    if (!session || !supabase) {
+      showReviewNotice(reviewUi.loginVote);
+      return;
+    }
+    if (review.user_id !== currentUserId && !isReviewAdmin) return;
+    if (!window.confirm(reviewUi.deleteConfirm)) return;
+
+    const previousReviews = reviews;
+    const imageUrls = normalizeReviewImages(review.images);
+    setDeletingReviewId(review.id);
+    setReviews((current) => current.filter((item) => item.id !== review.id));
+
+    const { error } = await supabase.from('place_reviews').delete().eq('id', review.id);
+    if (error) {
+      console.error('Unable to delete review:', error);
+      setReviews(previousReviews);
+      showReviewNotice(reviewUi.deleteError);
+      setDeletingReviewId(null);
+      return;
+    }
+
+    const storagePaths = getReviewImageStoragePaths(imageUrls);
+    if (storagePaths.length > 0) {
+      const { error: storageError } = await supabase.storage.from('review-images').remove(storagePaths);
+      if (storageError) console.warn('Unable to remove review images:', storageError);
+    }
+
+    showReviewNotice(reviewUi.deleteSuccess);
+    setDeletingReviewId(null);
+  };
+
   const handleSubmitReview = async () => {
     if (!supabase || !session || !selectedPlace || !writeTitle.trim() || !writeContent.trim() || writeRating === 0) return;
     setSubmitting(true);
@@ -2141,11 +2277,19 @@ function ReviewBoard({
 
     // 1. Upload images to Storage
     for (const file of selectedImages) {
-      const fileName = `${session.user.id}/${Date.now()}-${file.name}`;
+      const safeName = file.name.replace(/[^\w.-]+/g, '-').toLowerCase();
+      const fileName = `${session.user.id}/${crypto.randomUUID()}-${safeName || 'review.jpg'}`;
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('review-images')
         .upload(fileName, file);
-      
+
+      if (uploadError) {
+        console.error('Review image upload failed:', uploadError);
+        setSubmitting(false);
+        showReviewNotice(reviewUi.imageUploadError);
+        return;
+      }
+
       if (!uploadError && uploadData) {
         const { data: { publicUrl } } = supabase.storage
           .from('review-images')
@@ -2172,11 +2316,16 @@ function ReviewBoard({
 
     setSubmitting(false);
     if (!error && data) {
-      setReviews(prev => [data as PlaceReview, ...prev]);
+      const savedReview = data as PlaceReview;
+      const savedImages = normalizeReviewImages(savedReview.images);
+      setReviews(prev => [{
+        ...savedReview,
+        images: savedImages.length > 0 ? savedReview.images : imageUrls,
+      }, ...prev]);
       closeWriter();
     } else if (error) {
       console.error('Submit error:', error);
-      alert(isKo ? '리뷰 등록 중 오류가 발생했습니다. images 컬럼 구성을 확인해주세요.' : 'Có lỗi xảy ra khi đăng review. Vui lòng kiểm tra cấu trúc bảng images.');
+      showReviewNotice(reviewUi.submitError);
     }
   };
 
@@ -2287,11 +2436,11 @@ function ReviewBoard({
 
   const handleMarkerClick = (reviewId: string) => {
     setSelectedReviewId(reviewId);
-    setSheetExpanded(true);
+    setSheetExpanded(false);
     setTimeout(() => {
       const el = reviewRefs.current.get(reviewId);
       if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }
     }, 300);
   };
@@ -2310,6 +2459,7 @@ function ReviewBoard({
     });
     return Object.values(groups);
   }, [filtered]);
+  const collapsedSheetY = filtered.length > 1 ? '32%' : '58%';
 
   const createGroupIcon = (reviews: PlaceReview[], isSelected: boolean) => {
     const avg = (reviews.reduce((s, r) => s + Number(r.rating), 0) / reviews.length).toFixed(1);
@@ -2345,6 +2495,19 @@ function ReviewBoard({
   return (
     <>
       <div className="rv-container">
+        <AnimatePresence>
+          {reviewNotice ? (
+            <motion.div
+              className="rv-inline-notice"
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.18 }}
+            >
+              {reviewNotice}
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
         {/* Floating Search Bar */}
         <div className="rv-floating-search">
           <div className="rv-search-inner">
@@ -2439,8 +2602,8 @@ function ReviewBoard({
         {/* Bottom Sheet Review List */}
         <motion.div
           className="rv-bottom-sheet"
-          initial={{ y: '58%' }}
-          animate={{ y: sheetExpanded ? '6%' : '58%' }}
+          initial={{ y: collapsedSheetY }}
+          animate={{ y: sheetExpanded ? '6%' : collapsedSheetY }}
           transition={{ type: 'spring', damping: 25, stiffness: 180 }}
           drag="y"
           dragControls={dragControls}
@@ -2531,6 +2694,8 @@ function ReviewBoard({
                 const cat = REVIEW_CATS[review.category as keyof typeof REVIEW_CATS] || REVIEW_CATS.other;
                 const isSelected = selectedReviewId === review.id;
                 const userVote = reviewVotes[review.id];
+                const imageUrls = normalizeReviewImages(review.images);
+                const canDeleteReview = review.user_id === currentUserId || isReviewAdmin;
                 return (
                   <article
                     key={review.id}
@@ -2578,17 +2743,35 @@ function ReviewBoard({
                             <span>{review.downvotes_count || 0}</span>
                           </button>
                         </div>
+                        {canDeleteReview ? (
+                          <button
+                            type="button"
+                            className="rv-review-delete"
+                            disabled={deletingReviewId === review.id}
+                            aria-label={isKo ? '리뷰 삭제' : 'Xoá review'}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void handleDeleteReview(review);
+                            }}
+                          >
+                            {deletingReviewId === review.id ? (
+                              <Loader2 size={14} className="cm-spin" />
+                            ) : (
+                              <Trash2 size={14} />
+                            )}
+                          </button>
+                        ) : null}
                       </div>
                     </div>
                     <div className="rv-item-body">
                       <h5 className="rv-item-title">{review.title}</h5>
                       <p className="rv-item-text">{shortText(review.content, 120)}</p>
                       
-                      {review.images && review.images.length > 0 && (
-                        <div style={{ display: 'flex', gap: 8, marginTop: 12, overflowX: 'auto', paddingBottom: 4 }}>
-                          {review.images.map((url, i) => (
-                            <div key={i} style={{ flex: '0 0 100px', height: 100, borderRadius: 8, overflow: 'hidden', border: '1px solid #f1f5f9' }}>
-                              <img src={url} alt="Review" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      {imageUrls.length > 0 && (
+                        <div className="rv-review-images">
+                          {imageUrls.map((url, i) => (
+                            <div key={`${review.id}-image-${i}`} className="rv-review-image">
+                              <img src={url} alt={review.title} loading="lazy" />
                             </div>
                           ))}
                         </div>

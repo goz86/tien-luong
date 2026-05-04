@@ -67,6 +67,8 @@ export function ProfileScreen({
   lang,
   onChangeLang,
   earnedBadges,
+  isAdmin = false,
+  onOpenAdmin,
 }: {
   profile: ProfileDraft;
   setProfile: (draft: ProfileDraft) => void;
@@ -80,6 +82,8 @@ export function ProfileScreen({
   lang: AppLang;
   onChangeLang: (l: AppLang) => void;
   earnedBadges: string[];
+  isAdmin?: boolean;
+  onOpenAdmin?: () => void;
 }) {
 
   const [authMode, setAuthMode] = useState<AuthMode>('login');
@@ -631,6 +635,23 @@ export function ProfileScreen({
                   </button>
                 </div>
               </div>
+              {isAdmin && onOpenAdmin ? (
+                <div className="pf-pop-section">
+                  <label>{isKo ? '관리자' : 'Quản trị'}</label>
+                  <button
+                    type="button"
+                    className="pf-admin-entry"
+                    onClick={() => {
+                      setShowSettingsMenu(false);
+                      onOpenAdmin();
+                    }}
+                  >
+                    <span className="pf-admin-entry-icon"><Shield size={16} /></span>
+                    <span>{isKo ? '관리자 대시보드' : 'Dashboard admin'}</span>
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+              ) : null}
               {/* Edit Profile */}
               <div className="pf-pop-section">
                 <label>{isKo ? '프로필 수정' : 'Chỉnh sửa hồ sơ'}</label>

@@ -11,6 +11,7 @@ import { HomeScreen } from './components/HomeScreen';
 import { CalendarScreen } from './components/CalendarScreen';
 import { IncomeScreen } from './components/IncomeScreen';
 import { CommunityScreen } from './components/CommunityScreen';
+import { AdminScreen } from './components/AdminScreen';
 import { ProfileScreen, WALLPAPERS, type WallpaperKey, type AppLang } from './components/ProfileScreen';
 import { type CommunityNotification, timeAgo } from './data/communityData';
 import { BADGES } from './data/badgeData';
@@ -23,6 +24,7 @@ const getLocalDateString = () => {
 };
 const todayIso = getLocalDateString();
 const ONLINE_WINDOW_MS = 5 * 60 * 1000;
+const ADMIN_EMAILS = new Set(['michintashop@gmail.com']);
 
 type FriendshipRow = {
   id?: string;
@@ -92,11 +94,11 @@ function isFriendshipForUser(row: FriendshipRow | null | undefined, userId: stri
 }
 
 const tabLabels: Record<AppLang, Record<Tab, string>> = {
-  vi: { home: 'Trang chủ', calendar: 'Lịch', income: 'Thu nhập', friends: 'Cộng đồng', profile: 'Hồ sơ' },
-  ko: { home: '홈', calendar: '캘린더', income: '수입', friends: '커뮤니티', profile: '프로필' },
+  vi: { home: 'Trang chủ', calendar: 'Lịch', income: 'Thu nhập', friends: 'Cộng đồng', profile: 'Hồ sơ', admin: 'Quản trị' },
+  ko: { home: '홈', calendar: '캘린더', income: '수입', friends: '커뮤니티', profile: '프로필', admin: '관리자' },
 };
 
-const tabIcons: Array<{ id: Tab; icon: typeof House }> = [
+const tabIcons: Array<{ id: Exclude<Tab, 'admin'>; icon: typeof House }> = [
   { id: 'home', icon: House },
   { id: 'calendar', icon: CalendarDays },
   { id: 'income', icon: WalletCards },
@@ -149,7 +151,7 @@ function loadState(): StoredState {
   }
 }
 
-const VALID_TABS: Tab[] = ['home', 'calendar', 'income', 'friends', 'profile'];
+const VALID_TABS: Tab[] = ['home', 'calendar', 'income', 'friends', 'profile', 'admin'];
 
 function getTabFromHash(): Tab {
   const hash = window.location.hash.replace('#', '');
@@ -184,6 +186,11 @@ export default function App() {
   const [isAnonymousRank, setIsAnonymousRank] = useState(false);
   const [rankings, setRankings] = useState<any[]>([]);
   const [userStats, setUserStats] = useState({ postsCount: 0, commentsCount: 0, likesCount: 0 });
+  const [adminRole, setAdminRole] = useState<string | null>(null);
+  const isAdmin = useMemo(() => {
+    const email = (session?.user.email || '').toLowerCase();
+    return ADMIN_EMAILS.has(email) || Boolean(adminRole);
+  }, [adminRole, session]);
 
   const refreshRankings = useCallback(async () => {
     if (!supabase) return;
@@ -456,6 +463,27 @@ export default function App() {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!supabase || !session) {
+      setAdminRole(null);
+      return;
+    }
+
+    let isMounted = true;
+    supabase
+      .from('admin_roles')
+      .select('role')
+      .eq('user_id', session.user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (isMounted) setAdminRole(data?.role || null);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [session]);
 
   useEffect(() => {
     if (!supabase || !session) return;
@@ -904,6 +932,7 @@ export default function App() {
 
   async function requestConnection(id: string) {
     if (!supabase || !session) return;
+    const client = supabase;
     const userId = session.user.id;
     const actorName = profile.displayName?.trim() || session.user.email?.split('@')[0] || 'Một người bạn';
     const localExisting = (friendships as FriendshipRow[]).find((friendship) =>
@@ -921,7 +950,7 @@ export default function App() {
     };
 
     const notify = async (recipientId: string, type: string, title: string, body: string) => {
-      const { error } = await supabase!.from('community_notifications').insert({
+      const { error } = await client.from('community_notifications').insert({
         recipient_id: recipientId,
         actor_id: userId,
         type,
@@ -931,34 +960,56 @@ export default function App() {
       if (error) console.warn('Unable to send social notification:', error);
     };
 
-    if (localExisting?.requester_id === id && localExisting.target_profile_id === userId && localExisting.status === 'pending') {
+    const acceptFriendship = async (existing: FriendshipRow) => {
       const acceptedFriendship: FriendshipRow = {
-        ...localExisting,
+        ...existing,
         status: 'accepted',
         updated_at: new Date().toISOString(),
       };
       mergeFriendship(acceptedFriendship);
       setRequested((current) => current.filter((requestId) => requestId !== id));
 
-      const { data, error } = await supabase
-        .from('friend_requests')
-        .update({ status: 'accepted', updated_at: acceptedFriendship.updated_at })
-        .eq('id', localExisting.id)
-        .select()
-        .maybeSingle();
+      let acceptedRow: FriendshipRow | null = null;
+      const { data: rpcData, error: rpcError } = await client.rpc('accept_friend_request', { other_user_id: id });
 
-      if (error) {
-        console.error('Unable to accept friend request:', error);
-        mergeFriendship(localExisting);
-        return;
+      if (!rpcError) {
+        acceptedRow = (Array.isArray(rpcData) ? rpcData[0] : rpcData) as FriendshipRow | null;
+      } else {
+        console.warn('accept_friend_request RPC unavailable, falling back to direct update:', rpcError);
       }
 
-      if (data) mergeFriendship(data as FriendshipRow);
+      if (!acceptedRow) {
+        if (!existing.id) {
+          mergeFriendship(existing);
+          throw new Error('Missing friend request id');
+        }
+
+        const { data, error } = await client
+          .from('friend_requests')
+          .update({ status: 'accepted', updated_at: acceptedFriendship.updated_at })
+          .eq('id', existing.id)
+          .select()
+          .maybeSingle();
+
+        if (error || !data) {
+          if (error) console.error('Unable to accept friend request:', error);
+          mergeFriendship(existing);
+          throw error ?? new Error('Friend request not found');
+        }
+
+        acceptedRow = data as FriendshipRow;
+      }
+
+      mergeFriendship(acceptedRow);
       await notify(id, 'friend_accept', 'Đã trở thành bạn bè', `${actorName} đã chấp nhận lời mời kết bạn.`);
+    };
+
+    if (localExisting?.requester_id === id && localExisting.target_profile_id === userId && localExisting.status === 'pending') {
+      await acceptFriendship(localExisting);
       return;
     }
 
-    const { data: existingFromDb, error: existingError } = await supabase
+    const { data: existingFromDb, error: existingError } = await client
       .from('friend_requests')
       .select('*')
       .or(`and(requester_id.eq.${userId},target_profile_id.eq.${id}),and(requester_id.eq.${id},target_profile_id.eq.${userId})`)
@@ -968,7 +1019,7 @@ export default function App() {
 
     if (existingError && !existing) {
       console.error('Unable to read friend request:', existingError);
-      return;
+      throw existingError;
     }
 
     if (existing?.status === 'accepted') {
@@ -977,31 +1028,7 @@ export default function App() {
     }
 
     if (existing && existing.requester_id === id && existing.target_profile_id === userId) {
-      const acceptedFriendship: FriendshipRow = {
-        ...existing,
-        status: 'accepted',
-        updated_at: new Date().toISOString(),
-      };
-      mergeFriendship(acceptedFriendship);
-      setRequested((current) => current.filter((requestId) => requestId !== id));
-
-      const { data, error } = await supabase
-        .from('friend_requests')
-        .update({ status: 'accepted', updated_at: acceptedFriendship.updated_at })
-        .eq('id', existing.id)
-        .select()
-        .maybeSingle();
-
-      if (error) {
-        console.error('Unable to accept friend request:', error);
-        mergeFriendship(existing);
-        return;
-      }
-
-      if (data) {
-        mergeFriendship(data as FriendshipRow);
-      }
-      await notify(id, 'friend_accept', 'Đã trở thành bạn bè', `${actorName} đã chấp nhận lời mời kết bạn.`);
+      await acceptFriendship(existing);
       return;
     }
 
@@ -1009,18 +1036,19 @@ export default function App() {
 
     if (existing && existing.requester_id === userId) {
       if (existing.status === 'pending') return;
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from('friend_requests')
         .update({ status: 'pending' })
         .eq('id', existing.id)
         .select()
         .single();
 
-      if (!error && data) mergeFriendship(data as FriendshipRow);
+      if (error) throw error;
+      if (data) mergeFriendship(data as FriendshipRow);
       return;
     }
 
-    const { data: newReq, error } = await supabase.from('friend_requests').insert({
+    const { data: newReq, error } = await client.from('friend_requests').insert({
       requester_id: userId,
       target_profile_id: id,
       status: 'pending',
@@ -1032,6 +1060,7 @@ export default function App() {
     } else if (error) {
       console.error('Unable to create friend request:', error);
       setRequested((current) => current.filter((requestId) => requestId !== id));
+      throw error;
     }
   }
 
@@ -1158,7 +1187,7 @@ export default function App() {
               companions={companions}
               requested={requested}
               friendships={friendships}
-              onRequest={(id) => void requestConnection(id)}
+              onRequest={requestConnection}
               session={session}
               onOpenNotifications={handleOpenNotifications}
               unreadCount={unreadCount}
@@ -1180,6 +1209,16 @@ export default function App() {
               lang={lang}
               onChangeLang={setLang}
               earnedBadges={earnedBadges}
+              isAdmin={isAdmin}
+              onOpenAdmin={() => changeTab('admin')}
+            />
+          ) : null}
+          {tab === 'admin' ? (
+            <AdminScreen
+              session={session}
+              isAdmin={isAdmin}
+              lang={lang}
+              onBack={() => changeTab('profile')}
             />
           ) : null}
 

@@ -6,12 +6,26 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE OR REPLACE FUNCTION public.set_updated_at()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
 BEGIN
-  NEW.updated_at = timezone('utc'::text, now());
+  NEW.updated_at = now();
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$;
+
+CREATE OR REPLACE FUNCTION public.is_app_admin()
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SET search_path = public
+AS $$
+  SELECT lower(coalesce(auth.jwt() ->> 'email', '')) IN ('michintashop@gmail.com');
+$$;
+
+GRANT EXECUTE ON FUNCTION public.is_app_admin() TO authenticated;
 
 -- 1. Profiles
 CREATE TABLE IF NOT EXISTS public.profiles (
@@ -140,6 +154,43 @@ DROP TRIGGER IF EXISTS set_friend_requests_updated_at ON public.friend_requests;
 CREATE TRIGGER set_friend_requests_updated_at
 BEFORE UPDATE ON public.friend_requests
 FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+CREATE OR REPLACE FUNCTION public.accept_friend_request(other_user_id UUID)
+RETURNS TABLE(id UUID, requester_id UUID, target_profile_id UUID, status TEXT, created_at TIMESTAMP WITH TIME ZONE, updated_at TIMESTAMP WITH TIME ZONE)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  current_user_id UUID := (select auth.uid());
+BEGIN
+  IF current_user_id IS NULL THEN
+    RAISE EXCEPTION 'Authentication required';
+  END IF;
+
+  RETURN QUERY
+  WITH updated AS (
+    UPDATE public.friend_requests fr
+    SET status = 'accepted', updated_at = now()
+    WHERE fr.requester_id = other_user_id
+      AND fr.target_profile_id = current_user_id
+      AND fr.status = 'pending'
+    RETURNING fr.id, fr.requester_id, fr.target_profile_id, fr.status, fr.created_at, fr.updated_at
+  )
+  SELECT * FROM updated
+  UNION ALL
+  SELECT fr.id, fr.requester_id, fr.target_profile_id, fr.status, fr.created_at, fr.updated_at
+  FROM public.friend_requests fr
+  WHERE fr.requester_id = other_user_id
+    AND fr.target_profile_id = current_user_id
+    AND fr.status = 'accepted'
+    AND NOT EXISTS (SELECT 1 FROM updated)
+  LIMIT 1;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.accept_friend_request(UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.accept_friend_request(UUID) TO authenticated;
 
 CREATE OR REPLACE FUNCTION public.are_profiles_friends(user_a UUID, user_b UUID)
 RETURNS BOOLEAN
@@ -435,7 +486,41 @@ CREATE POLICY "Authenticated users can insert reviews." ON public.place_reviews 
 DROP POLICY IF EXISTS "Users can update own reviews." ON public.place_reviews;
 CREATE POLICY "Users can update own reviews." ON public.place_reviews FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 DROP POLICY IF EXISTS "Users can delete own reviews." ON public.place_reviews;
-CREATE POLICY "Users can delete own reviews." ON public.place_reviews FOR DELETE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete own reviews." ON public.place_reviews
+FOR DELETE USING (auth.uid() = user_id OR public.is_app_admin());
+
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+  'review-images',
+  'review-images',
+  true,
+  5242880,
+  ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif']::text[]
+)
+ON CONFLICT (id) DO UPDATE
+SET public = true,
+    file_size_limit = EXCLUDED.file_size_limit,
+    allowed_mime_types = EXCLUDED.allowed_mime_types;
+
+DROP POLICY IF EXISTS "Anyone can view review images." ON storage.objects;
+CREATE POLICY "Anyone can view review images." ON storage.objects
+FOR SELECT USING (bucket_id = 'review-images');
+
+DROP POLICY IF EXISTS "Users can upload own review images." ON storage.objects;
+CREATE POLICY "Users can upload own review images." ON storage.objects
+FOR INSERT TO authenticated
+WITH CHECK (
+  bucket_id = 'review-images'
+  AND (storage.foldername(name))[1] = (select auth.uid())::text
+);
+
+DROP POLICY IF EXISTS "Users can delete own review images." ON storage.objects;
+CREATE POLICY "Users can delete own review images." ON storage.objects
+FOR DELETE TO authenticated
+USING (
+  bucket_id = 'review-images'
+  AND ((storage.foldername(name))[1] = (select auth.uid())::text OR public.is_app_admin())
+);
 
 CREATE INDEX IF NOT EXISTS place_reviews_created_idx ON public.place_reviews(created_at DESC);
 CREATE INDEX IF NOT EXISTS place_reviews_category_idx ON public.place_reviews(category);
@@ -492,6 +577,9 @@ FROM (
 ) AS counts
 WHERE pr.id = counts.id;
 
+DROP FUNCTION IF EXISTS public.increment_review_upvote(UUID);
+DROP FUNCTION IF EXISTS public.increment_review_downvote(UUID);
+DROP FUNCTION IF EXISTS public.set_review_vote(UUID, TEXT);
 CREATE OR REPLACE FUNCTION public.set_review_vote(row_id UUID, next_vote TEXT)
 RETURNS TABLE(upvotes_count INTEGER, downvotes_count INTEGER, vote_type TEXT)
 LANGUAGE plpgsql
@@ -602,53 +690,61 @@ BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE public.community_notifications;
 EXCEPTION WHEN duplicate_object THEN
   NULL;
-END $$;
+END;
+$$;
 
 DO $$
 BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE public.community_comments;
 EXCEPTION WHEN duplicate_object THEN
   NULL;
-END $$;
+END;
+$$;
 
 DO $$
 BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE public.community_posts;
 EXCEPTION WHEN duplicate_object THEN
   NULL;
-END $$;
+END;
+$$;
 
 DO $$
 BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE public.friend_requests;
 EXCEPTION WHEN duplicate_object THEN
   NULL;
-END $$;
+END;
+$$;
 
 DO $$
 BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE public.chat_messages;
 EXCEPTION WHEN duplicate_object THEN
   NULL;
-END $$;
+END;
+$$;
 
 DO $$
 BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE public.profiles;
 EXCEPTION WHEN duplicate_object THEN
   NULL;
-END $$;
+END;
+$$;
 
 DO $$
 BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE public.place_reviews;
 EXCEPTION WHEN duplicate_object THEN
   NULL;
-END $$;
+END;
+$$;
 
 DO $$
 BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE public.place_review_votes;
 EXCEPTION WHEN duplicate_object THEN
   NULL;
-END $$;
+END;
+$$;
