@@ -1838,9 +1838,10 @@ select {
 .bottom-tabs {
   position: fixed;
   z-index: 2500;
-  left: 12px;
-  right: 12px;
+  left: 50%;
+  right: auto;
   bottom: 10px;
+  width: min(calc(100vw - 24px), 406px);
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 6px;
@@ -1850,6 +1851,7 @@ select {
   border-radius: 28px;
   box-shadow: 0 20px 52px rgba(28, 43, 76, 0.16);
   backdrop-filter: blur(22px);
+  transform: translateX(-50%);
   pointer-events: auto;
 }
 
@@ -1860,6 +1862,9 @@ select {
   border: 0;
   border-radius: 22px;
   background: transparent;
+  width: 100%;
+  min-width: 0;
+  padding: 0 2px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1869,6 +1874,12 @@ select {
   font-size: 11px;
   font-weight: 800;
   letter-spacing: -0.01em;
+}
+
+.tab-item>span:last-child {
+  width: 100%;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .tab-item.active {
@@ -9006,6 +9017,7 @@ select {
 .admin-content-panel,
 .admin-user-row,
 .admin-content-row,
+.admin-notification-row,
 .admin-announcement,
 .admin-access-card {
   background: white;
@@ -9023,6 +9035,26 @@ select {
   justify-content: space-between;
 }
 
+button.admin-stat-card {
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.admin-stat-card.clickable {
+  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.admin-stat-card.clickable:hover {
+  border-color: rgba(39, 82, 255, 0.32);
+  transform: translateY(-1px);
+}
+
+.admin-stat-card.clickable:active {
+  transform: scale(0.98);
+}
+
 .admin-stat-card svg {
   color: #2752ff;
 }
@@ -9038,6 +9070,18 @@ select {
   color: #64748b;
   font-size: 12px;
   font-weight: 850;
+}
+
+.admin-stat-card small {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: #eef2ff;
+  color: #2752ff;
+  font-size: 11px;
+  font-weight: 950;
 }
 
 .admin-tabbar {
@@ -9120,6 +9164,7 @@ select {
 }
 
 .admin-panel-scroll>.admin-content-row:first-child,
+.admin-panel-scroll>.admin-notification-row:first-child,
 .admin-panel-scroll>.admin-user-list:first-child .admin-user-row:first-child,
 .admin-panel-scroll>.admin-log-list:first-child .admin-log-row:first-child {
   margin-top: 0;
@@ -9133,6 +9178,7 @@ select {
 }
 
 .admin-content-row,
+.admin-notification-row,
 .admin-user-row {
   border-radius: 18px;
   padding: 14px;
@@ -9158,6 +9204,7 @@ select {
 }
 
 .admin-content-row h3,
+.admin-notification-row h3,
 .admin-user-row h3 {
   margin: 0;
   color: #0f172a;
@@ -9168,6 +9215,7 @@ select {
 }
 
 .admin-content-row p,
+.admin-notification-row p,
 .admin-user-row p,
 .admin-announcement p,
 .admin-log-row p {
@@ -9186,6 +9234,7 @@ select {
 }
 
 .admin-content-row small,
+.admin-notification-row small,
 .admin-user-row small,
 .admin-announcement small,
 .admin-log-row small,
@@ -9209,6 +9258,47 @@ select {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.admin-section-subtitle {
+  margin: 18px 0 10px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.admin-history-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: #f8fafc;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.admin-history-toolbar span {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.admin-history-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  border: none;
+  border-radius: 999px;
+  padding: 0 11px;
+  background: #111827;
+  color: white;
+  font-size: 12px;
+  font-weight: 950;
+  cursor: pointer;
 }
 
 .admin-user-row {
@@ -9417,6 +9507,7 @@ select {
 .dark .admin-content-panel,
 .dark .admin-user-row,
 .dark .admin-content-row,
+.dark .admin-notification-row,
 .dark .admin-announcement,
 .dark .admin-access-card {
   background: #111a2d;
@@ -9428,6 +9519,7 @@ select {
 .dark .admin-stat-card strong,
 .dark .admin-content-panel h2,
 .dark .admin-content-row h3,
+.dark .admin-notification-row h3,
 .dark .admin-user-row h3,
 .dark .admin-log-row strong {
   color: #f8fafc;
@@ -9435,6 +9527,7 @@ select {
 
 .dark .admin-title-row p,
 .dark .admin-content-row p,
+.dark .admin-notification-row p,
 .dark .admin-user-row p,
 .dark .admin-announcement p,
 .dark .admin-log-row p,
@@ -9457,6 +9550,26 @@ select {
 .dark .admin-row-badge {
   background: rgba(79, 115, 255, 0.16);
   color: #9fb0ff;
+}
+
+.dark .admin-section-subtitle,
+.dark .admin-stat-card span,
+.dark .admin-notification-row small {
+  color: #94a3b8;
+}
+
+.dark .admin-stat-card small {
+  background: rgba(79, 115, 255, 0.16);
+  color: #9fb0ff;
+}
+
+.dark .admin-history-toolbar {
+  background: #0f172a;
+  border-color: rgba(148, 163, 184, 0.16);
+}
+
+.dark .admin-history-toolbar span {
+  color: #cbd5e1;
 }
 
 .dark .admin-notice {

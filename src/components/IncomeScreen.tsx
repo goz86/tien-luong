@@ -64,15 +64,30 @@ function currentMonthIso() {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-01`;
 }
 
+function dateToIso(value: Date) {
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
+}
+
+function currentWeekRange() {
+  const today = new Date();
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const mondayIndex = (start.getDay() + 6) % 7;
+  start.setDate(start.getDate() - mondayIndex);
+
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+
+  return {
+    startIso: dateToIso(start),
+    endIso: dateToIso(end),
+  };
+}
+
 function formatPercent(value: number) {
   return `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
 }
 
 export function IncomeScreen({
-  monthlyTotal,
-  monthlyHours,
-  averageHourly,
-  workplaces,
   rate,
   shifts,
   venueColors,
@@ -84,10 +99,6 @@ export function IncomeScreen({
   onSetTarget,
   lang = 'vi',
 }: {
-  monthlyTotal: number;
-  monthlyHours: number;
-  averageHourly: number;
-  workplaces: Array<{ label: string; total: number; count: number; hours: number }>;
   rate: RateState;
   shifts: Shift[];
   venueColors: VenueColors;
@@ -103,7 +114,7 @@ export function IncomeScreen({
   const locale = isKo ? 'ko-KR' : 'vi-VN';
   const ui = isKo ? {
     tabs: { overview: '요약', expenses: '지출', workplaces: '근무지' },
-    netIncome: '이번 달 순수입',
+    netIncome: '월 순수입',
     grossIncome: '총 급여',
     expenses: '지출',
     totalHours: '총 시간',
@@ -113,7 +124,7 @@ export function IncomeScreen({
     needMore: (value: string) => `목표까지 ${value} 남았습니다.`,
     goalDone: '이번 달 목표를 달성했습니다.',
     incomeTabs: '수입 메뉴',
-    weeklyRhythm: '주간 근무 흐름',
+    weeklyRhythm: '이번 주 근무 흐름',
     weeklyIncome: '요일별 수입',
     monthOverview: '월간 요약',
     monthIncome: (days: number) => `${days}일 수입`,
@@ -142,7 +153,7 @@ export function IncomeScreen({
     shifts: '회',
   } : {
     tabs: { overview: 'Tổng quan', expenses: 'Chi tiêu', workplaces: 'Nơi làm' },
-    netIncome: 'Thu nhập ròng tháng này',
+    netIncome: 'Thu nhập ròng tháng',
     grossIncome: 'Tổng lương',
     expenses: 'Chi tiêu',
     totalHours: 'Tổng giờ',
@@ -152,7 +163,7 @@ export function IncomeScreen({
     needMore: (value: string) => `Cần ${value} để đạt mục tiêu.`,
     goalDone: 'Bạn đã vượt mục tiêu tháng này.',
     incomeTabs: 'Mục thu nhập',
-    weeklyRhythm: 'Nhịp làm việc tuần',
+    weeklyRhythm: 'Nhịp làm việc tuần này',
     weeklyIncome: 'Thu theo ngày trong tuần',
     monthOverview: 'Tổng quan tháng',
     monthIncome: (days: number) => `Thu nhập ${days} ngày`,
@@ -213,7 +224,7 @@ export function IncomeScreen({
     date: new Date().toISOString().slice(0, 10),
     note: '',
   });
-  const prevTotalRef = useRef(monthlyTotal);
+  const prevTotalRef = useRef<number | null>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent | TouchEvent) => {
@@ -237,31 +248,76 @@ export function IncomeScreen({
     return formatKrw(val);
   };
 
+  const selectedMonthKey = chartMonth.slice(0, 7);
+  const chartMonthDate = useMemo(() => new Date(`${chartMonth}T00:00:00`), [chartMonth]);
+  const chartMonthNumber = chartMonthDate.getMonth() + 1;
+  const chartMonthTitle = new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(chartMonthDate);
+  const chartDaysInMonth = new Date(chartMonthDate.getFullYear(), chartMonthDate.getMonth() + 1, 0).getDate();
+
+  const monthShifts = useMemo(
+    () => shifts.filter((shift) => shift.date.startsWith(selectedMonthKey)),
+    [selectedMonthKey, shifts]
+  );
+
+  const monthExpenses = useMemo(
+    () => expenses.filter((expense) => expense.date.startsWith(selectedMonthKey)),
+    [expenses, selectedMonthKey]
+  );
+
+  const monthlyTotal = useMemo(
+    () => monthShifts.reduce((sum, shift) => sum + calculateShiftPay(shift).total, 0),
+    [monthShifts]
+  );
+
+  const monthlyHours = useMemo(
+    () => monthShifts.reduce((sum, shift) => sum + calculateShiftPay(shift).hours, 0),
+    [monthShifts]
+  );
+
+  const averageHourly = monthlyHours ? monthlyTotal / monthlyHours : 0;
+
+  const workplaces = useMemo(() => {
+    const map = new Map<string, { label: string; total: number; count: number; hours: number }>();
+    monthShifts.forEach((shift) => {
+      const current = map.get(shift.label) ?? { label: shift.label, total: 0, count: 0, hours: 0 };
+      const pay = calculateShiftPay(shift);
+      map.set(shift.label, {
+        label: shift.label,
+        total: current.total + pay.total,
+        count: current.count + 1,
+        hours: current.hours + pay.hours,
+      });
+    });
+    return [...map.values()].sort((a, b) => b.total - a.total);
+  }, [monthShifts]);
+
+  const weekRange = useMemo(currentWeekRange, []);
+  const currentWeekShifts = useMemo(
+    () => shifts.filter((shift) => shift.date >= weekRange.startIso && shift.date <= weekRange.endIso),
+    [shifts, weekRange.endIso, weekRange.startIso]
+  );
+
   const weekdayTotals = useMemo(
     () =>
       weekdayLabels.map((_, index) =>
-        shifts
+        currentWeekShifts
           .filter((shift) => {
             const day = new Date(`${shift.date}T00:00:00`).getDay();
             return (day + 6) % 7 === index;
           })
           .reduce((sum, shift) => sum + calculateShiftPay(shift).total, 0)
       ),
-    [shifts]
+    [currentWeekShifts]
   );
 
-  const totalExpenses = useMemo(() => expenses.reduce((sum, expense) => sum + expense.amount, 0), [expenses]);
+  const totalExpenses = useMemo(() => monthExpenses.reduce((sum, expense) => sum + expense.amount, 0), [monthExpenses]);
   const netBalance = monthlyTotal - totalExpenses;
   const maxWeekdayTotal = Math.max(...weekdayTotals, 1);
   const strongestDay = weekdayTotals.indexOf(Math.max(...weekdayTotals));
   const progressPercentage = Math.min((monthlyTotal / (target || 1)) * 100, 100);
   const progressColor = progressPercentage >= 100 ? '#0d9b72' : progressPercentage >= 55 ? '#f59e0b' : '#ff6b7a';
   const missingTarget = Math.max(target - monthlyTotal, 0);
-  const monthLabel = new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(new Date());
-  const chartMonthDate = useMemo(() => new Date(`${chartMonth}T00:00:00`), [chartMonth]);
-  const chartMonthNumber = chartMonthDate.getMonth() + 1;
-  const chartMonthTitle = new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(chartMonthDate);
-  const chartDaysInMonth = new Date(chartMonthDate.getFullYear(), chartMonthDate.getMonth() + 1, 0).getDate();
+  const monthLabel = chartMonthTitle;
 
   const workplaceInsights = useMemo(
     () =>
@@ -275,13 +331,13 @@ export function IncomeScreen({
 
   const dailyAggregated = useMemo(() => {
     const map = new Map<string, { total: number; hours: number }>();
-    shifts.forEach((s) => {
+    monthShifts.forEach((s) => {
       const current = map.get(s.date) || { total: 0, hours: 0 };
       const pay = calculateShiftPay(s);
       map.set(s.date, { total: current.total + pay.total, hours: current.hours + pay.hours });
     });
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [shifts]);
+  }, [monthShifts]);
 
   const maxHoursInDay = useMemo(() => {
     if (dailyAggregated.length === 0) return 0;
@@ -298,21 +354,19 @@ export function IncomeScreen({
   // Monthly stats for the new chart (summarize by day of month)
   const monthlyChartData = useMemo(() => {
     const results = Array(chartDaysInMonth).fill(0);
-    const selectedMonthKey = chartMonth.slice(0, 7);
-    shifts.forEach(s => {
-      if (!s.date.startsWith(selectedMonthKey)) return;
+    monthShifts.forEach(s => {
       const d = new Date(`${s.date}T00:00:00`).getDate();
       if (d >= 1 && d <= chartDaysInMonth) {
         results[d - 1] += calculateShiftPay(s).total;
       }
     });
     return results;
-  }, [chartDaysInMonth, chartMonth, shifts]);
+  }, [chartDaysInMonth, monthShifts]);
 
   const maxMonthlyDay = Math.max(...monthlyChartData, 1);
 
   useEffect(() => {
-    if (monthlyTotal >= target && prevTotalRef.current < target && target > 0) {
+    if (prevTotalRef.current !== null && monthlyTotal >= target && prevTotalRef.current < target && target > 0) {
       confetti({
         particleCount: 150,
         spread: 80,
@@ -468,7 +522,7 @@ export function IncomeScreen({
               <article>
                 <CalendarDays size={20} />
                 <span>{ui.shiftCount}</span>
-                <strong>{shifts.length} {ui.shifts}</strong>
+                <strong>{monthShifts.length} {ui.shifts}</strong>
               </article>
               <article>
                 <Clock size={20} />
@@ -561,8 +615,8 @@ export function IncomeScreen({
             ) : null}
 
             <div className="income-expense-list">
-              {expenses.length ? (
-                expenses.map((expense) => {
+              {monthExpenses.length ? (
+                monthExpenses.map((expense) => {
                   const meta = categoryMeta[expense.category];
                   const Icon = meta.icon;
                   return (

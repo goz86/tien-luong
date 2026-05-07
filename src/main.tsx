@@ -10,7 +10,26 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 );
 
 // Service Worker registration with update detection
-if ('serviceWorker' in navigator) {
+if ('serviceWorker' in navigator && import.meta.env.DEV) {
+  window.addEventListener('load', async () => {
+    try {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((registration) => registration.unregister()));
+
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.filter((key) => key.startsWith('duhoc-mate-')).map((key) => caches.delete(key)));
+      }
+
+      if (navigator.serviceWorker.controller && !sessionStorage.getItem('duhoc-mate-dev-sw-reset')) {
+        sessionStorage.setItem('duhoc-mate-dev-sw-reset', '1');
+        window.location.reload();
+      }
+    } catch {
+      // Dev cache cleanup failed; Vite can still serve the app.
+    }
+  });
+} else if ('serviceWorker' in navigator) {
   window.addEventListener('load', async () => {
     try {
       const registration = await navigator.serviceWorker.register('/sw.js');

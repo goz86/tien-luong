@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Duhoc Mate — Người bạn đồng hành cho du học sinh Việt tại Hàn</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --orange: #ff6b35;
+      --orange-light: #ff8f5e;
+      --navy: #0b1d3a;
+      --navy-light: #1a2f52;
+      --cream: #fef6f0;
+      --cream-dark: #f5e6d8;
+      --teal: #2ec4b6;
+      --teal-light: #5edfd2;
+      --white: #ffffff;
+      --gray: #64748b;
+      --gray-light: #e2e8f0;
+      --radius: 20px;
+      --shadow: 0 8px 32px rgba(11,29,58,0.08);
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--cream);
+      color: var(--navy);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+    /* ── noise texture ── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      opacity: 0.03;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+
+    /* ── header ── */
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 24px; max-width: 1248px; margin: 0 auto;
+    }
+    .logo {
+      font-family: 'DM Serif Display', serif; font-size: 1.6rem; font-style: italic;
+      color: var(--orange); letter-spacing: -0.5px;
+    }
+    .logo span { color: var(--navy); }
+    .header-links { display: flex; gap: 28px; align-items: center; }
+    .header-links a {
+      text-decoration: none; color: var(--navy); font-weight: 500; font-size: 0.9rem;
+      transition: color .2s;
+    }
+    .header-links a:hover { color: var(--orange); }
+    .btn-outline {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 10px 22px; border: 2px solid var(--orange); border-radius: 100px;
+      color: var(--orange); font-weight: 600; font-size: 0.85rem;
+      text-decoration: none; transition: all .2s;
+    }
+    .btn-outline:hover { background: var(--orange); color: #fff; }
+
+    /* ── hero ── */
+    .hero {
+      display: flex; align-items: center; gap: 60px;
+      padding: 60px 24px 80px; max-width: 1248px; margin: 0 auto;
+      position: relative;
+    }
+    .hero::before {
+      content: ''; position: absolute; top: -120px; right: -200px;
+      width: 600px; height: 600px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(255,107,53,0.08) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero-text { flex: 1; position: relative; z-index: 1; }
+    .hero-text .tag {
+      display: inline-block; background: rgba(255,107,53,0.12); color: var(--orange);
+      padding: 6px 16px; border-radius: 100px; font-size: 0.8rem; font-weight: 600;
+      margin-bottom: 20px; letter-spacing: 0.3px;
+    }
+    .hero-text h1 {
+      font-family: 'DM Serif Display', serif;
+      font-size: clamp(2.6rem, 5vw, 4rem); line-height: 1.1;
+      margin-bottom: 20px; letter-spacing: -1px;
+    }
+    .hero-text h1 .highlight {
+      background: linear-gradient(135deg, var(--orange), var(--teal));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero-text p {
+      font-size: 1.1rem; color: var(--gray); max-width: 480px;
+      margin-bottom: 32px; line-height: 1.7;
+    }
+    .app-badges { display: flex; gap: 12px; flex-wrap: wrap; }
+    .app-badge {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 12px 24px; border-radius: 14px;
+      background: var(--navy); color: #fff; text-decoration: none;
+      transition: transform .2s, box-shadow .2s;
+      font-size: 0.85rem;
+    }
+    .app-badge:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(11,29,58,0.2); }
+    .app-badge .icon { font-size: 1.4rem; }
+    .app-badge .sub { font-size: 0.65rem; opacity: 0.6; font-weight: 400; }
+    .app-badge .name { font-weight: 700; line-height: 1.2; }
+
+    .hero-visual { flex: 1; position: relative; z-index: 1; }
+    .hero-phone {
+      width: 100%; max-width: 380px; margin: 0 auto;
+      aspect-ratio: 9/19; border-radius: 36px;
+      background: linear-gradient(160deg, var(--navy), var(--navy-light));
+      box-shadow: 0 24px 80px rgba(11,29,58,0.25);
+      position: relative; overflow: hidden;
+      display: flex; flex-direction: column;
+    }
+    .hero-phone-status {
+      display: flex; justify-content: space-between; padding: 14px 20px 8px;
+      color: rgba(255,255,255,0.7); font-size: 0.7rem; font-weight: 500;
+    }
+    .hero-phone-notch {
+      width: 120px; height: 24px; background: #000; border-radius: 0 0 16px 16px;
+      margin: 0 auto;
+    }
+    .hero-phone-screen {
+      flex: 1; padding: 12px 16px; display: flex; flex-direction: column; gap: 8px;
+    }
+    .hero-phone-card {
+      background: rgba(255,255,255,0.08); border-radius: 12px;
+      padding: 10px 14px; backdrop-filter: blur(4px);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .hero-phone-card .label { font-size: 0.6rem; color: rgba(255,255,255,0.5); }
+    .hero-phone-card .value { font-size: 0.85rem; font-weight: 700; color: var(--teal-light); }
+    .hero-phone-card .value.orange { color: var(--orange-light); }
+    .hero-phone-total {
+      background: linear-gradient(135deg, var(--orange), var(--teal));
+      border-radius: 12px; padding: 14px; margin: auto 0 0;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .hero-phone-total .label { font-size: 0.65rem; opacity: 0.8; }
+    .hero-phone-total .value { font-size: 1.1rem; font-weight: 800; }
+
+    .hero-phone-tabs {
+      display: flex; justify-content: space-around; padding: 10px 16px 6px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    .hero-phone-tabs span {
+      font-size: 0.55rem; color: rgba(255,255,255,0.3);
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+    }
+    .hero-phone-tabs span::before { content: '●'; font-size: 0.6rem; color: rgba(255,255,255,0.15); }
+    .hero-phone-tabs span.active { color: var(--orange-light); }
+    .hero-phone-tabs span.active::before { color: var(--orange-light); }
+
+    /* ── floating elements ── */
+    .hero-float {
+      position: absolute; font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem; padding: 8px 14px; border-radius: 10px;
+      background: var(--white); box-shadow: var(--shadow);
+      animation: float 3s ease-in-out infinite;
+      pointer-events: none;
+    }
+    .hero-float.f1 { top: 8%; right: -20px; animation-delay: 0s; }
+    .hero-float.f2 { bottom: 20%; left: -30px; animation-delay: 1.5s; }
+    .hero-float .num { color: var(--orange); font-weight: 700; }
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-8px); }
+    }
+
+    /* ── section heading ── */
+    .section {
+      padding: 80px 0;
+    }
+    .section-label {
+      display: inline-block; text-transform: uppercase; font-size: 0.75rem;
+      font-weight: 700; letter-spacing: 2px; color: var(--orange);
+      margin-bottom: 12px;
+    }
+    .section-title {
+      font-family: 'DM Serif Display', serif;
+      font-size: clamp(2rem, 3.5vw, 2.8rem); line-height: 1.15;
+      margin-bottom: 16px;
+    }
+    .section-sub {
+      color: var(--gray); font-size: 1.05rem; max-width: 520px;
+      margin-bottom: 48px;
+    }
+    .section-sub.center { text-align: center; margin-left: auto; margin-right: auto; }
+
+    /* ── features ── */
+    .features { display: grid; grid-template-columns: repeat(3,1fr); gap: 24px; }
+    .feature-card {
+      background: var(--white); border-radius: var(--radius);
+      padding: 36px 28px; box-shadow: var(--shadow);
+      transition: transform .3s, box-shadow .3s;
+      position: relative; overflow: hidden;
+    }
+    .feature-card:hover { transform: translateY(-4px); box-shadow: 0 16px 48px rgba(11,29,58,0.12); }
+    .feature-card .icon-wrap {
+      width: 52px; height: 52px; border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.5rem; margin-bottom: 20px;
+    }
+    .feature-card:nth-child(1) .icon-wrap { background: rgba(255,107,53,0.12); color: var(--orange); }
+    .feature-card:nth-child(2) .icon-wrap { background: rgba(46,196,182,0.12); color: var(--teal); }
+    .feature-card:nth-child(3) .icon-wrap { background: rgba(11,29,58,0.08); color: var(--navy); }
+    .feature-card h3 { font-size: 1.2rem; margin-bottom: 10px; }
+    .feature-card p { font-size: 0.9rem; color: var(--gray); line-height: 1.6; }
+    .feature-card .num {
+      position: absolute; top: 20px; right: 24px;
+      font-family: 'DM Serif Display', serif; font-size: 3rem;
+      color: var(--gray-light); line-height: 1;
+    }
+
+    /* ── stats ── */
+    .stats-section {
+      background: var(--navy); color: #fff;
+      padding: 80px 0; position: relative; overflow: hidden;
+    }
+    .stats-section::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(ellipse at 20% 50%, rgba(255,107,53,0.08) 0%, transparent 50%),
+                  radial-gradient(ellipse at 80% 50%, rgba(46,196,182,0.08) 0%, transparent 50%);
+    }
+    .stats-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 32px; position: relative; z-index: 1; }
+    .stat-item { text-align: center; }
+    .stat-number {
+      font-family: 'DM Serif Display', serif;
+      font-size: clamp(2.5rem, 4vw, 3.5rem); line-height: 1;
+      background: linear-gradient(135deg, var(--orange), var(--teal));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text; margin-bottom: 8px;
+    }
+    .stat-label { font-size: 0.9rem; opacity: 0.6; }
+
+    /* ── reviews ── */
+    .reviews { display: grid; grid-template-columns: repeat(2,1fr); gap: 20px; }
+    .review-card {
+      background: var(--white); border-radius: var(--radius);
+      padding: 28px; box-shadow: var(--shadow); position: relative;
+    }
+    .review-card .stars { color: #fbbf24; font-size: 1rem; margin-bottom: 12px; letter-spacing: 2px; }
+    .review-card blockquote {
+      font-size: 0.95rem; line-height: 1.7; color: var(--navy);
+      margin-bottom: 12px; font-style: italic;
+    }
+    .review-card .author { font-size: 0.8rem; color: var(--gray); font-weight: 500; }
+
+    /* ── comparison ── */
+    .comparison {
+      background: var(--white); border-radius: var(--radius);
+      padding: 48px; box-shadow: var(--shadow);
+      display: grid; grid-template-columns: 1fr auto 1fr; gap: 24px; align-items: center;
+    }
+    .comp-item { text-align: center; }
+    .comp-item .emoji { font-size: 2.5rem; margin-bottom: 12px; }
+    .comp-item h4 { font-size: 1.1rem; margin-bottom: 6px; }
+    .comp-item p { font-size: 0.85rem; color: var(--gray); }
+    .comp-vs {
+      font-family: 'DM Serif Display', serif; font-size: 2rem;
+      color: var(--gray-light); font-style: italic;
+    }
+
+    /* ── partner ── */
+    .partner-section {
+      background: var(--white); border-radius: var(--radius);
+      padding: 48px; box-shadow: var(--shadow); text-align: center;
+    }
+    .partner-section h3 { font-family: 'DM Serif Display', serif; font-size: 1.6rem; margin-bottom: 8px; }
+    .partner-section p { color: var(--gray); max-width: 500px; margin: 0 auto 28px; }
+
+    /* ── footer ── */
+    footer {
+      text-align: center; padding: 48px 24px;
+      color: var(--gray); font-size: 0.85rem;
+    }
+    footer a { color: var(--navy); text-decoration: none; }
+    footer a:hover { color: var(--orange); }
+
+    /* ── responsive ── */
+    @media (max-width: 900px) {
+      .hero { flex-direction: column; text-align: center; padding: 40px 24px 60px; }
+      .hero-text p { margin-left: auto; margin-right: auto; }
+      .app-badges { justify-content: center; }
+      .hero-visual { max-width: 280px; }
+      .features { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: 1fr; gap: 24px; }
+      .reviews { grid-template-columns: 1fr; }
+      .comparison { grid-template-columns: 1fr; text-align: center; }
+      .comp-vs { font-size: 1.5rem; }
+      .hero-float { display: none; }
+    }
+    @media (max-width: 600px) {
+      .hero { padding: 24px 16px 40px; }
+      .header-links a:not(.btn-outline) { display: none; }
+      .feature-card { padding: 24px 20px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ═══ HEADER ═══ -->
+  <header>
+    <div class="logo">Duhoc<span>Mate</span></div>
+    <div class="header-links">
+      <a href="#features">Tính năng</a>
+      <a href="#stats">Thống kê</a>
+      <a href="#reviews">Đánh giá</a>
+      <a href="http://127.0.0.1:4173" class="btn-outline">✨ Dùng thử</a>
+    </div>
+  </header>
+
+  <!-- ═══ HERO ═══ -->
+  <section class="hero">
+    <div class="hero-text">
+      <div class="tag">🇻🇳 Dành cho du học sinh Việt tại Hàn</div>
+      <h1>
+        Tính lương, đổi tỷ giá,<br />
+        <span class="highlight">kết bạn</span> — tất cả trong một app
+      </h1>
+      <p>
+        Không cần loay hoay với sổ sách hay Google Sheets nữa.
+        Duhoc Mate giúp bạn tính lương làm thêm theo luật Hàn Quốc,
+        quy đổi KRW→VND realtime, và kết nối với cộng đồng du học sinh gần bạn.
+      </p>
+      <div class="app-badges">
+        <a href="#" class="app-badge">
+          <span class="icon">🍎</span>
+          <div>
+            <div class="sub">Tải trên</div>
+            <div class="name">App Store</div>
+          </div>
+        </a>
+        <a href="#" class="app-badge">
+          <span class="icon">▶️</span>
+          <div>
+            <div class="sub">Tải trên</div>
+            <div class="name">Google Play</div>
+          </div>
+        </a>
+        <a href="http://127.0.0.1:4173" class="app-badge" style="background:var(--orange);">
+          <span class="icon">🌐</span>
+          <div>
+            <div class="sub">Dùng ngay</div>
+            <div class="name">Web App</div>
+          </div>
+        </a>
+      </div>
+    </div>
+
+    <div class="hero-visual">
+      <div class="hero-float f1"><span class="num">₩1,320,000</span> tháng 5</div>
+      <div class="hero-float f2">🇰🇷 → 🇻🇳 <span class="num">₩1 = ₫18.1</span></div>
+      <div class="hero-phone">
+        <div class="hero-phone-notch"></div>
+        <div class="hero-phone-status">
+          <span>16:24</span>
+          <span>📶 🔋</span>
+        </div>
+        <div class="hero-phone-screen">
+          <div class="hero-phone-card">
+            <div><div class="label">Nơi làm</div><div style="font-size:0.8rem;color:#fff;font-weight:600;">Cafe Hongdae</div></div>
+            <div class="value">₩46,200</div>
+          </div>
+          <div class="hero-phone-card">
+            <div><div class="label">Nơi làm</div><div style="font-size:0.8rem;color:#fff;font-weight:600;">Nhà hàng Gangnam</div></div>
+            <div class="value">₩72,800</div>
+          </div>
+          <div class="hero-phone-card">
+            <div><div class="label">Nơi làm</div><div style="font-size:0.8rem;color:#fff;font-weight:600;">Gia sư</div></div>
+            <div class="value orange">₩120,000</div>
+          </div>
+          <div class="hero-phone-total">
+            <div><div class="label">Tổng tháng 5</div></div>
+            <div class="value">₩1,320,000</div>
+          </div>
+          <div class="hero-phone-tabs">
+            <span>🏠</span>
+            <span class="active">📅</span>
+            <span>💰</span>
+            <span>👥</span>
+            <span>👤</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ FEATURES ═══ -->
+  <section class="section" id="features">
+    <div class="container">
+      <div class="section-label">Tính năng</div>
+      <h2 class="section-title">Mọi thứ bạn cần, gói gọn trong một app</h2>
+      <p class="section-sub">
+        Từ tính lương đến tìm bạn — Duhoc Mate là người bạn đồng hành
+        đáng tin cậy cho hành trình du học Hàn Quốc.
+      </p>
+
+      <div class="features">
+        <div class="feature-card">
+          <span class="num">01</span>
+          <div class="icon-wrap">🧮</div>
+          <h3>Tính lương thông minh</h3>
+          <p>
+            Tự động tính lương theo luật Hàn — phụ cấp ca đêm x1.5,
+            thuế 3.3%, 주휴수당 (phụ cấp cuối tuần). So sánh với lương
+            tối thiểu 2026: <strong>₩10,320/giờ</strong>.
+          </p>
+        </div>
+        <div class="feature-card">
+          <span class="num">02</span>
+          <div class="icon-wrap">💱</div>
+          <h3>Tỷ giá KRW→VND trực tiếp</h3>
+          <p>
+            Chuyển đổi tiền Hàn sang Việt Nam ngay lập tức với tỷ giá realtime.
+            Không cần mở thêm app nào khác — biết ngay bạn đang kiếm được
+            bao nhiêu tiền Việt.
+          </p>
+        </div>
+        <div class="feature-card">
+          <span class="num">03</span>
+          <div class="icon-wrap">🤝</div>
+          <h3>Cộng đồng &amp; Kết bạn</h3>
+          <p>
+            Tìm kiếm du học sinh gần bạn theo khu vực (Hongdae, Gangnam,
+            Suwon, Busan...). Chia sẻ việc làm, kinh nghiệm, và kết nối
+            với những người cùng cảnh ngộ.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ COMPARISON ═══ -->
+  <section class="section" style="padding-top:0;">
+    <div class="container">
+      <div class="comparison">
+        <div class="comp-item">
+          <div class="emoji">📱</div>
+          <h4>Làm thủ công</h4>
+          <p>Sổ sách giấy, Google Sheets, tự nhẩm lương mỗi tháng</p>
+        </div>
+        <div class="comp-vs">VS</div>
+        <div class="comp-item">
+          <div class="emoji">🚀</div>
+          <h4>Duhoc Mate</h4>
+          <p>Tự động mọi thứ — nhập ca, tính lương, đổi tiền, kết bạn</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ STATS ═══ -->
+  <section class="stats-section" id="stats">
+    <div class="container">
+      <div class="section-label" style="color:var(--orange);text-align:center;">Thống kê</div>
+      <h2 class="section-title" style="text-align:center;color:#fff;">
+        Cộng đồng đang lớn mạnh mỗi ngày
+      </h2>
+      <p class="section-sub center" style="opacity:0.5;color:#fff;">
+        Dữ liệu từ những người dùng đã tin tưởng Duhoc Mate
+      </p>
+      <div class="stats-grid">
+        <div class="stat-item">
+          <div class="stat-number">5,000+</div>
+          <div class="stat-label">Người dùng đăng ký</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-number">120,000+</div>
+          <div class="stat-label">Ca làm đã ghi nhận</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-number">₩2.1B+</div>
+          <div class="stat-label">Tiền lương đã tính</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ REVIEWS ═══ -->
+  <section class="section" id="reviews">
+    <div class="container">
+      <div class="section-label">Cảm nhận</div>
+      <h2 class="section-title">Người dùng nói gì về Duhoc Mate</h2>
+      <p class="section-sub">
+        Những chia sẻ thật từ cộng đồng du học sinh Việt tại Hàn.
+      </p>
+      <div class="reviews">
+        <div class="review-card">
+          <div class="stars">★★★★★</div>
+          <blockquote>
+            "Trước đây mình ghi sổ tay, cuối tháng ngồi cộng từng ca — vừa lâu vừa sai.
+            Từ ngày có Duhoc Mate, nhập ca xong là biết ngay lương, so sánh được với
+            lương tối thiểu nữa. Tiện vãi!"
+          </blockquote>
+          <div class="author">— Minh, du học sinh tại Seoul</div>
+        </div>
+        <div class="review-card">
+          <div class="stars">★★★★★</div>
+          <blockquote>
+            "Mình mới sang Hàn được 6 tháng, chưa biết ai. Nhờ tính năng tìm bạn
+            theo khu vực trong app, mình đã kết nối được với mấy bạn học cùng trường.
+            Có cả job board nữa, kiếm được việc làm thêm luôn!"
+          </blockquote>
+          <div class="author">— Linh, du học sinh tại Suwon</div>
+        </div>
+        <div class="review-card">
+          <div class="stars">★★★★★</div>
+          <blockquote>
+            "Cái hay nhất là tỷ giá KRW→VND realtime. Gửi tiền về nhà biết ngay
+            chính xác được bao nhiêu. Có cả tính thuế 3.3% cho bạn nào làm freelance
+            như mình nữa. 10 điểm!"
+          </blockquote>
+          <div class="author">— Đức, du học sinh tại Gangnam</div>
+        </div>
+        <div class="review-card">
+          <div class="stars">★★★★★</div>
+          <blockquote>
+            "Mình recommend app này cho hội bạn trong group 'Du học sinh Việt tại Hàn'.
+            Ai cũng khen. Chủ quán cafe chỗ mình làm còn hỏi 'app gì hay thế' 😂"
+          </blockquote>
+          <div class="author">— Hương, du học sinh tại Hongdae</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ PARTNER ═══ -->
+  <section class="section" style="padding-top:0;">
+    <div class="container">
+      <div class="partner-section">
+        <h3>📢 Hợp tác cùng Duhoc Mate</h3>
+        <p>
+          Bạn là chủ quán, nhà hàng, hoặc trung tâm ngoại ngữ tại Hàn?
+          Đăng tuyển dụng miễn phí và tiếp cận hàng ngàn du học sinh Việt
+          chất lượng đang tìm việc làm thêm.
+        </p>
+        <a href="#" class="btn-outline" style="background:var(--orange);color:#fff;border-color:var(--orange);">
+          Liên hệ hợp tác →
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ FOOTER ═══ -->
+  <footer>
+    <p>
+      Made with 💜 for Vietnamese students in Korea &nbsp;·&nbsp;
+      <a href="http://127.0.0.1:4173">Dùng thử Duhoc Mate</a>
+    </p>
+  </footer>
+
+</body>
+</html>

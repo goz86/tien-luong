@@ -104,12 +104,30 @@ type AdminAnnouncement = {
   created_at: string;
 };
 
+type AdminNotification = {
+  id: string;
+  recipient_id: string;
+  actor_id: string | null;
+  post_id: string | null;
+  comment_id: string | null;
+  type: string;
+  title: string;
+  body: string;
+  is_read: boolean | null;
+  created_at: string;
+};
+
 type DashboardStats = {
   users: number;
   posts: number;
   comments: number;
   reviews: number;
   notifications: number;
+};
+
+type AdminSeenState = {
+  comments: string;
+  notifications: string;
 };
 
 const ADMIN_TABS: Array<{ id: AdminTab; icon: typeof ShieldCheck }> = [
@@ -120,6 +138,12 @@ const ADMIN_TABS: Array<{ id: AdminTab; icon: typeof ShieldCheck }> = [
   { id: 'logs', icon: ShieldCheck },
 ];
 
+const ADMIN_SEEN_KEY = 'duhoc-mate-admin-seen-v1';
+const ADMIN_SEEN_FALLBACK: AdminSeenState = {
+  comments: '1970-01-01T00:00:00.000Z',
+  notifications: '1970-01-01T00:00:00.000Z',
+};
+
 const UI = {
   vi: {
     title: 'Quản trị',
@@ -128,7 +152,7 @@ const UI = {
     online: 'Admin online',
     refresh: 'Làm mới',
     noAccess: 'Tài khoản này chưa có quyền quản trị.',
-    patchHint: 'Chưa đọc được bảng admin. Hãy chạy file supabase/admin_dashboard_patch.sql trong Supabase.',
+    patchHint: 'Chưa đọc được bảng admin. Hãy chạy file supabase/admin_dashboard_rebuild.sql trong Supabase.',
     tabs: {
       overview: 'Tổng quan',
       users: 'Người dùng',
@@ -149,6 +173,13 @@ const UI = {
     usersTitle: 'Quản lý người dùng',
     contentTitle: 'Duyệt nội dung',
     commentsTitle: 'Bình luận cần theo dõi',
+    commentsHistoryTitle: 'Lịch sử bình luận',
+    notificationsTitle: 'Lịch sử thông báo',
+    sentAnnouncements: 'Thông báo đã gửi',
+    openHistory: 'Xem lịch sử',
+    newSinceSeen: 'mới',
+    backToContent: 'Tất cả nội dung',
+    backToAnnouncements: 'Viết thông báo',
     logsTitle: 'Nhật ký quản trị',
     announceTitle: 'Viết thông báo',
     empty: 'Chưa có dữ liệu.',
@@ -181,7 +212,7 @@ const UI = {
     online: '관리자 온라인',
     refresh: '새로고침',
     noAccess: '이 계정에는 관리자 권한이 없습니다.',
-    patchHint: '관리자 테이블을 읽을 수 없습니다. Supabase에서 supabase/admin_dashboard_patch.sql을 실행해주세요.',
+    patchHint: '관리자 테이블을 읽을 수 없습니다. Supabase에서 supabase/admin_dashboard_rebuild.sql을 실행해주세요.',
     tabs: {
       overview: '개요',
       users: '사용자',
@@ -202,6 +233,13 @@ const UI = {
     usersTitle: '사용자 관리',
     contentTitle: '콘텐츠 관리',
     commentsTitle: '댓글 관리',
+    commentsHistoryTitle: '댓글 내역',
+    notificationsTitle: '알림 내역',
+    sentAnnouncements: '보낸 공지',
+    openHistory: '내역 보기',
+    newSinceSeen: '신규',
+    backToContent: '전체 콘텐츠',
+    backToAnnouncements: '공지 작성',
     logsTitle: '관리 로그',
     announceTitle: '공지 작성',
     empty: '데이터가 없습니다.',
@@ -260,6 +298,36 @@ function localTime(value: string | null | undefined, lang: AppLang) {
   });
 }
 
+function loadAdminSeen(): AdminSeenState {
+  if (typeof window === 'undefined') return ADMIN_SEEN_FALLBACK;
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(ADMIN_SEEN_KEY) || '{}') as Partial<AdminSeenState>;
+    return {
+      comments: typeof stored.comments === 'string' ? stored.comments : ADMIN_SEEN_FALLBACK.comments,
+      notifications: typeof stored.notifications === 'string' ? stored.notifications : ADMIN_SEEN_FALLBACK.notifications,
+    };
+  } catch {
+    return ADMIN_SEEN_FALLBACK;
+  }
+}
+
+function newestIso(current: string, next: string | null | undefined) {
+  if (!next) return current;
+  return new Date(next).getTime() > new Date(current).getTime() ? next : current;
+}
+
+function getErrorMessage(error: unknown) {
+  if (error && typeof error === 'object' && 'message' in error) {
+    return String((error as { message?: unknown }).message || '');
+  }
+  return '';
+}
+
+function combineErrors(...errors: Array<unknown>) {
+  const details = errors.map(getErrorMessage).filter(Boolean);
+  return details.length ? details.join(' | ') : '';
+}
+
 export function AdminScreen({
   session,
   isAdmin,
@@ -273,9 +341,12 @@ export function AdminScreen({
 }) {
   const ui = UI[lang];
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
+  const [contentFocus, setContentFocus] = useState<'comments' | null>(null);
+  const [announcementFocus, setAnnouncementFocus] = useState<'notifications' | null>(null);
   const [loading, setLoading] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [seen, setSeen] = useState<AdminSeenState>(() => loadAdminSeen());
   const [stats, setStats] = useState<DashboardStats>({ users: 0, posts: 0, comments: 0, reviews: 0, notifications: 0 });
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [posts, setPosts] = useState<AdminPost[]>([]);
@@ -283,6 +354,7 @@ export function AdminScreen({
   const [comments, setComments] = useState<AdminComment[]>([]);
   const [logs, setLogs] = useState<AdminLog[]>([]);
   const [announcements, setAnnouncements] = useState<AdminAnnouncement[]>([]);
+  const [notifications, setNotifications] = useState<AdminNotification[]>([]);
   const [announcementTitle, setAnnouncementTitle] = useState('');
   const [announcementBody, setAnnouncementBody] = useState('');
   const [announcementSeverity, setAnnouncementSeverity] = useState<AnnouncementSeverity>('info');
@@ -293,11 +365,7 @@ export function AdminScreen({
     setNotice(null);
 
     const [
-      usersCount,
-      postsCount,
-      commentsCount,
-      reviewsCount,
-      notificationsCount,
+      statsRes,
       profilesRes,
       postsRes,
       reviewsRes,
@@ -305,12 +373,12 @@ export function AdminScreen({
       moderationsRes,
       logsRes,
       announcementsRes,
+      notificationsRes,
     ] = await Promise.all([
-      supabase.from('profiles').select('id', { count: 'exact', head: true }),
-      supabase.from('community_posts').select('id', { count: 'exact', head: true }),
-      supabase.from('community_comments').select('id', { count: 'exact', head: true }),
-      supabase.from('place_reviews').select('id', { count: 'exact', head: true }),
-      supabase.from('community_notifications').select('id', { count: 'exact', head: true }),
+      supabase.rpc('admin_get_dashboard_stats', {
+        comments_seen_at: seen.comments,
+        notifications_seen_at: seen.notifications,
+      }),
       supabase
         .from('profiles')
         .select('id, display_name, school, region, avatar_url, status, last_seen_at, created_at')
@@ -342,15 +410,43 @@ export function AdminScreen({
         .select('id, title, body, severity, is_published, created_at')
         .order('created_at', { ascending: false })
         .limit(12),
+      supabase
+        .from('community_notifications')
+        .select('id, recipient_id, actor_id, post_id, comment_id, type, title, body, is_read, created_at')
+        .order('created_at', { ascending: false })
+        .limit(50),
     ]);
 
-    setStats({
-      users: usersCount.count || 0,
-      posts: postsCount.count || 0,
-      comments: commentsCount.count || 0,
-      reviews: reviewsCount.count || 0,
-      notifications: notificationsCount.count || 0,
-    });
+    let nextStats: DashboardStats | null = null;
+    const statsRow = Array.isArray(statsRes.data) ? statsRes.data[0] : null;
+
+    if (!statsRes.error && statsRow) {
+      nextStats = {
+        users: Number(statsRow.users_count || 0),
+        posts: Number(statsRow.posts_count || 0),
+        comments: Number(statsRow.comments_new_count || 0),
+        reviews: Number(statsRow.reviews_count || 0),
+        notifications: Number(statsRow.notifications_new_count || 0),
+      };
+    } else {
+      const [usersCount, postsCount, commentsCount, reviewsCount, notificationsCount] = await Promise.all([
+        supabase.from('profiles').select('id', { count: 'exact', head: true }),
+        supabase.from('community_posts').select('id', { count: 'exact', head: true }),
+        supabase.from('community_comments').select('id', { count: 'exact', head: true }).gt('created_at', seen.comments),
+        supabase.from('place_reviews').select('id', { count: 'exact', head: true }),
+        supabase.from('community_notifications').select('id', { count: 'exact', head: true }).gt('created_at', seen.notifications),
+      ]);
+
+      nextStats = {
+        users: usersCount.count || 0,
+        posts: postsCount.count || 0,
+        comments: commentsCount.count || 0,
+        reviews: reviewsCount.count || 0,
+        notifications: notificationsCount.count || 0,
+      };
+    }
+
+    setStats(nextStats);
 
     const moderationMap = new Map<string, UserModeration>();
     (moderationsRes.data as UserModeration[] | null)?.forEach((row) => moderationMap.set(row.user_id, row));
@@ -364,12 +460,13 @@ export function AdminScreen({
     setComments((commentsRes.data as AdminComment[] | null) || []);
     setLogs((logsRes.data as AdminLog[] | null) || []);
     setAnnouncements((announcementsRes.data as AdminAnnouncement[] | null) || []);
+    setNotifications((notificationsRes.data as AdminNotification[] | null) || []);
 
-    if (commentsRes.error || moderationsRes.error || logsRes.error || announcementsRes.error) {
+    if (commentsRes.error || moderationsRes.error || logsRes.error || announcementsRes.error || notificationsRes.error) {
       setNotice(ui.patchHint);
     }
     setLoading(false);
-  }, [isAdmin, session, ui.patchHint]);
+  }, [isAdmin, seen.comments, seen.notifications, session, ui.patchHint]);
 
   useEffect(() => {
     void loadDashboard();
@@ -377,24 +474,109 @@ export function AdminScreen({
 
   useEffect(() => {
     if (!supabase || !session || !isAdmin) return;
+    let isMounted = true;
+    supabase
+      .from('admin_dashboard_seen_state')
+      .select('comments_seen_at, notifications_seen_at')
+      .eq('admin_id', session.user.id)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (!isMounted || error || !data) return;
+        setSeen((current) => {
+          const next = {
+            comments: newestIso(current.comments, (data as { comments_seen_at?: string | null }).comments_seen_at),
+            notifications: newestIso(current.notifications, (data as { notifications_seen_at?: string | null }).notifications_seen_at),
+          };
+          window.localStorage.setItem(ADMIN_SEEN_KEY, JSON.stringify(next));
+          return next;
+        });
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isAdmin, session]);
+
+  useEffect(() => {
+    if (!supabase || !session || !isAdmin) return;
     const client = supabase;
+    let reloadTimer: number | undefined;
+    const queueReload = () => {
+      window.clearTimeout(reloadTimer);
+      reloadTimer = window.setTimeout(() => void loadDashboard(), 250);
+    };
     const channel = client
       .channel('admin-dashboard-live')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => void loadDashboard())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'community_posts' }, () => void loadDashboard())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'community_comments' }, () => void loadDashboard())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'place_reviews' }, () => void loadDashboard())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_moderation' }, () => void loadDashboard())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_action_logs' }, () => void loadDashboard())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_announcements' }, () => void loadDashboard())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, queueReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'community_posts' }, queueReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'community_comments' }, queueReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'place_reviews' }, queueReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'community_notifications' }, queueReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_moderation' }, queueReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_action_logs' }, queueReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_announcements' }, queueReload)
       .subscribe();
 
     return () => {
+      window.clearTimeout(reloadTimer);
       void client.removeChannel(channel);
     };
   }, [isAdmin, loadDashboard, session]);
 
   const visibleLogs = useMemo(() => logs.slice(0, 20), [logs]);
+
+  useEffect(() => {
+    const targetId =
+      activeTab === 'content' && contentFocus === 'comments'
+        ? 'admin-comments-history'
+        : activeTab === 'announcements' && announcementFocus === 'notifications'
+          ? 'admin-notifications-history'
+          : null;
+    if (!targetId) return;
+    window.requestAnimationFrame(() => {
+      document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, [activeTab, announcementFocus, contentFocus]);
+
+  function openTab(tab: AdminTab) {
+    setActiveTab(tab);
+    if (tab !== 'content') setContentFocus(null);
+    if (tab !== 'announcements') setAnnouncementFocus(null);
+  }
+
+  async function persistSeen(kind: keyof AdminSeenState, seenAt: string) {
+    if (!supabase || !session) return;
+    const { error } = await supabase.rpc('admin_mark_dashboard_seen', {
+      seen_kind: kind,
+      seen_at: seenAt,
+    });
+    if (error) {
+      console.warn('Admin seen state stored locally only:', error);
+    }
+  }
+
+  function markSeen(kind: keyof AdminSeenState) {
+    const nextSeenAt = new Date().toISOString();
+    setSeen((current) => {
+      const next = { ...current, [kind]: nextSeenAt };
+      window.localStorage.setItem(ADMIN_SEEN_KEY, JSON.stringify(next));
+      return next;
+    });
+    setStats((current) => ({ ...current, [kind]: 0 }));
+    void persistSeen(kind, nextSeenAt);
+  }
+
+  function openCommentHistory() {
+    setContentFocus('comments');
+    openTab('content');
+    markSeen('comments');
+  }
+
+  function openNotificationHistory() {
+    setAnnouncementFocus('notifications');
+    openTab('announcements');
+    markSeen('notifications');
+  }
 
   async function safeLog(actionType: string, targetTable: string, targetId: string, targetUserId?: string | null, reason?: string | null) {
     if (!supabase) return;
@@ -426,7 +608,8 @@ export function AdminScreen({
       await loadDashboard();
     } catch (error) {
       console.error('Admin delete post failed:', error);
-      setNotice(ui.actionError);
+      const detail = getErrorMessage(error);
+      setNotice(detail ? `${ui.actionError} ${detail}` : ui.actionError);
     } finally {
       setBusyId(null);
     }
@@ -447,7 +630,8 @@ export function AdminScreen({
       await loadDashboard();
     } catch (error) {
       console.error('Admin delete review failed:', error);
-      setNotice(ui.actionError);
+      const detail = getErrorMessage(error);
+      setNotice(detail ? `${ui.actionError} ${detail}` : ui.actionError);
     } finally {
       setBusyId(null);
     }
@@ -463,15 +647,24 @@ export function AdminScreen({
     setComments((current) => current.filter((item) => !affectedIds.has(item.id)));
     setStats((current) => ({ ...current, comments: Math.max(current.comments - affectedIds.size, 0) }));
     try {
-      const { error } = await supabase.rpc('admin_delete_community_comment', { row_id: comment.id, reason_text: reason });
-      if (error) {
+      const hardDelete = await supabase.rpc('admin_delete_community_comment_hard', { row_id: comment.id, reason_text: reason });
+      const legacyDelete = hardDelete.error
+        ? await supabase.rpc('admin_delete_community_comment', { row_id: comment.id, reason_text: reason })
+        : null;
+      const deletedByRpc = !hardDelete.error
+        ? Number(hardDelete.data || 0) > 0
+        : Boolean(legacyDelete && !legacyDelete.error && legacyDelete.data !== false);
+
+      if (!deletedByRpc) {
         const childDelete = await supabase
           .from('community_comments')
           .delete()
           .eq('parent_id', comment.id)
           .select('id');
 
-        if (childDelete.error) throw error;
+        if (childDelete.error) {
+          throw new Error(combineErrors(hardDelete.error, legacyDelete?.error, childDelete.error) || ui.actionError);
+        }
 
         const fallback = await supabase
           .from('community_comments')
@@ -479,7 +672,12 @@ export function AdminScreen({
           .eq('id', comment.id)
           .select('id');
 
-        if (fallback.error || (fallback.data || []).length === 0) throw error;
+        if (fallback.error || (fallback.data || []).length === 0) {
+          throw new Error(
+            combineErrors(hardDelete.error, legacyDelete?.error, fallback.error) ||
+              'Không xoá được bình luận. Hãy chạy supabase/admin_comment_delete_fix.sql rồi refresh lại app.',
+          );
+        }
         await safeLog('delete_comment', 'community_comments', comment.id, comment.user_id, reason);
       }
       setNotice(ui.deleted);
@@ -488,7 +686,8 @@ export function AdminScreen({
       console.error('Admin delete comment failed:', error);
       setComments(previousComments);
       setStats(previousStats);
-      setNotice(ui.actionError);
+      const detail = getErrorMessage(error);
+      setNotice(detail ? `${ui.actionError} ${detail}` : ui.actionError);
     } finally {
       setBusyId(null);
     }
@@ -514,7 +713,8 @@ export function AdminScreen({
       await loadDashboard();
     } catch (error) {
       console.error('Admin moderation failed:', error);
-      setNotice(ui.actionError);
+      const detail = getErrorMessage(error);
+      setNotice(detail ? `${ui.actionError} ${detail}` : ui.actionError);
     } finally {
       setBusyId(null);
     }
@@ -547,7 +747,8 @@ export function AdminScreen({
       await loadDashboard();
     } catch (error) {
       console.error('Admin announcement failed:', error);
-      setNotice(ui.actionError);
+      const detail = getErrorMessage(error);
+      setNotice(detail ? `${ui.actionError} ${detail}` : ui.actionError);
     } finally {
       setBusyId(null);
     }
@@ -603,9 +804,21 @@ export function AdminScreen({
       <div className="admin-stats-grid">
         <StatCard label={ui.stats.users} value={stats.users} icon={Users} />
         <StatCard label={ui.stats.posts} value={stats.posts} icon={FileText} />
-        <StatCard label={ui.stats.comments} value={stats.comments} icon={MessageCircle} />
+        <StatCard
+          label={ui.stats.comments}
+          value={stats.comments}
+          icon={MessageCircle}
+          hint={`${ui.openHistory} · ${ui.newSinceSeen}`}
+          onClick={openCommentHistory}
+        />
         <StatCard label={ui.stats.reviews} value={stats.reviews} icon={Star} />
-        <StatCard label={ui.stats.notifications} value={stats.notifications} icon={Bell} />
+        <StatCard
+          label={ui.stats.notifications}
+          value={stats.notifications}
+          icon={Bell}
+          hint={`${ui.openHistory} · ${ui.newSinceSeen}`}
+          onClick={openNotificationHistory}
+        />
       </div>
 
       <nav className="admin-tabbar" aria-label="Admin sections">
@@ -614,7 +827,7 @@ export function AdminScreen({
             key={id}
             type="button"
             className={activeTab === id ? 'active' : ''}
-            onClick={() => setActiveTab(id)}
+            onClick={() => openTab(id)}
           >
             <Icon size={16} />
             <span>{ui.tabs[id]}</span>
@@ -716,91 +929,134 @@ export function AdminScreen({
 
       {activeTab === 'content' ? (
         <div className="admin-panel-stack">
-          <ContentPanel title={ui.contentTitle} scroll>
-            {posts.map((post) => (
-              <ContentRow
-                key={post.id}
-                title={post.title}
-                meta={`${post.display_name || ui.unknownUser} • ${timeAgo(post.created_at)} • ${post.comments_count || 0} comments`}
-                body={post.content}
-                badge={post.category}
-                actionLabel={ui.delete}
-                busy={busyId === `post-${post.id}`}
-                onAction={() => void deletePost(post)}
-              />
-            ))}
-            {posts.length === 0 ? <EmptyText text={ui.empty} /> : null}
-          </ContentPanel>
-          <ContentPanel title={ui.recentReviews} scroll>
-            {reviews.map((review) => (
-              <ContentRow
-                key={review.id}
-                title={`${review.place_name} · ${Number(review.rating).toFixed(1)}`}
-                meta={`${review.display_name || ui.unknownUser} • ${timeAgo(review.created_at)} • ${review.upvotes_count || 0}/${review.downvotes_count || 0}`}
-                body={`${review.title} - ${review.content}`}
-                badge={review.category}
-                actionLabel={ui.delete}
-                busy={busyId === `review-${review.id}`}
-                onAction={() => void deleteReview(review)}
-              />
-            ))}
-            {reviews.length === 0 ? <EmptyText text={ui.empty} /> : null}
-          </ContentPanel>
-          <ContentPanel title={ui.commentsTitle} scroll>
-            {comments.map((comment) => (
-              <ContentRow
-                key={comment.id}
-                title={comment.display_name || ui.unknownUser}
-                meta={`${timeAgo(comment.created_at)} • post ${comment.post_id.slice(0, 8)} • ${comment.likes_count || 0} likes`}
-                body={comment.content}
-                badge={comment.parent_id ? 'reply' : 'comment'}
-                actionLabel={ui.delete}
-                busy={busyId === `comment-${comment.id}`}
-                onAction={() => void deleteComment(comment)}
-              />
-            ))}
-            {comments.length === 0 ? <EmptyText text={ui.empty} /> : null}
-          </ContentPanel>
+          {contentFocus === 'comments' ? (
+            <ContentPanel id="admin-comments-history" title={ui.commentsHistoryTitle} scroll>
+              <HistoryToolbar count={comments.length} label={ui.stats.comments} backLabel={ui.backToContent} onBack={() => setContentFocus(null)} />
+              {comments.map((comment) => (
+                <ContentRow
+                  key={comment.id}
+                  title={comment.display_name || ui.unknownUser}
+                  meta={`${timeAgo(comment.created_at)} • post ${comment.post_id.slice(0, 8)} • ${comment.likes_count || 0} likes`}
+                  body={comment.content}
+                  badge={comment.parent_id ? 'reply' : 'comment'}
+                  actionLabel={ui.delete}
+                  busy={busyId === `comment-${comment.id}`}
+                  onAction={() => void deleteComment(comment)}
+                />
+              ))}
+              {comments.length === 0 ? <EmptyText text={ui.empty} /> : null}
+            </ContentPanel>
+          ) : (
+            <>
+              <ContentPanel title={ui.contentTitle} scroll>
+                {posts.map((post) => (
+                  <ContentRow
+                    key={post.id}
+                    title={post.title}
+                    meta={`${post.display_name || ui.unknownUser} • ${timeAgo(post.created_at)} • ${post.comments_count || 0} comments`}
+                    body={post.content}
+                    badge={post.category}
+                    actionLabel={ui.delete}
+                    busy={busyId === `post-${post.id}`}
+                    onAction={() => void deletePost(post)}
+                  />
+                ))}
+                {posts.length === 0 ? <EmptyText text={ui.empty} /> : null}
+              </ContentPanel>
+              <ContentPanel title={ui.recentReviews} scroll>
+                {reviews.map((review) => (
+                  <ContentRow
+                    key={review.id}
+                    title={`${review.place_name} · ${Number(review.rating).toFixed(1)}`}
+                    meta={`${review.display_name || ui.unknownUser} • ${timeAgo(review.created_at)} • ${review.upvotes_count || 0}/${review.downvotes_count || 0}`}
+                    body={`${review.title} - ${review.content}`}
+                    badge={review.category}
+                    actionLabel={ui.delete}
+                    busy={busyId === `review-${review.id}`}
+                    onAction={() => void deleteReview(review)}
+                  />
+                ))}
+                {reviews.length === 0 ? <EmptyText text={ui.empty} /> : null}
+              </ContentPanel>
+              <ContentPanel id="admin-comments-history" title={ui.commentsTitle} scroll>
+                {comments.map((comment) => (
+                  <ContentRow
+                    key={comment.id}
+                    title={comment.display_name || ui.unknownUser}
+                    meta={`${timeAgo(comment.created_at)} • post ${comment.post_id.slice(0, 8)} • ${comment.likes_count || 0} likes`}
+                    body={comment.content}
+                    badge={comment.parent_id ? 'reply' : 'comment'}
+                    actionLabel={ui.delete}
+                    busy={busyId === `comment-${comment.id}`}
+                    onAction={() => void deleteComment(comment)}
+                  />
+                ))}
+                {comments.length === 0 ? <EmptyText text={ui.empty} /> : null}
+              </ContentPanel>
+            </>
+          )}
         </div>
       ) : null}
 
       {activeTab === 'announcements' ? (
-        <ContentPanel title={ui.announceTitle}>
-          <form className="admin-announce-form" onSubmit={publishAnnouncement}>
-            <label>
-              <span>{ui.formTitle}</span>
-              <input value={announcementTitle} onChange={(event) => setAnnouncementTitle(event.target.value)} maxLength={120} />
-            </label>
-            <label>
-              <span>{ui.formBody}</span>
-              <textarea value={announcementBody} onChange={(event) => setAnnouncementBody(event.target.value)} rows={4} maxLength={1000} />
-            </label>
-            <label>
-              <span>{ui.formSeverity}</span>
-              <select value={announcementSeverity} onChange={(event) => setAnnouncementSeverity(event.target.value as AnnouncementSeverity)}>
-                <option value="info">Info</option>
-                <option value="success">Success</option>
-                <option value="warning">Warning</option>
-                <option value="danger">Danger</option>
-              </select>
-            </label>
-            <button type="submit" disabled={busyId === 'announcement' || !announcementTitle.trim() || !announcementBody.trim()}>
-              {busyId === 'announcement' ? <Loader2 size={16} className="cm-spin" /> : <Megaphone size={16} />}
-              {ui.publish}
-            </button>
-          </form>
+        <div className="admin-panel-stack">
+          {announcementFocus === 'notifications' ? (
+            <ContentPanel id="admin-notifications-history" title={ui.notificationsTitle} scroll>
+              <HistoryToolbar count={notifications.length} label={ui.stats.notifications} backLabel={ui.backToAnnouncements} onBack={() => setAnnouncementFocus(null)} />
+              {notifications.map((item) => (
+                <NotificationRow key={item.id} item={item} lang={lang} />
+              ))}
+              {notifications.length === 0 ? <EmptyText text={ui.empty} /> : null}
+            </ContentPanel>
+          ) : (
+            <>
+              <ContentPanel title={ui.announceTitle}>
+                <form className="admin-announce-form" onSubmit={publishAnnouncement}>
+                  <label>
+                    <span>{ui.formTitle}</span>
+                    <input value={announcementTitle} onChange={(event) => setAnnouncementTitle(event.target.value)} maxLength={120} />
+                  </label>
+                  <label>
+                    <span>{ui.formBody}</span>
+                    <textarea value={announcementBody} onChange={(event) => setAnnouncementBody(event.target.value)} rows={4} maxLength={1000} />
+                  </label>
+                  <label>
+                    <span>{ui.formSeverity}</span>
+                    <select value={announcementSeverity} onChange={(event) => setAnnouncementSeverity(event.target.value as AnnouncementSeverity)}>
+                      <option value="info">Info</option>
+                      <option value="success">Success</option>
+                      <option value="warning">Warning</option>
+                      <option value="danger">Danger</option>
+                    </select>
+                  </label>
+                  <button type="submit" disabled={busyId === 'announcement' || !announcementTitle.trim() || !announcementBody.trim()}>
+                    {busyId === 'announcement' ? <Loader2 size={16} className="cm-spin" /> : <Megaphone size={16} />}
+                    {ui.publish}
+                  </button>
+                </form>
 
-          <div className="admin-announcement-list">
-            {announcements.map((item) => (
-              <article key={item.id} className={`admin-announcement ${item.severity}`}>
-                <strong>{item.title}</strong>
-                <p>{shortText(item.body, 130)}</p>
-                <small>{localTime(item.created_at, lang)}</small>
-              </article>
-            ))}
-            {announcements.length === 0 ? <EmptyText text={ui.empty} /> : null}
-          </div>
-        </ContentPanel>
+                <h3 className="admin-section-subtitle">{ui.sentAnnouncements}</h3>
+                <div className="admin-announcement-list">
+                  {announcements.map((item) => (
+                    <article key={item.id} className={`admin-announcement ${item.severity}`}>
+                      <strong>{item.title}</strong>
+                      <p>{shortText(item.body, 130)}</p>
+                      <small>{localTime(item.created_at, lang)}</small>
+                    </article>
+                  ))}
+                  {announcements.length === 0 ? <EmptyText text={ui.empty} /> : null}
+                </div>
+              </ContentPanel>
+
+              <ContentPanel id="admin-notifications-history" title={ui.notificationsTitle} scroll>
+                {notifications.map((item) => (
+                  <NotificationRow key={item.id} item={item} lang={lang} />
+                ))}
+                {notifications.length === 0 ? <EmptyText text={ui.empty} /> : null}
+              </ContentPanel>
+            </>
+          )}
+        </div>
       ) : null}
 
       {activeTab === 'logs' ? (
@@ -825,22 +1081,75 @@ export function AdminScreen({
   );
 }
 
-function StatCard({ label, value, icon: Icon }: { label: string; value: number; icon: typeof ShieldCheck }) {
-  return (
-    <div className="admin-stat-card">
+function StatCard({
+  label,
+  value,
+  icon: Icon,
+  hint,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  icon: typeof ShieldCheck;
+  hint?: string;
+  onClick?: () => void;
+}) {
+  const content = (
+    <>
       <Icon size={17} />
       <strong>{value.toLocaleString()}</strong>
       <span>{label}</span>
+      {hint ? <small>{hint}</small> : null}
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <button type="button" className="admin-stat-card clickable" onClick={onClick}>
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <div className="admin-stat-card">
+      {content}
     </div>
   );
 }
 
-function ContentPanel({ title, children, scroll = false }: { title: string; children: React.ReactNode; scroll?: boolean }) {
+function ContentPanel({ id, title, children, scroll = false }: { id?: string; title: string; children: React.ReactNode; scroll?: boolean }) {
   return (
-    <section className={`admin-content-panel ${scroll ? 'is-scrollable' : ''}`}>
+    <section id={id} className={`admin-content-panel ${scroll ? 'is-scrollable' : ''}`}>
       <h2>{title}</h2>
       {scroll ? <div className="admin-panel-scroll">{children}</div> : children}
     </section>
+  );
+}
+
+function HistoryToolbar({ count, label, backLabel, onBack }: { count: number; label: string; backLabel: string; onBack: () => void }) {
+  return (
+    <div className="admin-history-toolbar">
+      <span>{`${count.toLocaleString()} ${label}`}</span>
+      <button type="button" onClick={onBack}>
+        <ArrowLeft size={14} />
+        {backLabel}
+      </button>
+    </div>
+  );
+}
+
+function NotificationRow({ item, lang }: { item: AdminNotification; lang: AppLang }) {
+  const target = item.post_id ? `post ${item.post_id.slice(0, 8)}` : item.comment_id ? `comment ${item.comment_id.slice(0, 8)}` : '';
+  const status = lang === 'ko' ? (item.is_read ? '읽음' : '안 읽음') : item.is_read ? 'đã đọc' : 'chưa đọc';
+
+  return (
+    <article className="admin-notification-row">
+      <span className="admin-row-badge">{item.type || 'system'}</span>
+      <h3>{item.title}</h3>
+      <p>{shortText(item.body, 120)}</p>
+      <small>{[localTime(item.created_at, lang), status, target].filter(Boolean).join(' • ')}</small>
+    </article>
   );
 }
 

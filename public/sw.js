@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'duhoc-mate-v3';
+const CACHE_VERSION = 'duhoc-mate-v4-cachefix';
 const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/offline.html', '/icons/icon.svg', '/icons/icon.png'];
 
 self.addEventListener('install', (event) => {
@@ -17,6 +17,18 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
+
+  // Vite/dev source modules must always be network-first. Caching these is what
+  // makes localhost appear to "go back" to old React code after refresh.
+  if (
+    url.pathname.startsWith('/src/') ||
+    url.pathname.startsWith('/@vite') ||
+    url.pathname.startsWith('/@react-refresh') ||
+    url.pathname.startsWith('/node_modules/.vite/')
+  ) {
+    event.respondWith(fetch(event.request).catch(() => caches.match(event.request)));
+    return;
+  }
 
   // Navigation requests → network-first, fallback to offline page
   if (event.request.mode === 'navigate') {

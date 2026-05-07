@@ -145,6 +145,8 @@ export function ProfileScreen({
   }, [session]);
 
   const isKo = lang === 'ko';
+  const isAdminEmail = (session?.user.email || '').trim().toLowerCase() === 'michintashop@gmail.com';
+  const canOpenAdmin = isAdmin || isAdminEmail;
   const profileTags = isKo
     ? ['TOPIK', '카페', '스터디', '절약', '맛집', '입국 초기', '한국어', '여행', '사진', '운동', '요리', '음악', '산책']
     : ['TOPIK', 'Cafe', 'Học nhóm', 'Budget', 'Ăn uống', 'Mới sang', 'Tiếng Hàn', 'Du lịch', 'Chụp ảnh', 'Thể thao', 'Nấu ăn', 'Âm nhạc', 'Dạo phố'];
@@ -635,7 +637,7 @@ export function ProfileScreen({
                   </button>
                 </div>
               </div>
-              {isAdmin && onOpenAdmin ? (
+              {canOpenAdmin ? (
                 <div className="pf-pop-section">
                   <label>{isKo ? '관리자' : 'Quản trị'}</label>
                   <button
@@ -643,7 +645,11 @@ export function ProfileScreen({
                     className="pf-admin-entry"
                     onClick={() => {
                       setShowSettingsMenu(false);
-                      onOpenAdmin();
+                      if (onOpenAdmin) {
+                        onOpenAdmin();
+                      } else {
+                        window.location.hash = 'admin';
+                      }
                     }}
                   >
                     <span className="pf-admin-entry-icon"><Shield size={16} /></span>
