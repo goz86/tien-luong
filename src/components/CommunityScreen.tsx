@@ -1085,7 +1085,6 @@ export function CommunityScreen({
         <section className="cm-service-panel">
           <div className="cm-service-head">
             <div>
-              <p>{ui.connect}</p>
               <h2>{ui.nearbyFriends}</h2>
             </div>
             <Users size={22} />

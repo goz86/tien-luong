@@ -234,9 +234,9 @@ export const BADGES: Badge[] = [
     icon: '📍',
     tier: 'silver', category: 'social',
     color: '#fff7ed', border: '#f97316', glow: 'rgba(249,115,22,0.2)',
-    requirement: ({ posts }) => posts.filter(p => p.post_type === 'review' || (p as any).venue_name).length >= 10,
+    requirement: ({ posts }) => posts.filter(p => p.category === 'food').length >= 10,
     getProgress: ({ posts }) => ({
-      current: Math.min(posts.filter(p => p.post_type === 'review' || (p as any).venue_name).length, 10),
+      current: Math.min(posts.filter(p => p.category === 'food').length, 10),
       target: 10,
     }),
   },

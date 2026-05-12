@@ -154,7 +154,7 @@ export function IncomeScreen({
     shifts: '회',
   } : {
     tabs: { overview: 'Tổng quan', expenses: 'Chi tiêu', workplaces: 'Nơi làm' },
-    netIncome: 'Thu nhập ròng tháng',
+    netIncome: 'Thu nhập ròng / tháng',
     grossIncome: 'Tổng lương',
     expenses: 'Chi tiêu',
     totalHours: 'Tổng giờ',
@@ -171,9 +171,9 @@ export function IncomeScreen({
     prevMonth: 'Tháng trước',
     nextMonth: 'Tháng sau',
     avgHourly: 'Lương TB/giờ',
-    shiftCount: 'Số ca tháng',
+    shiftCount: 'Số ca làm',
     bestHours: 'Kỷ lục giờ làm',
-    bestDay: 'Ngày bội thu',
+    bestDay: 'Ngày làm nhiều nhất',
     expenseManage: 'Quản lý chi tiêu',
     expenseRecords: 'Khoản đã ghi',
     addExpense: 'Thêm chi tiêu',
@@ -219,7 +219,7 @@ export function IncomeScreen({
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [activeSelect, setActiveSelect] = useState<string | null>(null);
   const [chartMonth, setChartMonth] = useState(currentMonthIso);
-  const [chartView, setChartView] = useState<ChartViewMode>('month');
+  const [chartView, setChartView] = useState<ChartViewMode>('day');
   const [showCelebration, setShowCelebration] = useState(false);
   const [expenseForm, setExpenseForm] = useState<Omit<Expense, 'id'>>({
     category: 'food',

@@ -6,7 +6,9 @@
       "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\(p.dependencies['leaflet'], p.dependencies['react-leaflet']\\)\")",
       "Bash(cp \"C:\\\\Users\\\\Hhung\\\\Desktop\\\\tien-luong\\\\index.html\" \"C:\\\\Users\\\\Hhung\\\\Desktop\\\\tien-luong\\\\.claude\\\\worktrees\\\\cool-yalow-465b82\\\\index.html\")",
       "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(npm run *)"
     ]
   }
 }
