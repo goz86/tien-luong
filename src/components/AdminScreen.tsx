@@ -340,6 +340,7 @@ export function AdminScreen({
   onBack: () => void;
 }) {
   const ui = UI[lang];
+  const isKo = lang === 'ko';
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   const [contentFocus, setContentFocus] = useState<'comments' | null>(null);
   const [announcementFocus, setAnnouncementFocus] = useState<'notifications' | null>(null);
@@ -355,6 +356,16 @@ export function AdminScreen({
   const [logs, setLogs] = useState<AdminLog[]>([]);
   const [announcements, setAnnouncements] = useState<AdminAnnouncement[]>([]);
   const [notifications, setNotifications] = useState<AdminNotification[]>([]);
+  // Styled confirm/prompt modal
+  type ConfirmState = { message: string; resolve: (ok: boolean, reason: string) => void };
+  const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
+  const [confirmReason, setConfirmReason] = useState('');
+  const adminConfirm = useCallback((message: string): Promise<{ ok: boolean; reason: string }> =>
+    new Promise(resolve => {
+      setConfirmReason('');
+      setConfirmState({ message, resolve: (ok, reason) => { setConfirmState(null); resolve({ ok, reason }); } });
+    }), []);
+
   const [announcementTitle, setAnnouncementTitle] = useState('');
   const [announcementBody, setAnnouncementBody] = useState('');
   const [announcementSeverity, setAnnouncementSeverity] = useState<AnnouncementSeverity>('info');
@@ -594,8 +605,9 @@ export function AdminScreen({
   }
 
   async function deletePost(post: AdminPost) {
-    if (!supabase || !window.confirm(ui.deletePostConfirm)) return;
-    const reason = window.prompt(ui.reasonPrompt, '') ?? '';
+    if (!supabase) return;
+    const { ok, reason } = await adminConfirm(ui.deletePostConfirm);
+    if (!ok) return;
     setBusyId(`post-${post.id}`);
     try {
       const { error } = await supabase.rpc('admin_delete_community_post', { row_id: post.id, reason_text: reason });
@@ -616,8 +628,9 @@ export function AdminScreen({
   }
 
   async function deleteReview(review: AdminReview) {
-    if (!supabase || !window.confirm(ui.deleteReviewConfirm)) return;
-    const reason = window.prompt(ui.reasonPrompt, '') ?? '';
+    if (!supabase) return;
+    const { ok, reason } = await adminConfirm(ui.deleteReviewConfirm);
+    if (!ok) return;
     setBusyId(`review-${review.id}`);
     try {
       const { error } = await supabase.rpc('admin_delete_place_review', { row_id: review.id, reason_text: reason });
@@ -638,8 +651,9 @@ export function AdminScreen({
   }
 
   async function deleteComment(comment: AdminComment) {
-    if (!supabase || !window.confirm(ui.deleteCommentConfirm)) return;
-    const reason = window.prompt(ui.reasonPrompt, '') ?? '';
+    if (!supabase) return;
+    const { ok, reason } = await adminConfirm(ui.deleteCommentConfirm);
+    if (!ok) return;
     setBusyId(`comment-${comment.id}`);
     const previousComments = comments;
     const previousStats = stats;
@@ -770,57 +784,63 @@ export function AdminScreen({
     );
   }
 
+  // Merge recent activity (posts + reviews + comments) for overview feed
+  const activityFeed = useMemo(() => {
+    const items = [
+      ...posts.map(p => ({ type: 'post' as const, id: p.id, title: p.title, sub: p.display_name, badge: p.category, ts: p.created_at, raw: p })),
+      ...reviews.map(r => ({ type: 'review' as const, id: r.id, title: r.place_name, sub: r.display_name, badge: r.category, ts: r.created_at, raw: r })),
+      ...comments.map(c => ({ type: 'comment' as const, id: c.id, title: c.content, sub: c.display_name, badge: c.parent_id ? 'reply' : 'comment', ts: c.created_at, raw: c })),
+    ];
+    return items.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime()).slice(0, 20);
+  }, [posts, reviews, comments]);
+
   return (
     <section className="admin-screen">
-      <header className="admin-header">
-        <button type="button" className="admin-back-btn" onClick={onBack}>
-          <ArrowLeft size={18} />
-          {ui.back}
-        </button>
-        <button type="button" className="admin-refresh-btn" onClick={() => void loadDashboard()} disabled={loading}>
-          {loading ? <Loader2 size={16} className="cm-spin" /> : <RefreshCw size={16} />}
-          {ui.refresh}
-        </button>
-      </header>
-
-      <div className="admin-title-row">
-        <div>
+      {/* Dark header */}
+      <header className="admin-hero">
+        <div className="admin-hero-top">
+          <button type="button" className="admin-back-btn" onClick={onBack}>
+            <ArrowLeft size={16} />
+            {ui.back}
+          </button>
+          <div className="admin-hero-actions">
+            <span className="admin-live-pill"><ShieldCheck size={13} />{ui.online}</span>
+            <button type="button" className="admin-refresh-btn" onClick={() => void loadDashboard()} disabled={loading}>
+              {loading ? <Loader2 size={15} className="cm-spin" /> : <RefreshCw size={15} />}
+            </button>
+          </div>
+        </div>
+        <div className="admin-hero-body">
           <h1>{ui.title}</h1>
           <p>{ui.subtitle}</p>
         </div>
-        <span className="admin-live-pill">
-          <ShieldCheck size={15} />
-          {ui.online}
-        </span>
-      </div>
+
+        {/* Metric chips */}
+        <div className="admin-metric-strip">
+          {([
+            { icon: Users,         val: stats.users,         label: ui.stats.users,         color: '#60a5fa', onClick: undefined },
+            { icon: FileText,      val: stats.posts,         label: ui.stats.posts,         color: '#34d399', onClick: undefined },
+            { icon: MessageCircle, val: stats.comments,      label: ui.stats.comments,      color: '#f59e0b', onClick: openCommentHistory },
+            { icon: Star,          val: stats.reviews,       label: ui.stats.reviews,       color: '#a78bfa', onClick: undefined },
+            { icon: Bell,          val: stats.notifications, label: ui.stats.notifications, color: '#f87171', onClick: openNotificationHistory },
+          ] as { icon: typeof ShieldCheck; val: number; label: string; color: string; onClick?: () => void }[]).map(({ icon: Ic, val, label, color, onClick: oc }) => (
+            <button key={label} type="button" className="admin-metric-chip" style={{ '--chip-color': color } as React.CSSProperties} onClick={oc}>
+              <Ic size={14} />
+              <strong>{val.toLocaleString()}</strong>
+              <span>{label}</span>
+            </button>
+          ))}
+        </div>
+      </header>
 
       {notice ? (
         <div className="admin-notice">
-          <Bell size={16} />
+          <Bell size={15} />
           <span>{notice}</span>
         </div>
       ) : null}
 
-      <div className="admin-stats-grid">
-        <StatCard label={ui.stats.users} value={stats.users} icon={Users} />
-        <StatCard label={ui.stats.posts} value={stats.posts} icon={FileText} />
-        <StatCard
-          label={ui.stats.comments}
-          value={stats.comments}
-          icon={MessageCircle}
-          hint={`${ui.openHistory} · ${ui.newSinceSeen}`}
-          onClick={openCommentHistory}
-        />
-        <StatCard label={ui.stats.reviews} value={stats.reviews} icon={Star} />
-        <StatCard
-          label={ui.stats.notifications}
-          value={stats.notifications}
-          icon={Bell}
-          hint={`${ui.openHistory} · ${ui.newSinceSeen}`}
-          onClick={openNotificationHistory}
-        />
-      </div>
-
+      {/* Tab bar */}
       <nav className="admin-tabbar" aria-label="Admin sections">
         {ADMIN_TABS.map(({ id, icon: Icon }) => (
           <button
@@ -829,7 +849,7 @@ export function AdminScreen({
             className={activeTab === id ? 'active' : ''}
             onClick={() => openTab(id)}
           >
-            <Icon size={16} />
+            <Icon size={15} />
             <span>{ui.tabs[id]}</span>
           </button>
         ))}
@@ -837,50 +857,49 @@ export function AdminScreen({
 
       {activeTab === 'overview' ? (
         <div className="admin-panel-stack">
-          <ContentPanel title={ui.recentPosts} scroll>
-            {posts.map((post) => (
-              <ContentRow
-                key={post.id}
-                title={post.title}
-                meta={`${post.display_name || ui.unknownUser} • ${timeAgo(post.created_at)}`}
-                body={post.content}
-                badge={post.category}
-                actionLabel={ui.delete}
-                busy={busyId === `post-${post.id}`}
-                onAction={() => void deletePost(post)}
-              />
+          {/* Quick actions */}
+          <div className="admin-quick-actions">
+            {([
+              { icon: Megaphone,  label: isKo ? '공지 작성' : 'Thông báo', color: '#f97316', tab: 'announcements' as AdminTab },
+              { icon: Users,      label: isKo ? '사용자'   : 'Người dùng', color: '#2752ff', tab: 'users' as AdminTab },
+              { icon: FileText,   label: isKo ? '콘텐츠'   : 'Nội dung',   color: '#10b981', tab: 'content' as AdminTab },
+              { icon: ShieldCheck,label: isKo ? '로그'     : 'Nhật ký',    color: '#8b5cf6', tab: 'logs' as AdminTab },
+            ] as { icon: typeof ShieldCheck; label: string; color: string; tab: AdminTab }[]).map(({ icon: Ic, label, color, tab }) => (
+              <button key={tab} type="button" className="admin-qa-btn" style={{ '--qa-color': color } as React.CSSProperties} onClick={() => openTab(tab)}>
+                <span className="admin-qa-icon"><Ic size={20} /></span>
+                <span>{label}</span>
+              </button>
             ))}
-            {posts.length === 0 ? <EmptyText text={ui.empty} /> : null}
-          </ContentPanel>
-          <ContentPanel title={ui.recentReviews} scroll>
-            {reviews.map((review) => (
-              <ContentRow
-                key={review.id}
-                title={`${review.place_name} · ${Number(review.rating).toFixed(1)}`}
-                meta={`${review.display_name || ui.unknownUser} • ${timeAgo(review.created_at)}`}
-                body={`${review.title} - ${review.content}`}
-                badge={review.category}
-                actionLabel={ui.delete}
-                busy={busyId === `review-${review.id}`}
-                onAction={() => void deleteReview(review)}
-              />
+          </div>
+
+          {/* Unified activity feed */}
+          <ContentPanel title={isKo ? '최근 활동' : 'Hoạt động gần đây'} scroll>
+            {activityFeed.length === 0 ? <EmptyText text={ui.empty} /> : activityFeed.map((item) => (
+              <article key={`${item.type}-${item.id}`} className="admin-feed-row">
+                <span className={`admin-feed-dot admin-feed-dot--${item.type}`} />
+                <div className="admin-feed-body">
+                  <div className="admin-feed-top">
+                    <span className={`admin-feed-badge admin-feed-badge--${item.type}`}>{item.type}</span>
+                    <span className="admin-feed-badge admin-feed-badge--cat">{item.badge}</span>
+                    <span className="admin-feed-time">{timeAgo(item.ts)}</span>
+                  </div>
+                  <p className="admin-feed-title">{item.title.length > 60 ? item.title.slice(0, 60) + '…' : item.title}</p>
+                  <span className="admin-feed-sub">{item.sub || ui.unknownUser}</span>
+                </div>
+                <button
+                  type="button"
+                  className="admin-feed-del"
+                  disabled={busyId === `${item.type}-${item.id}`}
+                  onClick={() => {
+                    if (item.type === 'post')    void deletePost(item.raw as AdminPost);
+                    if (item.type === 'review')  void deleteReview(item.raw as AdminReview);
+                    if (item.type === 'comment') void deleteComment(item.raw as AdminComment);
+                  }}
+                >
+                  {busyId === `${item.type}-${item.id}` ? <Loader2 size={14} className="cm-spin" /> : <Trash2 size={14} />}
+                </button>
+              </article>
             ))}
-            {reviews.length === 0 ? <EmptyText text={ui.empty} /> : null}
-          </ContentPanel>
-          <ContentPanel title={ui.recentComments} scroll>
-            {comments.map((comment) => (
-              <ContentRow
-                key={comment.id}
-                title={comment.display_name || ui.unknownUser}
-                meta={`${timeAgo(comment.created_at)} • post ${comment.post_id.slice(0, 8)}`}
-                body={comment.content}
-                badge={comment.parent_id ? 'reply' : 'comment'}
-                actionLabel={ui.delete}
-                busy={busyId === `comment-${comment.id}`}
-                onAction={() => void deleteComment(comment)}
-              />
-            ))}
-            {comments.length === 0 ? <EmptyText text={ui.empty} /> : null}
           </ContentPanel>
         </div>
       ) : null}
@@ -1023,10 +1042,10 @@ export function AdminScreen({
                   <label>
                     <span>{ui.formSeverity}</span>
                     <select value={announcementSeverity} onChange={(event) => setAnnouncementSeverity(event.target.value as AnnouncementSeverity)}>
-                      <option value="info">Info</option>
-                      <option value="success">Success</option>
-                      <option value="warning">Warning</option>
-                      <option value="danger">Danger</option>
+                      <option value="info">{isKo ? '정보' : 'Thông tin'}</option>
+                      <option value="success">{isKo ? '성공' : 'Thành công'}</option>
+                      <option value="warning">{isKo ? '경고' : 'Cảnh báo'}</option>
+                      <option value="danger">{isKo ? '위험' : 'Khẩn cấp'}</option>
                     </select>
                   </label>
                   <button type="submit" disabled={busyId === 'announcement' || !announcementTitle.trim() || !announcementBody.trim()}>
@@ -1076,6 +1095,35 @@ export function AdminScreen({
             {visibleLogs.length === 0 ? <EmptyText text={ui.empty} /> : null}
           </div>
         </ContentPanel>
+      ) : null}
+
+      {/* Styled delete confirm modal */}
+      {confirmState ? (
+        <div className="admin-confirm-overlay" onClick={() => confirmState.resolve(false, '')}>
+          <div className="admin-confirm-modal" onClick={e => e.stopPropagation()}>
+            <div className="admin-confirm-icon">
+              <Trash2 size={22} />
+            </div>
+            <h3>{confirmState.message}</h3>
+            <p>{ui.reasonPrompt}</p>
+            <input
+              className="admin-confirm-input"
+              placeholder={isKo ? '선택 사항' : 'Không bắt buộc'}
+              value={confirmReason}
+              onChange={e => setConfirmReason(e.target.value)}
+              autoFocus
+            />
+            <div className="admin-confirm-btns">
+              <button type="button" className="admin-confirm-cancel" onClick={() => confirmState.resolve(false, '')}>
+                {isKo ? '취소' : 'Huỷ'}
+              </button>
+              <button type="button" className="admin-confirm-ok" onClick={() => confirmState.resolve(true, confirmReason)}>
+                <Trash2 size={14} />
+                {isKo ? '삭제' : 'Xoá'}
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </section>
   );

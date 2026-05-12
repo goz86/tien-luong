@@ -10,10 +10,39 @@
   "theme_color": "#2563eb",
   "icons": [
     {
-      "src": "/icons/icon.png",
+      "src": "/logo.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Thêm ca làm",
+      "short_name": "Thêm ca",
+      "description": "Nhập ca làm mới nhanh chóng",
+      "url": "/?action=add-shift",
+      "icons": [{ "src": "/icons/icon.png", "sizes": "96x96", "type": "image/png" }]
+    },
+    {
+      "name": "Xem thu nhập",
+      "short_name": "Thu nhập",
+      "description": "Xem tổng thu nhập tháng này",
+      "url": "/#income",
+      "icons": [{ "src": "/icons/icon.png", "sizes": "96x96", "type": "image/png" }]
+    },
+    {
+      "name": "Cộng đồng",
+      "short_name": "Cộng đồng",
+      "description": "Xem bảng tin cộng đồng",
+      "url": "/#friends",
+      "icons": [{ "src": "/icons/icon.png", "sizes": "96x96", "type": "image/png" }]
     }
   ]
 }

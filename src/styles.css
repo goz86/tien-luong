@@ -63,9 +63,9 @@
 }
 
 .dark .bottom-tabs {
-  background: rgba(15, 23, 42, 0.9);
-  border-top-color: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.05);
+  background: #1e2535;
+  border-color: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .dark .tab-link {
@@ -115,12 +115,16 @@
 
 /* Tab items */
 .dark .tab-item {
-  color: #64748b;
+  color: rgba(255, 255, 255, 0.3);
 }
 
 .dark .tab-item.active {
-  color: var(--blue-500);
-  background: rgba(39, 82, 255, 0.15);
+  color: #4f73ff;
+  background: transparent;
+}
+
+.dark .tab-item.active .tab-icon-wrap {
+  box-shadow: 0 8px 24px rgba(39, 82, 255, 0.50), 0 0 0 6px #1e2535;
 }
 
 /* Appbar */
@@ -1835,6 +1839,40 @@ select {
   color: var(--text-soft);
 }
 
+/* ── Activity Ticker ── */
+.activity-ticker {
+  height: 30px;
+  padding: 0 16px;
+  margin: -4px 0 6px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+}
+
+.ticker-inner {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  max-width: 100%;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.ticker-in  { opacity: 0; transform: translateY(6px); }
+.ticker-show { opacity: 1; transform: translateY(0); }
+.ticker-out  { opacity: 0; transform: translateY(-6px); }
+
+.ticker-icon { display: flex; align-items: center; flex-shrink: 0; }
+.ticker-author { font-weight: 700; color: #1e293b; flex-shrink: 0; }
+.ticker-sep { color: #cbd5e1; flex-shrink: 0; }
+.ticker-text { color: #64748b; overflow: hidden; text-overflow: ellipsis; }
+
+.dark .ticker-author { color: #e2e8f0; }
+.dark .ticker-text { color: #94a3b8; }
+
+/* ── Nav bar: light style with notch orange active circle ── */
 .bottom-tabs {
   position: fixed;
   z-index: 2500;
@@ -1844,61 +1882,78 @@ select {
   width: min(calc(100vw - 24px), 406px);
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 6px;
-  padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
-  background: rgba(255, 255, 255, 0.78);
-  border: 1px solid rgba(255, 255, 255, 0.78);
-  border-radius: 28px;
-  box-shadow: 0 20px 52px rgba(28, 43, 76, 0.16);
-  backdrop-filter: blur(22px);
+  gap: 0;
+  padding: 0 4px calc(10px + env(safe-area-inset-bottom));
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 32px;
+  box-shadow: 0 8px 32px rgba(28, 43, 76, 0.12), 0 2px 8px rgba(28, 43, 76, 0.06);
   transform: translateX(-50%);
   pointer-events: auto;
+  overflow: visible;
 }
 
 .tab-item {
   position: relative;
   z-index: 1;
-  min-height: 58px;
+  min-height: 60px;
   border: 0;
-  border-radius: 22px;
+  border-radius: 28px;
   background: transparent;
   width: 100%;
   min-width: 0;
-  padding: 0 2px;
+  padding: 0 2px 8px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 4px;
-  color: #7d8aa0;
-  font-size: 11px;
-  font-weight: 800;
+  justify-content: flex-end;
+  gap: 3px;
+  color: #aab0c0;
+  font-size: 10px;
+  font-weight: 600;
   letter-spacing: -0.01em;
+  overflow: visible;
 }
 
-.tab-item>span:last-child {
+.tab-item > span:last-child {
   width: 100%;
   text-align: center;
   white-space: nowrap;
 }
 
 .tab-item.active {
-  color: var(--text-main);
-  background: #ffffff;
-  box-shadow: 0 10px 24px rgba(28, 43, 76, 0.12);
+  color: #2752ff;
+  background: transparent;
+  box-shadow: none;
 }
 
 .tab-icon-wrap {
-  width: 30px;
-  height: 30px;
+  width: 26px;
+  height: 26px;
   display: grid;
   place-items: center;
-  border-radius: 12px;
+  border-radius: 8px;
+  flex-shrink: 0;
 }
 
 .tab-item.active .tab-icon-wrap {
-  color: var(--blue-700);
-  background: linear-gradient(135deg, rgba(39, 82, 255, 0.14), rgba(38, 217, 164, 0.16));
+  position: absolute;
+  top: -22px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #4f73ff, #2752ff);
+  box-shadow:
+    0 8px 24px rgba(39, 82, 255, 0.40),
+    0 0 0 6px #ffffff;
+  color: #fff;
+}
+
+.tab-item.active .tab-icon-wrap svg {
+  width: 22px;
+  height: 22px;
 }
 
 @media (max-width: 480px) {
@@ -1974,7 +2029,7 @@ select {
     right: auto;
     width: 406px;
     transform: translateX(-50%);
-    border-radius: 28px;
+    border-radius: 26px;
   }
 
   .day-sheet,
@@ -2439,8 +2494,9 @@ select {
   margin: 0 0 4px;
   color: var(--text-soft);
   font-size: 12px;
-  font-weight: 900;
-  text-transform: uppercase;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: normal;
 }
 
 .community-section-head h2,
@@ -3145,7 +3201,9 @@ select {
 
 .income-goal-head span {
   color: var(--text-soft);
-  text-transform: uppercase;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: normal;
 }
 
 .income-goal-head strong {
@@ -3259,6 +3317,21 @@ select {
   color: var(--blue-700);
 }
 
+/* ── Income chart panel: prevent header height shift between tabs ── */
+
+/* Scale h2 down on narrow screens to prevent different wrap behaviour per tab */
+.income-chart-panel.monthly .income-section-head h2 {
+  font-size: clamp(17px, 4.8vw, 22px);
+}
+
+/* On narrow screens reserve the max possible header height (p + 2-line h2 + caption)
+   so switching tabs never shifts the panel down */
+@media (max-width: 412px) {
+  .income-chart-panel.monthly .income-section-head > div:first-child {
+    min-height: 84px;
+  }
+}
+
 .income-chart-panel.monthly {
   margin-top: 16px;
   background: white;
@@ -3273,6 +3346,17 @@ select {
   font-size: 12px;
   font-weight: 800;
   text-transform: capitalize;
+}
+
+/* Ghost state: hidden but still occupies space — prevents height jump */
+.income-month-caption--ghost {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.income-month-switcher--ghost {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .income-month-switcher {
@@ -3337,6 +3421,11 @@ select {
   min-height: 2px;
 }
 
+/* Week band tinting — every other 7-day block */
+.income-month-bars div.week-odd {
+  background: #e8edf5;
+}
+
 .income-month-bars div span {
   display: block;
   width: 100%;
@@ -3349,6 +3438,280 @@ select {
 .income-month-bars .top-day span {
   background: #2752ff;
   box-shadow: 0 0 8px rgba(39, 82, 255, 0.3);
+}
+
+/* Today bar — distinct accent (orange/coral) */
+.income-month-bars .today-day {
+  background: #fff0e8;
+  border-radius: 999px;
+}
+.income-month-bars .today-day span {
+  background: linear-gradient(180deg, #ff9a6c, #ff5e2e);
+  box-shadow: 0 0 8px rgba(255, 94, 46, 0.4);
+}
+
+/* ── Fixed-height chart area wrapper (prevents jump on view switch) ── */
+.income-chart-area {
+  height: 118px;
+  margin: 6px 0 0;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.income-day-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* ── Day milestone tick labels ── */
+.income-day-ticks {
+  display: flex;
+  height: 16px;
+  margin-top: 3px;
+  position: relative;
+}
+
+.income-day-ticks span {
+  flex: 1;
+  position: relative;
+  font-size: 8.5px;
+  font-weight: 600;
+  color: transparent;
+  text-align: center;
+  line-height: 16px;
+}
+
+/* Guide line: extends upward through the bar area */
+.income-day-ticks span.tick-show::before {
+  content: '';
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 1px;
+  height: 86px;
+  border-left: 1px dashed rgba(100, 116, 139, 0.2);
+  pointer-events: none;
+}
+
+.income-day-ticks span.tick-show {
+  color: var(--text-faint);
+}
+
+/* Today tick — orange label + dot indicator */
+.income-day-ticks span.tick-today {
+  color: #ff5e2e !important;
+  font-weight: 700;
+}
+.income-day-ticks span.tick-today::after {
+  content: '▲';
+  position: absolute;
+  bottom: -1px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 5px;
+  color: #ff5e2e;
+  line-height: 1;
+}
+
+/* Day bars fill remaining height inside chart-area */
+.income-chart-area .income-month-bars {
+  flex: 1;
+  height: auto;
+}
+
+/* ── Grouped Bar Chart (month/week view) ── */
+.income-grouped-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 5px;
+  height: 100%;
+  padding: 0 2px;
+}
+
+.igb-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.igb-value {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text-soft);
+  min-height: 14px;
+  display: block;
+  text-align: center;
+  white-space: nowrap;
+  line-height: 14px;
+}
+
+.igb-col.current .igb-value { color: #2752ff; }
+
+.igb-bar-wrap {
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  flex: 1; /* takes remaining space after value + bottom */
+}
+
+.igb-bar-fill {
+  width: 100%;
+  border-radius: 6px 6px 3px 3px;
+  background: #dde8ff;
+  min-height: 4px;
+  transition: height 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  align-self: flex-end;
+}
+
+.igb-col.current .igb-bar-fill {
+  background: linear-gradient(180deg, #4f8aff 0%, #2752ff 100%);
+  box-shadow: 0 4px 14px rgba(39, 82, 255, 0.3);
+}
+
+/* Fixed-height bottom section — ALL columns same height so bars align */
+.igb-bottom {
+  height: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding-top: 4px;
+  gap: 2px;
+}
+
+.igb-label {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-faint);
+  text-align: center;
+  line-height: 1;
+}
+
+.igb-col.current .igb-label { color: #2752ff; font-weight: 700; }
+
+.igb-est {
+  font-size: 8px;
+  font-weight: 700;
+  color: #2752ff;
+  background: rgba(39, 82, 255, 0.1);
+  padding: 1px 6px;
+  border-radius: 99px;
+  line-height: 14px;
+}
+
+/* Invisible spacer for non-current cols so height matches current */
+.igb-est-spacer {
+  display: block;
+  height: 14px;
+}
+
+/* ── Chart View Tabs ── */
+.income-chart-view-tabs {
+  display: flex;
+  gap: 6px;
+  margin-top: 14px;
+  background: #f1f5f9;
+  border-radius: 12px;
+  padding: 3px;
+}
+
+.income-chart-view-tabs button {
+  flex: 1;
+  padding: 7px 0;
+  border: none;
+  background: transparent;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-soft);
+  cursor: pointer;
+  transition: all 0.18s;
+}
+
+.income-chart-view-tabs button.active {
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+/* ── Goal Achieved Celebration ── */
+.income-goal-achieved {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #059669;
+  font-size: 13px;
+  font-weight: 700;
+  position: relative;
+  overflow: visible;
+  padding: 2px 0;
+}
+
+.income-goal-achieved svg { flex-shrink: 0; color: #059669; }
+
+.iga-particles {
+  position: absolute;
+  inset: -20px -10px;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.iga-p {
+  position: absolute;
+  font-size: 14px;
+  opacity: 0;
+  bottom: 0;
+  left: 50%;
+}
+
+.income-goal-achieved.burst .iga-p { animation: igaFloat 1.4s ease-out forwards; }
+.iga-p0 { left: 5%;  animation-delay: 0.0s !important; }
+.iga-p1 { left: 18%; animation-delay: 0.1s !important; }
+.iga-p2 { left: 30%; animation-delay: 0.05s !important; }
+.iga-p3 { left: 45%; animation-delay: 0.15s !important; }
+.iga-p4 { left: 58%; animation-delay: 0.08s !important; }
+.iga-p5 { left: 70%; animation-delay: 0.2s !important; }
+.iga-p6 { left: 82%; animation-delay: 0.03s !important; }
+.iga-p7 { left: 93%; animation-delay: 0.12s !important; }
+
+@keyframes igaFloat {
+  0%   { opacity: 0; transform: translateY(0) scale(0.5) rotate(0deg); }
+  20%  { opacity: 1; transform: translateY(-10px) scale(1.2) rotate(15deg); }
+  100% { opacity: 0; transform: translateY(-55px) scale(0.8) rotate(30deg); }
+}
+
+/* Persistent glow on goal panel when achieved */
+.income-goal-panel:has(.income-goal-achieved) {
+  border-color: rgba(5,150,105,0.25);
+  background: linear-gradient(135deg, rgba(236,253,245,0.8), rgba(255,255,255,0.95));
+}
+
+.dark .income-goal-panel:has(.income-goal-achieved) {
+  background: linear-gradient(135deg, rgba(5,150,105,0.12), transparent);
+}
+
+/* Dark mode — day view bars */
+.dark .income-month-bars div { background: rgba(255,255,255,0.06); }
+.dark .income-month-bars div.week-odd { background: rgba(255,255,255,0.10); }
+.dark .income-month-bars div span { background: rgba(255,255,255,0.22); }
+.dark .income-month-bars .today-day { background: rgba(255, 94, 46, 0.15); }
+.dark .income-day-ticks span.tick-show::before {
+  border-left-color: rgba(255,255,255,0.1);
+}
+
+/* Dark mode grouped bars */
+.dark .igb-bar-fill { background: #1e293b; }
+.dark .igb-col.current .igb-bar-fill {
+  background: linear-gradient(180deg, #4f8aff 0%, #2752ff 100%);
+}
+.dark .income-chart-view-tabs { background: rgba(255,255,255,0.06); }
+.dark .income-chart-view-tabs button.active {
+  background: #1e293b;
+  color: #f1f5f9;
 }
 
 .income-snapshot-grid article.gold {
@@ -4192,6 +4555,11 @@ select {
   -webkit-backdrop-filter: blur(8px);
 }
 
+.cm-header--hidden {
+  display: none;
+}
+
+
 .cm-header-actions {
   display: flex;
   gap: 4px;
@@ -4315,11 +4683,11 @@ select {
 }
 
 .cm-trending-kicker {
-  font-size: 11px;
-  font-weight: 800;
+  font-size: 12px;
+  font-weight: 700;
   color: var(--text-soft);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: normal;
+  text-transform: none;
   margin: 0 0 4px;
 }
 
@@ -6441,55 +6809,198 @@ select {
   cursor: pointer;
 }
 
+/* ── Badge Count Pill ── */
+.pf-badge-count-pill {
+  margin-left: auto;
+  font-size: 13px;
+  font-weight: 900;
+  color: #f59e0b;
+}
+.pf-badge-count-pill span { font-weight: 500; color: var(--text-soft); }
+
+/* ── Overall Progress Bar ── */
+.pf-badge-progress-overview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 18px;
+}
+.pf-badge-progress-track {
+  flex: 1;
+  height: 6px;
+  background: #e9f0fb;
+  border-radius: 99px;
+  overflow: hidden;
+}
+.pf-badge-progress-fill-main {
+  height: 100%;
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+  border-radius: 99px;
+  transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.pf-badge-progress-pct {
+  font-size: 11px;
+  font-weight: 800;
+  color: #f59e0b;
+  min-width: 32px;
+  text-align: right;
+}
+
+/* ── Category Group ── */
+.pf-badge-group {
+  margin-bottom: 20px;
+}
+.pf-badge-group:last-child { margin-bottom: 0; }
+.pf-badge-group-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-soft);
+  margin-bottom: 10px;
+}
+
+/* ── Badge Grid ── */
 .pf-badges-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 14px;
-}
-
-.pf-badge {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
   gap: 8px;
 }
 
-.pf-badge span {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-main);
-  text-align: center;
+/* ── Badge Card (new design) ── */
+.pf-badge2 {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 6px 8px;
+  border-radius: 14px;
+  border: 1.5px solid #e2e8f0;
+  background: #f8fafc;
+  overflow: hidden;
+  transition: transform 0.18s, box-shadow 0.18s;
 }
 
-.pf-badge-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  border: 2.5px solid;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 24px;
+.pf-badge2.earned {
+  border-width: 1.5px;
+  transform: translateY(0);
+}
+
+.pf-badge2.locked {
+  border-style: dashed;
+  opacity: 0.82;
+}
+
+/* Tier pill (top center) */
+.pf-badge2-tier {
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 99px;
+  background: rgba(0,0,0,0.06);
+  color: var(--text-soft);
+  margin-bottom: 7px;
+}
+.pf-tier-bronze.earned .pf-badge2-tier  { background: rgba(251,146,60,0.18); color: #c2410c; }
+.pf-tier-silver.earned .pf-badge2-tier  { background: rgba(148,163,184,0.25); color: #475569; }
+.pf-tier-gold.earned .pf-badge2-tier    { background: rgba(234,179,8,0.2);  color: #a16207; }
+.pf-tier-diamond.earned .pf-badge2-tier { background: rgba(245,158,11,0.2); color: #b45309; }
+
+/* Emoji icon */
+.pf-badge2-emoji {
+  font-size: 28px;
+  line-height: 1;
+  margin-bottom: 7px;
   transition: transform 0.2s;
 }
+.pf-badge2.locked .pf-badge2-emoji { filter: grayscale(1) opacity(0.5); }
+.pf-badge2.earned:active .pf-badge2-emoji { transform: scale(1.15); }
 
-.pf-badge.earned .pf-badge-icon {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+/* Name */
+.pf-badge2-name {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-align: center;
+  line-height: 1.3;
+  color: var(--text-main);
+}
+.pf-badge2.locked .pf-badge2-name { color: var(--text-faint); }
+
+/* Progress bar (locked only) */
+.pf-badge2-progress {
+  width: 100%;
+  margin-top: 7px;
+}
+.pf-badge2-prog-bar {
+  height: 3px;
+  background: rgba(0,0,0,0.08);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.pf-badge2-prog-fill {
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #94a3b8, #64748b);
+  transition: width 0.5s ease;
+}
+.pf-badge2-prog-text {
+  display: block;
+  font-size: 8px;
+  color: var(--text-faint);
+  text-align: center;
+  margin-top: 3px;
 }
 
-.pf-badge.locked {
-  opacity: 0.4;
+/* Lock icon (top right corner) */
+.pf-badge2-lock {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  font-size: 8px;
+  opacity: 0.35;
 }
 
-.pf-badge.locked .pf-badge-icon {
-  border-style: dashed;
+/* Shine overlay on earned badges */
+.pf-badge2-shine {
+  position: absolute;
+  inset: 0;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.55) 0%, transparent 55%);
+  pointer-events: none;
 }
+
+/* Legacy badge classes (kept for compatibility) */
+.pf-badge { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.pf-badge span { font-size: 11px; font-weight: 700; color: var(--text-main); text-align: center; }
+.pf-badge-icon {
+  width: 56px; height: 56px; border-radius: 50%; border: 2.5px solid;
+  display: flex; align-items: center; justify-content: center; font-size: 24px;
+}
+.pf-badge.earned .pf-badge-icon { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+.pf-badge.locked { opacity: 0.4; }
+.pf-badge.locked .pf-badge-icon { border-style: dashed; }
 
 /* Dark mode */
 .dark .pf-hero,
 .dark .pf-card {
   background: var(--surface);
   border-color: rgba(255, 255, 255, 0.06);
+}
+
+.dark .pf-badge2.locked {
+  background: #1e293b;
+  border-color: rgba(255,255,255,0.1);
+}
+
+.dark .pf-badge-progress-track {
+  background: rgba(255,255,255,0.08);
+}
+
+.dark .pf-badge2-prog-bar {
+  background: rgba(255,255,255,0.1);
 }
 
 .dark .pf-hero-bg {
@@ -7254,23 +7765,48 @@ select {
   color: white;
 }
 
-/* Floating Search Bar */
+/* Floating Search Bar — fixed to top of viewport, merges with tabs below */
 .rv-floating-search {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  right: 16px;
-  z-index: 1001;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  z-index: 3000;
+  background: #ffffff;
+  padding: 12px 14px 8px;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .rv-search-inner {
   display: flex;
   align-items: center;
   gap: 12px;
-  background: white;
-  padding: 10px 16px;
+  background: #f1f5f9;
+  padding: 10px 14px;
   border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+}
+
+/* Push tabs down below the fixed search bar, hide sync strip */
+.screen-shell:has(.rv-container) .cm-sync-strip {
+  display: none;
+}
+
+/* White background fills any gap between fixed search bar and tabs */
+.screen-shell:has(.rv-container) {
+  background: #ffffff;
+}
+
+/* Tabs become the bottom half of the unified top bar */
+.screen-shell:has(.rv-container) .cm-board-tabs {
+  margin-top: 58px;
+  background: #ffffff;
+  padding: 8px 14px 10px;
+  border-bottom: none;
+  border-bottom-left-radius: 16px;
+  border-bottom-right-radius: 16px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.09);
 }
 
 .rv-search-input-field {
@@ -7397,13 +7933,6 @@ select {
 }
 
 /* Floating Search Results */
-.rv-floating-search {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  right: 16px;
-  z-index: 2000;
-}
 
 .rv-search-inner {
   background: white;
@@ -7787,7 +8316,7 @@ select {
 .rv-write-body {
   flex: 1;
   overflow-y: auto;
-  padding: 20px;
+  padding: 20px 20px 100px;
 }
 
 .rv-write-section {
@@ -8541,6 +9070,23 @@ select {
 .dark .cm-board-tabs {
   background: rgba(15, 23, 42, 0.9);
   border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+.dark .screen-shell:has(.rv-container) {
+  background: #0f172a;
+}
+
+.dark .screen-shell:has(.rv-container) .cm-board-tabs {
+  background: #0f172a;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+.dark .rv-floating-search {
+  background: #0f172a;
+}
+
+.dark .rv-search-inner {
+  background: #1e293b;
 }
 
 .dark .cm-board-tabs button {

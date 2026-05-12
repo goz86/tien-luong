@@ -1335,7 +1335,7 @@ export function CommunityScreen({
   if (view === 'feed') {
     return (
       <>
-        <header className="cm-header">
+        <header className={`cm-header${boardMode === 'reviews' ? ' cm-header--hidden' : ''}`}>
           {!showSearch ? (
             <>
               <Logo />
@@ -2459,7 +2459,7 @@ function ReviewBoard({
     });
     return Object.values(groups);
   }, [filtered]);
-  const collapsedSheetY = filtered.length > 1 ? '32%' : '58%';
+  const collapsedSheetY = '72%'; // fixed — sheet stays at bottom, only rises on manual drag
 
   const createGroupIcon = (reviews: PlaceReview[], isSelected: boolean) => {
     const avg = (reviews.reduce((s, r) => s + Number(r.rating), 0) / reviews.length).toFixed(1);
@@ -2629,13 +2629,12 @@ function ReviewBoard({
           <div
             className="rv-sheet-header"
             onPointerDown={(event) => dragControls.start(event)}
-            onClick={() => setSheetExpanded(!sheetExpanded)}
             style={{ cursor: 'grab' }}
           >
             <div className="rv-sheet-handle" />
             <div className="rv-sheet-title-row">
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <h3>{reviewUi.foundPlaces(filtered.length)}</h3>
+                <h3>{mapBounds ? reviewUi.foundPlaces(groupedPlaces.length) : '...'}</h3>
                 <span className="rv-avg-score">★ {avgRating}</span>
               </div>
               <button

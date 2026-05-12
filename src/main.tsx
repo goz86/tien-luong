@@ -9,6 +9,18 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   </React.StrictMode>
 );
 
+// Hide splash screen once React finishes first render
+requestAnimationFrame(() => {
+  requestAnimationFrame(() => {
+    const splash = document.getElementById('splash');
+    if (splash) {
+      splash.style.opacity = '0';
+      splash.style.pointerEvents = 'none';
+      setTimeout(() => splash.remove(), 520);
+    }
+  });
+});
+
 // Service Worker registration with update detection
 if ('serviceWorker' in navigator && import.meta.env.DEV) {
   window.addEventListener('load', async () => {

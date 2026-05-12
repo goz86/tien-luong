@@ -496,7 +496,9 @@ export function CalendarScreen({
               );
             })}
           </div>
-          <strong className="calendar-total-fixed">{formatCalendarKrw(monthTotal)}</strong>
+          <div className="calendar-total-wrap">
+            <strong className="calendar-total-fixed">{formatCalendarKrw(monthTotal)}</strong>
+          </div>
           <button type="button" className="calendar-month-nav" onClick={onNextMonth} aria-label={ui.nextMonth}>
             <ChevronRight size={18} />
           </button>

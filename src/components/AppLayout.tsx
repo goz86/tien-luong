@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { CalendarDays, House, MessageCircleMore, UserRound, WalletCards, Bell, ThumbsUp, MessageCircle, X } from 'lucide-react';
 import { hasSupabaseConfig, supabase as supabaseClient } from '../lib/supabase';
@@ -32,9 +32,31 @@ type WallpaperKey = string;
 
 const REFRESH_RATE_URL = 'https://open.er-api.com/v6/latest/KRW';
 
+const BANNER_DISMISS_KEY = 'duhocmate-banner-dismissed';
+
 export default function AppLayout() {
   const store = useAppStore();
   const suppressPopstate = useRef(false);
+  const [activeBanner, setActiveBanner] = useState<{ id: string; title: string; body: string; severity: string } | null>(null);
+
+  // Fetch latest announcement within 24h
+  useEffect(() => {
+    if (!supabaseClient) return;
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    supabaseClient
+      .from('admin_announcements')
+      .select('id, title, body, severity')
+      .eq('is_published', true)
+      .gte('created_at', cutoff)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .then(({ data }) => {
+        if (!data || data.length === 0) return;
+        const item = data[0] as { id: string; title: string; body: string; severity: string };
+        const dismissed = localStorage.getItem(BANNER_DISMISS_KEY);
+        if (dismissed !== item.id) setActiveBanner(item);
+      });
+  }, []);
 
   /* ── tab routing ── */
   const changeTab = useCallback((nextTab: Tab) => {
@@ -78,6 +100,17 @@ export default function AppLayout() {
   useEffect(() => {
     const hash = (window.location.hash.replace('#', '') || 'home') as Tab;
     history.replaceState({ tab: hash }, '');
+  }, []);
+
+  /* ── PWA shortcut: ?action=add-shift ── */
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const action = params.get('action');
+    if (action === 'add-shift') {
+      const clean = window.location.pathname + window.location.hash;
+      history.replaceState({}, '', clean);
+      setTimeout(() => openAddToday(), 300);
+    }
   }, []);
 
   /* ── refresh exchange rate ── */
@@ -143,13 +176,28 @@ export default function AppLayout() {
     };
 
     const acceptF = async (existing: any) => {
-      const accepted = { ...existing, status: 'accepted', updated_at: new Date().toISOString() };
-      mergeF(accepted);
+      // Optimistic update so UI feels instant
+      const optimistic = { ...existing, status: 'accepted', updated_at: new Date().toISOString() };
+      mergeF(optimistic);
       store.setRequested((prev) => prev.filter((id) => id !== targetId));
 
-      const { data: rpcData } = await client.rpc('accept_friend_request', { other_user_id: targetId });
-      const acceptedRow = Array.isArray(rpcData) ? rpcData[0] : rpcData;
-      if (acceptedRow) mergeF(acceptedRow);
+      // Direct DB update — more reliable than a custom RPC that may not exist
+      const { data: updatedRow, error: updateErr } = await client
+        .from('friend_requests')
+        .update({ status: 'accepted' })
+        .eq('id', existing.id)
+        .select()
+        .single();
+
+      if (!updateErr && updatedRow) {
+        mergeF(updatedRow);
+      } else if (updateErr) {
+        // Rollback optimistic update on failure — restore friendship to previous state
+        mergeF(existing);
+        console.error('Lỗi chấp nhận kết bạn:', updateErr);
+        throw new Error('Chưa chấp nhận được lời mời kết bạn.');
+      }
+
       await notify(targetId, 'friend_accept', 'Đã trở thành bạn bè', `${actorName} đã chấp nhận lời mời kết bạn.`);
     };
 
@@ -180,12 +228,19 @@ export default function AppLayout() {
       return;
     }
 
+    // Optimistic UI: show "sent" immediately
     store.addRequested(targetId);
 
     if (existing && existing.requester_id === userId) {
-      if (existing.status === 'pending') return;
-      const { data } = await client.from('friend_requests').update({ status: 'pending' }).eq('id', existing.id).select().single();
+      if (existing.status === 'pending') return; // already pending, done
+      const { data, error: updateErr } = await client
+        .from('friend_requests')
+        .update({ status: 'pending' })
+        .eq('id', existing.id)
+        .select()
+        .single();
       if (data) mergeF(data);
+      else if (updateErr) store.setRequested((prev) => prev.filter((id) => id !== targetId));
       return;
     }
 
@@ -198,6 +253,11 @@ export default function AppLayout() {
     if (!error && newReq) {
       mergeF(newReq);
       await notify(targetId, 'friend_request', 'Lời mời kết bạn mới', `${actorName} muốn kết bạn với bạn.`);
+    } else if (error) {
+      // Revert optimistic update if insert failed
+      store.setRequested((prev) => prev.filter((id) => id !== targetId));
+      console.error('Lỗi gửi lời mời kết bạn:', error);
+      throw new Error('Chưa gửi được lời mời kết bạn.');
     }
   }, [store.session, store.profile, store.friendships]);
 
@@ -322,6 +382,34 @@ export default function AppLayout() {
   return (
     <div className="app-stage">
       <div className="phone-shell" style={wallpaperStyle}>
+        {/* Admin announcement banner */}
+        <AnimatePresence>
+          {activeBanner ? (
+            <motion.div
+              className={`app-banner app-banner--${activeBanner.severity}`}
+              initial={{ y: -60, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: -60, opacity: 0 }}
+              transition={{ type: 'spring', damping: 26, stiffness: 280 }}
+            >
+              <div className="app-banner-content">
+                <strong>{activeBanner.title}</strong>
+                <span>{activeBanner.body}</span>
+              </div>
+              <button
+                type="button"
+                className="app-banner-close"
+                onClick={() => {
+                  localStorage.setItem(BANNER_DISMISS_KEY, activeBanner.id);
+                  setActiveBanner(null);
+                }}
+              >
+                <X size={16} />
+              </button>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+
         <main key={store.tab} className="screen-shell">
           {store.tab === 'home' && (
             <HomeScreen

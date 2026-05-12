@@ -5,6 +5,7 @@ import { RateState, Shift, VenueColors } from '../lib/types';
 import { formatDateChip, getVenueColor } from '../utils/helpers';
 import { FinanceMetric } from './shared/ui';
 import { Logo } from './shared/Logo';
+import { ActivityTicker } from './shared/ActivityTicker';
 
 export function HomeScreen({
   monthlyTotal,
@@ -80,7 +81,7 @@ export function HomeScreen({
     currencyHint: 'Nhấn để đổi tiền tệ',
     monthlyIncome: 'Thu nhập tháng này',
     totalHours: 'Tổng số giờ',
-    averageHourly: 'Lương TB/ giờ',
+    averageHourly: 'TB/giờ',
     exchangeRate: 'Tỷ giá',
     cachedRate: 'Dùng cache',
     addShift: 'Thêm ca',
@@ -137,21 +138,34 @@ export function HomeScreen({
         </button>
       </header>
 
+      <ActivityTicker lang={lang} />
+
       <section className="hero-balance-card">
         <div className="hero-topline">
-          <div onClick={() => setIsVND(!isVND)} style={{ cursor: 'pointer', flex: 1, minWidth: 0 }} title={ui.currencyHint}>
+          <div onClick={() => setIsVND(!isVND)} style={{ cursor: 'pointer', flex: 1, minWidth: 0, overflow: 'hidden' }} title={ui.currencyHint}>
             <p>{ui.monthlyIncome}</p>
-            <h2 style={{ 
-              whiteSpace: 'nowrap', 
-              fontSize: isVND ? '28px' : '35px',
-              height: '42px',
-              display: 'flex',
-              alignItems: 'center',
-              transition: 'font-size 0.2s ease',
-              letterSpacing: isVND ? '-0.05em' : '-0.035em'
-            }}>
-              {isVND ? `${Math.round(monthlyTotal * rate.value).toLocaleString('vi-VN')} VNĐ` : formatKrw(monthlyTotal)}
-            </h2>
+            {(() => {
+              const display = isVND
+                ? `${Math.round(monthlyTotal * rate.value).toLocaleString('vi-VN')} VNĐ`
+                : formatKrw(monthlyTotal);
+              const len = display.replace(/\s/g, '').length;
+              const fs = isVND
+                ? (len > 16 ? '18px' : len > 12 ? '22px' : '26px')
+                : (len > 11 ? '24px' : len > 9 ? '28px' : len > 7 ? '32px' : '35px');
+              return (
+                <h2 style={{
+                  whiteSpace: 'nowrap',
+                  fontSize: fs,
+                  height: '42px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  transition: 'font-size 0.2s ease',
+                  letterSpacing: '-0.035em',
+                }}>
+                  {display}
+                </h2>
+              );
+            })()}
           </div>
           
           <div className="month-navigator">

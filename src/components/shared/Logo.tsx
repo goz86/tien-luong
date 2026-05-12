@@ -1,25 +1,20 @@
 export function Logo() {
   return (
-    <div className="brand-logo" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-      <div style={{ width: '36px', height: '36px', borderRadius: '8px', overflow: 'hidden', flexShrink: 0 }}>
-        <img src="/logo.png" alt="Duhoc Mate Logo" style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scale(1.15)' }} />
+    <div className="brand-logo" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+      <div style={{ width: '62px', height: '62px', borderRadius: '50%', overflow: 'hidden', flexShrink: 0, boxShadow: '0 4px 14px rgba(39,82,255,0.18)' }}>
+        <img src="/logo.png" alt="Duhoc Mate Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
       </div>
       <span style={{
-        fontSize: '22px',
+        fontSize: '26px',
         fontWeight: 900,
         letterSpacing: '-0.03em',
-        background: 'linear-gradient(135deg, #0f172a 0%, #334155 100%)',
-        WebkitBackgroundClip: 'text',
-        WebkitTextFillColor: 'transparent',
-      }} className="dark-text-gradient">
+        color: '#0f172a',
+        lineHeight: 1.2,
+      }} className="logo-text">
         Duhoc Mate
       </span>
       <style>{`
-        .dark .dark-text-gradient {
-          background: linear-gradient(135deg, #ffffff 0%, #94a3b8 100%) !important;
-          -webkit-background-clip: text !important;
-          -webkit-text-fill-color: transparent !important;
-        }
+        .dark .logo-text { color: #ffffff !important; }
       `}</style>
     </div>
   );

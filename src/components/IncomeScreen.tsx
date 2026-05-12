@@ -38,6 +38,7 @@ import { getVenueColor, shiftMonth } from '../utils/helpers';
 
 type AppLang = 'vi' | 'ko';
 type IncomeTab = 'overview' | 'expenses' | 'workplaces';
+type ChartViewMode = 'day' | 'week' | 'month';
 type IconComponent = LucideIcon;
 
 const incomeTabs: Array<{ id: IncomeTab; icon: IconComponent }> = [
@@ -218,6 +219,8 @@ export function IncomeScreen({
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [activeSelect, setActiveSelect] = useState<string | null>(null);
   const [chartMonth, setChartMonth] = useState(currentMonthIso);
+  const [chartView, setChartView] = useState<ChartViewMode>('month');
+  const [showCelebration, setShowCelebration] = useState(false);
   const [expenseForm, setExpenseForm] = useState<Omit<Expense, 'id'>>({
     category: 'food',
     amount: 0,
@@ -253,6 +256,11 @@ export function IncomeScreen({
   const chartMonthNumber = chartMonthDate.getMonth() + 1;
   const chartMonthTitle = new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(chartMonthDate);
   const chartDaysInMonth = new Date(chartMonthDate.getFullYear(), chartMonthDate.getMonth() + 1, 0).getDate();
+
+  const todayNow = new Date();
+  const todayMonthKey = `${todayNow.getFullYear()}-${String(todayNow.getMonth() + 1).padStart(2, '0')}`;
+  const isCurrentViewMonth = selectedMonthKey === todayMonthKey;
+  const todayDayNumber = todayNow.getDate();
 
   const monthShifts = useMemo(
     () => shifts.filter((shift) => shift.date.startsWith(selectedMonthKey)),
@@ -365,14 +373,77 @@ export function IncomeScreen({
 
   const maxMonthlyDay = Math.max(...monthlyChartData, 1);
 
+  // ── 6-month grouped chart ──────────────────────────────────────────────
+  const sixMonthsData = useMemo(() => {
+    const result = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(chartMonthDate.getFullYear(), chartMonthDate.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const total = shifts
+        .filter(s => s.date.startsWith(key))
+        .reduce((sum, s) => sum + calculateShiftPay(s).total, 0);
+      result.push({ total, label: isKo ? `${d.getMonth() + 1}월` : `Th${d.getMonth() + 1}`, isCurrent: i === 0 });
+    }
+    return result;
+  }, [chartMonthDate, shifts, isKo]);
+
+  // ── 6-week grouped chart ───────────────────────────────────────────────
+  const sixWeeksData = useMemo(() => {
+    const result = [];
+    const today = new Date();
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - (today.getDay() + 6) % 7);
+    for (let i = 5; i >= 0; i--) {
+      const start = new Date(monday);
+      start.setDate(monday.getDate() - i * 7);
+      const end = new Date(start);
+      end.setDate(start.getDate() + 6);
+      const startStr = dateToIso(start);
+      const endStr   = dateToIso(end);
+      const total = shifts
+        .filter(s => s.date >= startStr && s.date <= endStr)
+        .reduce((sum, s) => sum + calculateShiftPay(s).total, 0);
+      result.push({ total, label: `${start.getDate()}/${start.getMonth() + 1}`, isCurrent: i === 0 });
+    }
+    return result;
+  }, [shifts]);
+
+  const maxGrouped = useMemo(() => {
+    const src = chartView === 'month' ? sixMonthsData : sixWeeksData;
+    return Math.max(...src.map(d => d.total), 1);
+  }, [chartView, sixMonthsData, sixWeeksData]);
+
+  // Compact money label for bars
+  const fmtBar = (val: number) => {
+    if (val >= 1_000_000) return `${(val / 1_000_000).toFixed(1)}M`;
+    if (val >= 1_000)     return `${Math.round(val / 1000)}K`;
+    return val > 0 ? val.toString() : '';
+  };
+
   useEffect(() => {
     if (prevTotalRef.current !== null && monthlyTotal >= target && prevTotalRef.current < target && target > 0) {
       confetti({
-        particleCount: 150,
-        spread: 80,
-        origin: { y: 0.6 },
-        colors: ['#2752ff', '#0d9b72', '#ff6b7a', '#f59e0b'],
+        particleCount: 200,
+        spread: 90,
+        origin: { y: 0.55 },
+        colors: ['#2752ff', '#0d9b72', '#ff6b7a', '#f59e0b', '#a855f7'],
       });
+      setTimeout(() => confetti({
+        particleCount: 80,
+        angle: 60,
+        spread: 55,
+        origin: { x: 0, y: 0.65 },
+        colors: ['#fbbf24', '#34d399', '#60a5fa'],
+      }), 250);
+      setTimeout(() => confetti({
+        particleCount: 80,
+        angle: 120,
+        spread: 55,
+        origin: { x: 1, y: 0.65 },
+        colors: ['#f472b6', '#a78bfa', '#fb923c'],
+      }), 400);
+      setShowCelebration(true);
+      setTimeout(() => setShowCelebration(false), 5000);
     }
     prevTotalRef.current = monthlyTotal;
   }, [monthlyTotal, target]);
@@ -447,7 +518,20 @@ export function IncomeScreen({
         <div className="income-progress-track" aria-label={isKo ? `목표의 ${progressPercentage.toFixed(0)}% 달성` : `Đã đạt ${progressPercentage.toFixed(0)}% mục tiêu`}>
           <span style={{ width: `${progressPercentage}%`, background: progressColor }} />
         </div>
-        <p>{missingTarget > 0 ? ui.needMore(formatMoney(missingTarget)) : ui.goalDone}</p>
+
+        {missingTarget > 0 ? (
+          <p>{ui.needMore(formatMoney(missingTarget))}</p>
+        ) : (
+          <div className={`income-goal-achieved${showCelebration ? ' burst' : ''}`}>
+            <div className="iga-particles" aria-hidden="true">
+              {['🎉','⭐','✨','🎊','💫','🌟','🎈','🏆'].map((e, i) => (
+                <span key={i} className={`iga-p iga-p${i}`}>{e}</span>
+              ))}
+            </div>
+            <Sparkles size={16} />
+            <span>{ui.goalDone}</span>
+          </div>
+        )}
       </section>
 
       <div className="income-subtabs" role="tablist" aria-label={ui.incomeTabs}>
@@ -491,24 +575,99 @@ export function IncomeScreen({
               <div className="income-section-head">
                 <div>
                   <p>{ui.monthOverview}</p>
-                  <h2>{ui.monthIncome(chartDaysInMonth)}</h2>
-                  <span className="income-month-caption">{chartMonthTitle}</span>
+                  <h2>
+                    {chartView === 'day'
+                      ? ui.monthIncome(chartDaysInMonth)
+                      : chartView === 'week'
+                      ? (isKo ? '주간 수입 흐름' : 'Thu nhập theo tuần')
+                      : (isKo ? '월별 수입 흐름' : 'Thu nhập theo tháng')}
+                  </h2>
+                  {/* Always rendered — visibility:hidden keeps header height stable when not in day mode */}
+                  <span className={`income-month-caption${chartView !== 'day' ? ' income-month-caption--ghost' : ''}`}>
+                    {chartMonthTitle}
+                  </span>
                 </div>
-                <div className="income-month-switcher" aria-label={isKo ? '차트 월 선택' : 'Chọn tháng biểu đồ'}>
-                  <button type="button" onClick={() => setChartMonth((value) => shiftMonth(value, -1))} aria-label={ui.prevMonth}>
+                {/* Always rendered — keeps section-head height same across all views */}
+                <div
+                  className={`income-month-switcher${chartView !== 'day' ? ' income-month-switcher--ghost' : ''}`}
+                  aria-label={isKo ? '차트 월 선택' : 'Chọn tháng biểu đồ'}
+                  aria-hidden={chartView !== 'day'}
+                >
+                  <button type="button" onClick={() => setChartMonth((value) => shiftMonth(value, -1))} aria-label={ui.prevMonth} tabIndex={chartView !== 'day' ? -1 : 0}>
                     <ChevronLeft size={17} />
                   </button>
                   <strong>{chartMonthNumber}</strong>
-                  <button type="button" onClick={() => setChartMonth((value) => shiftMonth(value, 1))} aria-label={ui.nextMonth}>
+                  <button type="button" onClick={() => setChartMonth((value) => shiftMonth(value, 1))} aria-label={ui.nextMonth} tabIndex={chartView !== 'day' ? -1 : 0}>
                     <ChevronRight size={17} />
                   </button>
                 </div>
               </div>
-              <div className="income-month-bars">
-                {monthlyChartData.map((value, idx) => (
-                  <div key={idx} className={value === maxMonthlyDay && value > 0 ? 'top-day' : ''}>
-                    <span style={{ height: `${Math.max(2, (value / maxMonthlyDay) * 50)}px` }} />
+
+              {/* ── Bar chart area — fixed height wrapper prevents layout jump ── */}
+              <div className="income-chart-area">
+                {chartView === 'day' ? (
+                  <div className="income-day-view">
+                    <div className="income-month-bars">
+                      {monthlyChartData.map((value, idx) => {
+                        const day = idx + 1;
+                        const isToday = isCurrentViewMonth && day === todayDayNumber;
+                        const isTop = value === maxMonthlyDay && value > 0;
+                        const weekBand = Math.floor(idx / 7) % 2 === 1 ? 'week-odd' : '';
+                        const cls = [isTop && !isToday ? 'top-day' : '', isToday ? 'today-day' : '', weekBand].filter(Boolean).join(' ');
+                        return (
+                          <div key={idx} className={cls || undefined}>
+                            <span style={{ height: `${Math.max(2, (value / maxMonthlyDay) * 72)}px` }} />
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {/* Day milestone markers */}
+                    <div className="income-day-ticks">
+                      {monthlyChartData.map((_, idx) => {
+                        const day = idx + 1;
+                        const isMilestone = [5, 10, 15, 20, 25, 30].includes(day);
+                        const isToday = isCurrentViewMonth && day === todayDayNumber;
+                        const cls = [isMilestone ? 'tick-show' : '', isToday ? 'tick-today' : ''].filter(Boolean).join(' ');
+                        return (
+                          <span key={idx} className={cls || undefined}>
+                            {isMilestone ? day : ''}
+                          </span>
+                        );
+                      })}
+                    </div>
                   </div>
+                ) : (
+                  <div className="income-grouped-bars">
+                    {(chartView === 'month' ? sixMonthsData : sixWeeksData).map((item, idx) => (
+                      <div key={idx} className={`igb-col${item.isCurrent ? ' current' : ''}`}>
+                        <span className="igb-value">{fmtBar(item.total)}</span>
+                        <div className="igb-bar-wrap">
+                          <div
+                            className="igb-bar-fill"
+                            style={{ height: `${Math.max(4, (item.total / maxGrouped) * 74)}px` }}
+                          />
+                        </div>
+                        {/* Fixed-height bottom area keeps ALL columns same total height */}
+                        <div className="igb-bottom">
+                          <span className="igb-label">{item.label}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* ── View switcher tabs ── */}
+              <div className="income-chart-view-tabs">
+                {(['month', 'week', 'day'] as ChartViewMode[]).map(v => (
+                  <button
+                    key={v}
+                    type="button"
+                    className={chartView === v ? 'active' : ''}
+                    onClick={() => setChartView(v)}
+                  >
+                    {v === 'month' ? (isKo ? '월별' : 'Tháng') : v === 'week' ? (isKo ? '주별' : 'Tuần') : (isKo ? '일별' : 'Ngày')}
+                  </button>
                 ))}
               </div>
             </section>

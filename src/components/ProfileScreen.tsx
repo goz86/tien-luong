@@ -29,7 +29,8 @@ import {
   X,
   Trophy,
 } from 'lucide-react';
-import { BADGES } from '../data/badgeData';
+import { BADGES, BADGE_CATEGORY_META, TIER_META, type BadgeCategory } from '../data/badgeData';
+import { useAppStore } from '../store/appStore';
 
 import { Session } from '@supabase/supabase-js';
 import { ProfileDraft } from '../lib/types';
@@ -104,6 +105,19 @@ export function ProfileScreen({
   const [regRegionSuggestions, setRegRegionSuggestions] = useState<Region[]>([]);
   const [regSchoolSuggestions, setRegSchoolSuggestions] = useState<School[]>([]);
   const [stats, setStats] = useState({ posts: 0, comments: 0, bookmarks: 0, likes: 0 });
+
+  // Badge progress data from store
+  const badgeShifts      = useAppStore(s => s.shifts);
+  const badgeExpenses    = useAppStore(s => s.expenses);
+  const badgeCompanions  = useAppStore(s => s.companions);
+  const badgeData = {
+    shifts: badgeShifts,
+    expenses: badgeExpenses,
+    posts: [],
+    comments: [],
+    companionsCount: badgeCompanions.length,
+    likesCount: stats.likes,
+  } as const;
 
   useEffect(() => {
     if (!session || !supabase) return;
@@ -441,31 +455,100 @@ export function ProfileScreen({
           </div>
 
           {/* ===== BADGES SECTION ===== */}
-          <section className="pf-card">
+          <section className="pf-card pf-badge-card">
             <div className="pf-card-header">
               <Trophy size={18} color="#f59e0b" />
               <span>{isKo ? '업적 배지' : 'Huy hiệu thành tích'}</span>
-              <span className="pf-see-all">{earnedBadges.length}/{BADGES.length}</span>
+              <span className="pf-badge-count-pill">{earnedBadges.length}<span>/{BADGES.length}</span></span>
             </div>
-            <div className="pf-badges-grid">
-              {BADGES.map((badge) => {
-                const isEarned = earnedBadges.includes(badge.id);
-                return (
-                  <div key={badge.id} className={`pf-badge ${isEarned ? 'earned' : 'locked'}`}>
-                    <div className="pf-badge-icon" style={{ 
-                      background: isEarned ? badge.color : '#f1f5f9', 
-                      borderColor: isEarned ? badge.border : '#cbd5e1',
-                      filter: isEarned ? 'none' : 'grayscale(1) opacity(0.5)'
-                    }}>
-                      {badge.icon}
-                    </div>
-                    <span style={{ color: isEarned ? 'var(--text-main)' : 'var(--text-faint)' }}>
-                      {isKo ? badge.label_ko : badge.label_vi}
-                    </span>
+
+            {/* Progress summary bar */}
+            <div className="pf-badge-progress-overview">
+              <div className="pf-badge-progress-track">
+                <div
+                  className="pf-badge-progress-fill-main"
+                  style={{ width: `${Math.round(earnedBadges.length / BADGES.length * 100)}%` }}
+                />
+              </div>
+              <span className="pf-badge-progress-pct">
+                {Math.round(earnedBadges.length / BADGES.length * 100)}%
+              </span>
+            </div>
+
+            {/* Badges grouped by category */}
+            {(Object.keys(BADGE_CATEGORY_META) as BadgeCategory[]).map(cat => {
+              const catBadges = BADGES.filter(b => b.category === cat);
+              if (!catBadges.length) return null;
+              const meta = BADGE_CATEGORY_META[cat];
+              return (
+                <div key={cat} className="pf-badge-group">
+                  <div className="pf-badge-group-title">
+                    <span>{meta.icon}</span>
+                    <span>{isKo ? meta.label_ko : meta.label_vi}</span>
                   </div>
-                );
-              })}
-            </div>
+                  <div className="pf-badges-grid">
+                    {catBadges.map(badge => {
+                      const isEarned = earnedBadges.includes(badge.id);
+                      const prog = badge.getProgress(badgeData as any);
+                      const pct = Math.min(100, Math.round((prog.current / prog.target) * 100));
+                      const tierLabel = isKo ? TIER_META[badge.tier].label_ko : TIER_META[badge.tier].label_vi;
+
+                      // Format progress text
+                      let progText = '';
+                      if (!isEarned) {
+                        if (badge.category === 'income') {
+                          const fmtM = (v: number) => v >= 1_000_000
+                            ? `${(v / 1_000_000).toFixed(1)}M`
+                            : `${Math.round(v / 1000)}k`;
+                          progText = `${fmtM(prog.current)} / ${fmtM(prog.target)}₩`;
+                        } else {
+                          progText = `${prog.current} / ${prog.target}`;
+                        }
+                      }
+
+                      return (
+                        <div
+                          key={badge.id}
+                          className={`pf-badge2 pf-tier-${badge.tier} ${isEarned ? 'earned' : 'locked'}`}
+                          style={isEarned ? {
+                            background: badge.color,
+                            borderColor: badge.border,
+                            boxShadow: `0 4px 18px ${badge.glow}`,
+                          } : undefined}
+                        >
+                          {/* Tier pill */}
+                          <span className="pf-badge2-tier">{tierLabel}</span>
+
+                          {/* Icon */}
+                          <div className="pf-badge2-emoji">{badge.icon}</div>
+
+                          {/* Name */}
+                          <span className="pf-badge2-name">
+                            {isKo ? badge.label_ko : badge.label_vi}
+                          </span>
+
+                          {/* Progress bar (locked only) */}
+                          {!isEarned && (
+                            <div className="pf-badge2-progress">
+                              <div className="pf-badge2-prog-bar">
+                                <div className="pf-badge2-prog-fill" style={{ width: `${pct}%` }} />
+                              </div>
+                              <span className="pf-badge2-prog-text">{progText}</span>
+                            </div>
+                          )}
+
+                          {/* Lock overlay */}
+                          {!isEarned && <span className="pf-badge2-lock">🔒</span>}
+
+                          {/* Shine overlay for earned */}
+                          {isEarned && <span className="pf-badge2-shine" />}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
           </section>
 
         </>
