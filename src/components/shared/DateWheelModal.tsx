@@ -45,7 +45,7 @@ export function DateWheelModal({ initialDate, onClose, onConfirm, title }: DateW
   };
 
   return (
-    <section className="calendar-modal-backdrop" onClick={onClose} style={{ zIndex: 3000 }}>
+    <section className="calendar-modal-backdrop" onClick={onClose} style={{ zIndex: 4300 }}>
       <div className="calendar-modal time-wheel-modal" onClick={(e) => e.stopPropagation()}>
         <div className="month-wheel-actions">
           <button type="button" onClick={onClose}>Huỷ</button>
