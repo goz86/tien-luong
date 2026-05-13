@@ -1,0 +1,65 @@
+{
+  "packageId": "com.duhocmate.www.twa",
+  "host": "www.duhocmate.com",
+  "name": "Duhoc Mate",
+  "launcherName": "DuhocMate",
+  "display": "standalone",
+  "themeColor": "#2563EB",
+  "themeColorDark": "#000000",
+  "navigationColor": "#000000",
+  "navigationColorDark": "#000000",
+  "navigationDividerColor": "#000000",
+  "navigationDividerColorDark": "#000000",
+  "backgroundColor": "#F8FAFC",
+  "enableNotifications": true,
+  "startUrl": "/",
+  "iconUrl": "https://www.duhocmate.com/logo.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "C:\\Users\\Hhung\\Desktop\\tien-luong\\android\\android.keystore",
+    "alias": "android"
+  },
+  "appVersionName": "1",
+  "appVersionCode": 1,
+  "shortcuts": [
+    {
+      "name": "Thêm ca làm",
+      "shortName": "Thêm ca",
+      "url": "https://www.duhocmate.com/?action=add-shift",
+      "chosenIconUrl": "https://www.duhocmate.com/icons/icon.png"
+    },
+    {
+      "name": "Xem thu nhập",
+      "shortName": "Thu nhập",
+      "url": "https://www.duhocmate.com/#income",
+      "chosenIconUrl": "https://www.duhocmate.com/icons/icon.png"
+    },
+    {
+      "name": "Cộng đồng",
+      "shortName": "Cộng đồng",
+      "url": "https://www.duhocmate.com/#friends",
+      "chosenIconUrl": "https://www.duhocmate.com/icons/icon.png"
+    }
+  ],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://www.duhocmate.com/manifest.webmanifest",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://www.duhocmate.com/",
+  "minSdkVersion": 21,
+  "orientation": "portrait-primary",
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "protocolHandlers": [],
+  "fileHandlers": [],
+  "launchHandlerClientMode": "",
+  "displayOverride": [],
+  "appVersion": "1"
+}

@@ -4,3 +4,8 @@ dist
 .env.local
 *.log
 *.tsbuildinfo
+
+# Android Bubblewrap Build
+android/app/build/
+android/.gradle/
+android/app-release-unsigned.apk

@@ -1,0 +1,10 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.duhocmate.www.twa",
+    "sha256_cert_fingerprints": [
+      "5C:10:9E:E3:29:45:C5:2A:5A:6B:54:18:9F:6F:B2:2C:9C:C1:C5:10:28:C6:EF:B3:F3:62:C0:73:96:41:E2:07"
+    ]
+  }
+}]
