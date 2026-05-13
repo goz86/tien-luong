@@ -1626,10 +1626,11 @@ select {
   padding: 16px 0 14px 0;
   position: sticky;
   top: 0;
-  z-index: 100;
+  z-index: 10000;
   background: linear-gradient(180deg, #ffffff 0%, #f5f8ff 100%);
   box-shadow: 0 4px 12px rgba(20, 45, 109, 0.08);
   border-bottom: 1px solid rgba(112, 129, 159, 0.08);
+  isolation: isolate;
 }
 
 .sheet-head h3 {
@@ -2261,6 +2262,32 @@ button.ticker-inner {
     height: 40px;
     padding: 0 9px;
     font-size: 11px;
+  }
+}
+
+/* ===== MOBILE 375px (iPhone SE) OPTIMIZATIONS ===== */
+@media (max-width: 390px) {
+  /* Fix finance-metric cards: prevent "17.58 VND" from wrapping on home screen */
+  .finance-metric {
+    padding: 10px 8px;
+  }
+  .finance-metric strong {
+    font-size: 13px;
+  }
+
+  /* Tighten hero card horizontal padding to give metric columns more room */
+  .hero-balance-card {
+    padding: 20px 14px 16px;
+  }
+
+  /* Slightly smaller date header in day-sheet to allow single-line display */
+  .sheet-head h3 {
+    font-size: 16px;
+  }
+
+  /* Reduce appbar padding for tighter screens */
+  .appbar {
+    padding: 0 14px;
   }
 }
 
@@ -11202,4 +11229,25 @@ button.admin-stat-card {
 .dark .admin-qa-copy small,
 .dark .admin-signal-panel small {
   color: #94a3b8;
+}
+
+/* ===== MOBILE 375px — overrides after base styles (must stay at end of file) ===== */
+@media (max-width: 390px) {
+  /* Fix community header wordmark wrapping */
+  .cm-wordmark {
+    font-size: 22px;
+  }
+  .cm-header {
+    padding: 14px 16px 8px;
+  }
+
+  /* Restore multi-column income grids — the max-width:380px block above forces 1fr,
+     but 375px screens have enough room to keep original layouts */
+  .income-hero-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .income-snapshot-grid,
+  .income-analysis-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
