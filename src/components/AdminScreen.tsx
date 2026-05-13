@@ -22,6 +22,7 @@ import type { AppLang } from './ProfileScreen';
 import { timeAgo } from '../data/communityData';
 
 type AdminTab = 'overview' | 'users' | 'content' | 'announcements' | 'logs';
+type AdminContentView = 'posts' | 'reviews' | 'comments';
 type ModerationStatus = 'active' | 'muted' | 'suspended' | 'banned';
 type AnnouncementSeverity = 'info' | 'success' | 'warning' | 'danger';
 
@@ -342,6 +343,7 @@ export function AdminScreen({
   const ui = UI[lang];
   const isKo = lang === 'ko';
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
+  const [contentView, setContentView] = useState<AdminContentView>('posts');
   const [contentFocus, setContentFocus] = useState<'comments' | null>(null);
   const [announcementFocus, setAnnouncementFocus] = useState<'notifications' | null>(null);
   const [loading, setLoading] = useState(false);
@@ -578,6 +580,7 @@ export function AdminScreen({
   }
 
   function openCommentHistory() {
+    setContentView('comments');
     setContentFocus('comments');
     openTab('content');
     markSeen('comments');
@@ -768,6 +771,23 @@ export function AdminScreen({
     }
   }
 
+  // Merge recent activity (posts + reviews + comments) for overview feed.
+  // Keep hooks before conditional returns so auth/admin restoration cannot change hook order.
+  const activityFeed = useMemo(() => {
+    const items = [
+      ...posts.map(p => ({ type: 'post' as const, id: p.id, title: p.title, sub: p.display_name, badge: p.category, ts: p.created_at, raw: p })),
+      ...reviews.map(r => ({ type: 'review' as const, id: r.id, title: r.place_name, sub: r.display_name, badge: r.category, ts: r.created_at, raw: r })),
+      ...comments.map(c => ({ type: 'comment' as const, id: c.id, title: c.content, sub: c.display_name, badge: c.parent_id ? 'reply' : 'comment', ts: c.created_at, raw: c })),
+    ];
+    return items.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime()).slice(0, 20);
+  }, [posts, reviews, comments]);
+
+  const contentCounts: Record<AdminContentView, number> = {
+    posts: posts.length,
+    reviews: reviews.length,
+    comments: comments.length,
+  };
+
   if (!isAdmin) {
     return (
       <section className="admin-screen admin-access">
@@ -783,16 +803,6 @@ export function AdminScreen({
       </section>
     );
   }
-
-  // Merge recent activity (posts + reviews + comments) for overview feed
-  const activityFeed = useMemo(() => {
-    const items = [
-      ...posts.map(p => ({ type: 'post' as const, id: p.id, title: p.title, sub: p.display_name, badge: p.category, ts: p.created_at, raw: p })),
-      ...reviews.map(r => ({ type: 'review' as const, id: r.id, title: r.place_name, sub: r.display_name, badge: r.category, ts: r.created_at, raw: r })),
-      ...comments.map(c => ({ type: 'comment' as const, id: c.id, title: c.content, sub: c.display_name, badge: c.parent_id ? 'reply' : 'comment', ts: c.created_at, raw: c })),
-    ];
-    return items.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime()).slice(0, 20);
-  }, [posts, reviews, comments]);
 
   return (
     <section className="admin-screen">
@@ -857,8 +867,7 @@ export function AdminScreen({
 
       {activeTab === 'overview' ? (
         <div className="admin-panel-stack">
-          {/* Quick actions */}
-          <div className="admin-quick-actions">
+          <section className="admin-command-deck" aria-label={isKo ? '관리 작업' : 'Tác vụ quản trị'}>
             {([
               { icon: Megaphone,  label: isKo ? '공지 작성' : 'Thông báo', color: '#f97316', tab: 'announcements' as AdminTab },
               { icon: Users,      label: isKo ? '사용자'   : 'Người dùng', color: '#2752ff', tab: 'users' as AdminTab },
@@ -867,10 +876,21 @@ export function AdminScreen({
             ] as { icon: typeof ShieldCheck; label: string; color: string; tab: AdminTab }[]).map(({ icon: Ic, label, color, tab }) => (
               <button key={tab} type="button" className="admin-qa-btn" style={{ '--qa-color': color } as React.CSSProperties} onClick={() => openTab(tab)}>
                 <span className="admin-qa-icon"><Ic size={20} /></span>
-                <span>{label}</span>
+                <span className="admin-qa-copy">
+                  <strong>{label}</strong>
+                  <small>
+                    {tab === 'announcements'
+                      ? stats.notifications.toLocaleString()
+                      : tab === 'users'
+                        ? stats.users.toLocaleString()
+                        : tab === 'content'
+                          ? (posts.length + reviews.length + comments.length).toLocaleString()
+                          : visibleLogs.length.toLocaleString()}
+                  </small>
+                </span>
               </button>
             ))}
-          </div>
+          </section>
 
           {/* Unified activity feed */}
           <ContentPanel title={isKo ? '최근 활동' : 'Hoạt động gần đây'} scroll>
@@ -901,6 +921,22 @@ export function AdminScreen({
               </article>
             ))}
           </ContentPanel>
+          <section className="admin-signal-panel" aria-label={isKo ? '주요 알림' : 'Tín hiệu mới'}>
+            <button type="button" onClick={openCommentHistory}>
+              <MessageCircle size={18} />
+              <span>
+                <strong>{stats.comments.toLocaleString()}</strong>
+                <small>{ui.stats.comments}</small>
+              </span>
+            </button>
+            <button type="button" onClick={openNotificationHistory}>
+              <Bell size={18} />
+              <span>
+                <strong>{stats.notifications.toLocaleString()}</strong>
+                <small>{ui.stats.notifications}</small>
+              </span>
+            </button>
+          </section>
         </div>
       ) : null}
 
@@ -967,6 +1003,25 @@ export function AdminScreen({
             </ContentPanel>
           ) : (
             <>
+              <div className="admin-content-switch" role="tablist" aria-label={ui.contentTitle}>
+                {([
+                  { id: 'posts', label: ui.stats.posts },
+                  { id: 'reviews', label: ui.stats.reviews },
+                  { id: 'comments', label: ui.stats.comments },
+                ] as { id: AdminContentView; label: string }[]).map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={contentView === item.id ? 'active' : ''}
+                    onClick={() => setContentView(item.id)}
+                  >
+                    <span>{item.label}</span>
+                    <strong>{contentCounts[item.id].toLocaleString()}</strong>
+                  </button>
+                ))}
+              </div>
+
+              {contentView === 'posts' ? (
               <ContentPanel title={ui.contentTitle} scroll>
                 {posts.map((post) => (
                   <ContentRow
@@ -982,6 +1037,8 @@ export function AdminScreen({
                 ))}
                 {posts.length === 0 ? <EmptyText text={ui.empty} /> : null}
               </ContentPanel>
+              ) : null}
+              {contentView === 'reviews' ? (
               <ContentPanel title={ui.recentReviews} scroll>
                 {reviews.map((review) => (
                   <ContentRow
@@ -997,6 +1054,8 @@ export function AdminScreen({
                 ))}
                 {reviews.length === 0 ? <EmptyText text={ui.empty} /> : null}
               </ContentPanel>
+              ) : null}
+              {contentView === 'comments' ? (
               <ContentPanel id="admin-comments-history" title={ui.commentsTitle} scroll>
                 {comments.map((comment) => (
                   <ContentRow
@@ -1012,6 +1071,7 @@ export function AdminScreen({
                 ))}
                 {comments.length === 0 ? <EmptyText text={ui.empty} /> : null}
               </ContentPanel>
+              ) : null}
             </>
           )}
         </div>
