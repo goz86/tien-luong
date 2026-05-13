@@ -14,13 +14,59 @@ export function useAuthSync() {
   useEffect(() => {
     if (!supabase) return;
     const client = supabase;
+    let mounted = true;
 
-    client.auth.getSession().then(({ data }) => setSession(data.session));
+    const restoreSession = async (clearWhenMissing = false) => {
+      const { data, error } = await client.auth.getSession();
+      if (!mounted) return;
+      if (error) {
+        console.warn('Unable to restore Supabase session:', error.message);
+        return;
+      }
+
+      if (data.session) {
+        setSession(data.session);
+        return;
+      }
+
+      if (clearWhenMissing) {
+        setSession(null);
+      }
+    };
+
+    void restoreSession(true);
+
     const { data: { subscription } } = client.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession);
+      if (!mounted) return;
+
+      if (nextSession) {
+        setSession(nextSession);
+        return;
+      }
+
+      if (_event === 'SIGNED_OUT') {
+        setSession(null);
+      }
     });
 
-    return () => subscription.unsubscribe();
+    const recoverActiveSession = () => {
+      void restoreSession(false);
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') recoverActiveSession();
+    };
+
+    window.addEventListener('focus', recoverActiveSession);
+    window.addEventListener('online', recoverActiveSession);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+      window.removeEventListener('focus', recoverActiveSession);
+      window.removeEventListener('online', recoverActiveSession);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [setSession]);
 
   // Admin role

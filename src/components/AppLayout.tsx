@@ -38,6 +38,7 @@ export default function AppLayout() {
   const store = useAppStore();
   const suppressPopstate = useRef(false);
   const [activeBanner, setActiveBanner] = useState<{ id: string; title: string; body: string; severity: string } | null>(null);
+  const [communityTargetPostId, setCommunityTargetPostId] = useState<string | null>(null);
 
   // Fetch latest announcement within 24h
   useEffect(() => {
@@ -77,6 +78,11 @@ export default function AppLayout() {
   const openAddToday = useCallback(() => {
     navigateToDate(new Date().toISOString().slice(0, 10));
   }, [navigateToDate]);
+
+  const openCommunityPost = useCallback((postId: string) => {
+    setCommunityTargetPostId(postId);
+    changeTab('friends');
+  }, [changeTab]);
 
   useEffect(() => {
     function handlePopstate(e: PopStateEvent) {
@@ -449,6 +455,7 @@ export default function AppLayout() {
               onPrevMonth={() => store.setCalendarMonth(shiftMonth(store.calendarMonth, -1))}
               onNextMonth={() => store.setCalendarMonth(shiftMonth(store.calendarMonth, 1))}
               onOpenNotifications={handleOpenNotifications}
+              onOpenCommunityPost={openCommunityPost}
               unreadCount={store.unreadCount}
               profile={store.profile}
               lang={store.lang}
@@ -526,6 +533,8 @@ export default function AppLayout() {
               onOpenNotifications={handleOpenNotifications}
               unreadCount={store.unreadCount}
               onNavigateToProfile={() => changeTab('profile')}
+              targetPostId={communityTargetPostId}
+              onTargetPostConsumed={() => setCommunityTargetPostId(null)}
               lang={store.lang}
             />
           )}
@@ -559,17 +568,27 @@ export default function AppLayout() {
 
         {/* ── Bottom Tabs ── */}
         <nav className="bottom-tabs" aria-label={store.lang === 'ko' ? '주요 내비게이션' : 'Điều hướng chính'}>
-          {tabIcons.map(({ id, icon: Icon }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => changeTab(id)}
-              className={store.tab === id ? 'tab-item active' : 'tab-item'}
-            >
-              <span className="tab-icon-wrap"><Icon size={20} /></span>
-              <span>{tabLabels[store.lang][id]}</span>
-            </button>
-          ))}
+          {tabIcons.map(({ id, icon: Icon }) => {
+            const isActive = store.tab === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => changeTab(id)}
+                className={isActive ? 'tab-item active' : 'tab-item'}
+              >
+                {isActive ? (
+                  <motion.span
+                    layoutId="nav-active"
+                    className="tab-active-bg"
+                    transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
+                  />
+                ) : null}
+                <span className="tab-icon-wrap"><Icon size={20} /></span>
+                <span className="tab-label">{tabLabels[store.lang][id]}</span>
+              </button>
+            );
+          })}
         </nav>
 
         {/* ── Push Toast ── */}

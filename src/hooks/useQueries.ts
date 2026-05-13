@@ -5,6 +5,7 @@ import type { Shift, Expense, ProfileDraft, CompanionProfile } from '../lib/type
 import { useEffect } from 'react';
 import type { CommunityNotification } from '../data/communityData';
 import { BADGES } from '../data/badgeData';
+import { calculateShiftPay } from '../lib/salary';
 
 /* ── query key factories ── */
 export const queryKeys = {
@@ -32,6 +33,20 @@ function rowToShift(row: any): Shift {
     nightShift: row.night_shift,
     taxDeduction: row.tax_deduction,
     holidayAllowance: row.holiday_allowance,
+  };
+}
+
+function getLocalDateString(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function getLocalMonthRange() {
+  const now = new Date();
+  const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  return {
+    monthKey,
+    startDate: `${monthKey}-01`,
+    todayDate: getLocalDateString(now),
   };
 }
 
@@ -269,18 +284,72 @@ export function useNotificationsQuery(userId: string | undefined) {
 
 /* ── Rankings ── */
 export function useRankingsQuery(userId: string | undefined) {
+  const range = getLocalMonthRange();
   return useQuery({
-    queryKey: queryKeys.rankings(new Date().toISOString().slice(0, 7)),
+    queryKey: queryKeys.rankings(`${range.monthKey}:${range.todayDate}`),
     queryFn: async () => {
-      const monthKey = new Date().toISOString().slice(0, 7);
-      const { data: top3 } = await supabase!
+      const { monthKey, startDate, todayDate } = getLocalMonthRange();
+      const { data: shiftRows, error: shiftError } = await supabase!
+        .from('shift_entries')
+        .select('*')
+        .gte('work_date', startDate)
+        .lte('work_date', todayDate);
+
+      if (!shiftError && shiftRows) {
+        const totals = new Map<string, number>();
+
+        shiftRows.forEach((row: any) => {
+          if (!row.user_id) return;
+          const shift = rowToShift(row);
+          const income = Math.max(0, Number(calculateShiftPay(shift).total) || 0);
+          totals.set(row.user_id, (totals.get(row.user_id) || 0) + income);
+        });
+
+        const sorted = [...totals.entries()]
+          .map(([rowUserId, totalIncome]) => ({ user_id: rowUserId, total_income: Math.max(0, Math.round(totalIncome)) }))
+          .filter((item) => item.total_income > 0)
+          .sort((a, b) => b.total_income - a.total_income);
+
+        const uids = sorted.map((item) => item.user_id);
+        let profileMap: Record<string, { display_name?: string; is_anonymous_rank?: boolean }> = {};
+        if (uids.length > 0) {
+          const { data: profiles } = await supabase!
+            .from('profiles')
+            .select('id, display_name, is_anonymous_rank')
+            .in('id', uids);
+          profileMap = (profiles || []).reduce((acc: Record<string, { display_name?: string; is_anonymous_rank?: boolean }>, p: any) => {
+            acc[p.id] = { display_name: p.display_name, is_anonymous_rank: p.is_anonymous_rank };
+            return acc;
+          }, {});
+        }
+
+        const ranked = sorted.map((item, index) => ({
+          ...item,
+          month_key: monthKey,
+          rank: index + 1,
+          display_name: profileMap[item.user_id]?.display_name || 'Ẩn danh',
+          is_anonymous_rank: profileMap[item.user_id]?.is_anonymous_rank ?? false,
+        }));
+
+        if (ranked.length > 0) {
+          const top3 = ranked.slice(0, 3);
+          if (!userId || top3.some((item) => item.user_id === userId)) return top3;
+          const me = ranked.find((item) => item.user_id === userId);
+          return me ? [...top3, me] : top3;
+        }
+      }
+
+      const { data: topRows } = await supabase!
         .from('monthly_rankings')
         .select('*')
         .eq('month_key', monthKey)
+        .gte('total_income', 0)
         .order('total_income', { ascending: false })
         .limit(3);
 
-      let final: any[] = (top3 || []).map((r: any, i: number) => ({ ...r, rank: i + 1 }));
+      let final: any[] = (topRows || [])
+        .filter((r: any) => Number(r.total_income) > 0)
+        .map((r: any, i: number) => ({ ...r, total_income: Math.max(0, Number(r.total_income) || 0), rank: i + 1 }));
 
       if (userId) {
         const inTop3 = final.some((r: any) => r.user_id === userId);
@@ -290,14 +359,16 @@ export function useRankingsQuery(userId: string | undefined) {
             .select('*')
             .eq('month_key', monthKey)
             .eq('user_id', userId)
+            .gte('total_income', 0)
             .maybeSingle();
-          if (me) {
+          if (me && Number(me.total_income) > 0) {
             const { count } = await supabase!
               .from('monthly_rankings')
               .select('*', { count: 'exact', head: true })
               .eq('month_key', monthKey)
+              .gte('total_income', 0)
               .gt('total_income', me.total_income);
-            final = [...final, { ...me, rank: (count || 0) + 1 }];
+            final = [...final, { ...me, total_income: Math.max(0, Number(me.total_income) || 0), rank: (count || 0) + 1 }];
           }
         }
       }
@@ -487,4 +558,3 @@ export function useSyncQueriesToStore() {
     return () => { cancelled = true; clearInterval(interval); document.removeEventListener('visibilitychange', update); };
   }, [userId]);
 }
-

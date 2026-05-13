@@ -340,8 +340,14 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     // Auth
-    setSession: (s) => set({ session: s }),
-    setAdminRole: (r) => set({ adminRole: r }),
+    setSession: (nextSession) => set((state) => ({
+      session: nextSession,
+      ...derive({ session: nextSession, adminRole: state.adminRole, notifications: state.notifications }),
+    })),
+    setAdminRole: (role) => set((state) => ({
+      adminRole: role,
+      ...derive({ session: state.session, adminRole: role, notifications: state.notifications }),
+    })),
     setAuthEmail: (e) => set({ authEmail: e }),
     setAuthMessage: (m) => set({ authMessage: m }),
     setSendingAuth: (v) => set({ sendingAuth: v }),

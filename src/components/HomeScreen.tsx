@@ -4,7 +4,6 @@ import { formatKrw, calculateShiftPay, shiftHours } from '../lib/salary';
 import { RateState, Shift, VenueColors } from '../lib/types';
 import { formatDateChip, getVenueColor } from '../utils/helpers';
 import { FinanceMetric } from './shared/ui';
-import { Logo } from './shared/Logo';
 import { ActivityTicker } from './shared/ActivityTicker';
 
 export function HomeScreen({
@@ -24,6 +23,7 @@ export function HomeScreen({
   onPrevMonth,
   onNextMonth,
   onOpenNotifications,
+  onOpenCommunityPost,
   unreadCount,
   profile,
   lang = 'vi',
@@ -48,6 +48,7 @@ export function HomeScreen({
   onPrevMonth: () => void;
   onNextMonth: () => void;
   onOpenNotifications: () => void;
+  onOpenCommunityPost: (postId: string) => void;
   unreadCount: number;
   profile: any;
   lang?: 'vi' | 'ko';
@@ -112,7 +113,7 @@ export function HomeScreen({
   return (
     <>
       <header className="appbar">
-        <Logo />
+        <h1 className="appbar-title home-wordmark">Duhoc Mate</h1>
         <button 
           type="button" 
           aria-label={ui.notifications}
@@ -138,7 +139,7 @@ export function HomeScreen({
         </button>
       </header>
 
-      <ActivityTicker lang={lang} />
+      <ActivityTicker lang={lang} onOpenPost={onOpenCommunityPost} />
 
       <section className="hero-balance-card">
         <div className="hero-topline">

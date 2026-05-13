@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   ArrowLeft,
   Bell,
@@ -33,11 +33,7 @@ import { motion, AnimatePresence, useDragControls } from 'framer-motion';
 import type { Session } from '@supabase/supabase-js';
 import type { CompanionProfile } from '../lib/types';
 import { supabase } from '../lib/supabase';
-import { Logo } from './shared/Logo';
 import { ChatView } from './ChatView';
-import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
 import {
   CATEGORIES,
   type CommunityCategory,
@@ -84,6 +80,14 @@ const REVIEW_CATS: Record<Exclude<ReviewCategory, 'all'>, { label: string; color
   other: { label: 'Khác', color: '#64748b', bg: '#f1f5f9' },
 };
 
+const REVIEW_CAT_ICONS: Record<Exclude<ReviewCategory, 'all'>, string> = {
+  work: '💼',
+  housing: '🏠',
+  food: '🍜',
+  service: '🛎️',
+  other: '📍',
+};
+
 interface PlaceReview {
   id: string;
   user_id: string;
@@ -119,33 +123,305 @@ interface NominatimResult {
 
 const SEOUL_CENTER: [number, number] = [37.5665, 126.978];
 const REVIEW_ADMIN_EMAILS = new Set(['michintashop@gmail.com']);
+const NAVER_MAP_CLIENT_ID = import.meta.env.VITE_NAVER_MAP_CLIENT_ID as string | undefined;
 
-const markerIcon = new L.Icon({
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41],
-});
+declare global {
+  interface Window {
+    naver?: {
+      maps?: any;
+    };
+    __duhocMateNaverMapInit?: () => void;
+  }
+}
 
-function FitBounds({ positions, totalCount }: { positions: [number, number][], totalCount: number }) {
-  const map = useMap();
+type ReviewMapBounds = {
+  contains: (position: [number, number]) => boolean;
+};
+
+type ReviewPlaceGroup = {
+  lat: number;
+  lng: number;
+  name: string;
+  reviews: PlaceReview[];
+};
+
+type ReviewMapHandle = {
+  setView: (center: [number, number], zoom?: number) => void;
+  zoomIn: () => void;
+  zoomOut: () => void;
+};
+
+let naverMapsSdkPromise: Promise<any> | null = null;
+
+function loadNaverMapsSdk() {
+  if (typeof window === 'undefined') return Promise.reject(new Error('Browser is not available.'));
+  if (window.naver?.maps) return Promise.resolve(window.naver.maps);
+  if (!NAVER_MAP_CLIENT_ID) return Promise.reject(new Error('Missing VITE_NAVER_MAP_CLIENT_ID.'));
+  if (naverMapsSdkPromise) return naverMapsSdkPromise;
+
+  naverMapsSdkPromise = new Promise((resolve, reject) => {
+    const existing = document.getElementById('naver-map-sdk') as HTMLScriptElement | null;
+    if (existing) {
+      if (window.naver?.maps?.jsContentLoaded) {
+        resolve(window.naver.maps);
+        return;
+      }
+      window.__duhocMateNaverMapInit = () => resolve(window.naver?.maps);
+      existing.addEventListener('error', () => reject(new Error('Unable to load Naver Maps SDK.')));
+      return;
+    }
+
+    window.__duhocMateNaverMapInit = () => {
+      if (window.naver?.maps) resolve(window.naver.maps);
+      else reject(new Error('Naver Maps SDK loaded without maps namespace.'));
+    };
+
+    const script = document.createElement('script');
+    script.id = 'naver-map-sdk';
+    script.async = true;
+    script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${encodeURIComponent(NAVER_MAP_CLIENT_ID)}&submodules=geocoder&callback=__duhocMateNaverMapInit`;
+    script.onerror = () => reject(new Error('Unable to load Naver Maps SDK.'));
+    document.head.appendChild(script);
+  });
+
+  return naverMapsSdkPromise;
+}
+
+function buildReviewMarkerHtml(reviews: PlaceReview[], isSelected: boolean) {
+  const count = reviews.length;
+  const categoryKey = (reviews[0].category as Exclude<ReviewCategory, 'all'>) || 'other';
+  const category = REVIEW_CATS[categoryKey as keyof typeof REVIEW_CATS] || REVIEW_CATS.other;
+  const icon = REVIEW_CAT_ICONS[categoryKey as keyof typeof REVIEW_CAT_ICONS] || REVIEW_CAT_ICONS.other;
+  const color = isSelected ? '#2752ff' : category.color;
+  const title = escapeHtml(reviews[0].title || reviews[0].place_name);
+  const reviewId = escapeHtml(reviews[0].id);
+
+  return `<div class="rv-title-marker ${isSelected ? 'selected' : ''}" data-review-id="${reviewId}" style="--marker-color: ${color};">
+    <div class="rv-title-marker-label">
+      <span class="rv-title-marker-icon">${icon}</span>
+      <span class="rv-title-marker-text">${title}</span>
+      ${count > 1 ? `<span class="rv-title-marker-count">${count}</span>` : ''}
+    </div>
+    <div class="rv-marker-arrow" style="border-top-color: ${color};"></div>
+  </div>`;
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function detachNaverMarker(marker: any) {
+  try {
+    marker?.setMap?.(null);
+  } catch {
+    // Naver SDK can throw while a failed/half-disposed map instance is being unmounted.
+  }
+}
+
+const NaverReviewMap = forwardRef<ReviewMapHandle, {
+  groups: ReviewPlaceGroup[];
+  selectedReviewId: string | null;
+  userPos: [number, number] | null;
+  onBoundsChange: (bounds: ReviewMapBounds) => void;
+  onMarkerClick: (reviewId: string) => void;
+}>(({ groups, selectedReviewId, userPos, onBoundsChange, onMarkerClick }, ref) => {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<any>(null);
+  const mapsRef = useRef<any>(null);
+  const markersRef = useRef<any[]>([]);
+  const listenersRef = useRef<any[]>([]);
+  const userMarkerRef = useRef<any>(null);
   const hasFitOnce = useRef(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (positions.length === 0 || hasFitOnce.current) return;
-    if (positions.length === 1) {
-      map.setView(positions[0], 15);
+    const handleMarkerDomClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      const marker = target?.closest?.('.rv-title-marker') as HTMLElement | null;
+      const reviewId = marker?.dataset.reviewId;
+      if (!reviewId) return;
+      event.preventDefault();
+      event.stopPropagation();
+      onMarkerClick(reviewId);
+    };
+
+    document.addEventListener('click', handleMarkerDomClick, true);
+    return () => document.removeEventListener('click', handleMarkerDomClick, true);
+  }, [onMarkerClick]);
+
+  const pushBounds = useCallback(() => {
+    const maps = mapsRef.current;
+    const map = mapRef.current;
+    if (!maps || !map) return;
+    const bounds = map.getBounds();
+    onBoundsChange({
+      contains: ([lat, lng]) => {
+        if (!bounds) return true;
+        const latLng = new maps.LatLng(lat, lng);
+        if (typeof bounds.hasLatLng === 'function') return bounds.hasLatLng(latLng);
+        if (typeof bounds.hasPoint === 'function') return bounds.hasPoint(latLng);
+        return true;
+      },
+    });
+  }, [onBoundsChange]);
+
+  useEffect(() => {
+    let disposed = false;
+
+    loadNaverMapsSdk()
+      .then((maps) => {
+        if (disposed || !containerRef.current) return;
+        mapsRef.current = maps;
+        const map = new maps.Map(containerRef.current, {
+          center: new maps.LatLng(SEOUL_CENTER[0], SEOUL_CENTER[1]),
+          zoom: 12,
+          minZoom: 6,
+          zoomControl: false,
+          scaleControl: false,
+          mapDataControl: false,
+        });
+        mapRef.current = map;
+        listenersRef.current = [
+          maps.Event.addListener(map, 'idle', pushBounds),
+          maps.Event.addListener(map, 'zoom_changed', pushBounds),
+        ];
+        window.setTimeout(pushBounds, 150);
+        window.setTimeout(() => {
+          const mapText = containerRef.current?.innerText || '';
+          if (!disposed && mapText.includes('인증')) {
+            setLoadError('Naver Map chưa được cấp quyền cho URL này. Hãy thêm http://127.0.0.1:4173 và http://127.0.0.1:5173 vào Web service URL.');
+          }
+        }, 1800);
+      })
+      .catch((error) => {
+        console.error('Naver map load failed:', error);
+        setLoadError(error instanceof Error ? error.message : 'Unable to load Naver Maps SDK.');
+      });
+
+    return () => {
+      disposed = true;
+      listenersRef.current.forEach((listener) => {
+        if (!listener) return;
+        try {
+          mapsRef.current?.Event?.removeListener?.(listener);
+        } catch {
+          // Ignore SDK cleanup errors during React remounts.
+        }
+      });
+      markersRef.current.forEach(detachNaverMarker);
+      detachNaverMarker(userMarkerRef.current);
+      listenersRef.current = [];
+      markersRef.current = [];
+      mapRef.current = null;
+    };
+  }, [pushBounds]);
+
+  useImperativeHandle(ref, () => ({
+    setView(center, zoom) {
+      const maps = mapsRef.current;
+      const map = mapRef.current;
+      if (!maps || !map) return;
+      map.setCenter(new maps.LatLng(center[0], center[1]));
+      if (zoom) map.setZoom(zoom);
+      window.setTimeout(pushBounds, 120);
+    },
+    zoomIn() {
+      const map = mapRef.current;
+      if (!map) return;
+      map.setZoom((map.getZoom?.() || 12) + 1);
+      window.setTimeout(pushBounds, 120);
+    },
+    zoomOut() {
+      const map = mapRef.current;
+      if (!map) return;
+      map.setZoom((map.getZoom?.() || 12) - 1);
+      window.setTimeout(pushBounds, 120);
+    },
+  }), [pushBounds]);
+
+  useEffect(() => {
+    const maps = mapsRef.current;
+    const map = mapRef.current;
+    if (!maps || !map) return;
+
+    markersRef.current.forEach(detachNaverMarker);
+    markersRef.current = groups.map((group) => {
+      const isSelected = group.reviews.some((review) => review.id === selectedReviewId);
+      const marker = new maps.Marker({
+        position: new maps.LatLng(group.lat, group.lng),
+        map,
+        icon: {
+          content: buildReviewMarkerHtml(group.reviews, isSelected),
+          size: new maps.Size(172, 54),
+          anchor: new maps.Point(86, 50),
+        },
+      });
+      return marker;
+    });
+
+    if (!hasFitOnce.current && groups.length > 0) {
+      if (groups.length === 1) {
+        map.setCenter(new maps.LatLng(groups[0].lat, groups[0].lng));
+        map.setZoom(15);
+      } else {
+        const bounds = new maps.LatLngBounds();
+        groups.forEach((group) => bounds.extend(new maps.LatLng(group.lat, group.lng)));
+        map.fitBounds(bounds);
+      }
+      hasFitOnce.current = true;
+      window.setTimeout(pushBounds, 220);
     } else {
-      const bounds = L.latLngBounds(positions.map(p => L.latLng(p[0], p[1])));
-      map.fitBounds(bounds, { padding: [30, 30] });
+      window.setTimeout(pushBounds, 80);
     }
-    hasFitOnce.current = true;
-  }, [map, totalCount]); // Only fit once based on total count
-  return null;
-}
+  }, [groups, selectedReviewId, onMarkerClick, pushBounds]);
+
+  useEffect(() => {
+    const maps = mapsRef.current;
+    const map = mapRef.current;
+    if (!maps || !map) return;
+
+    if (!userPos) {
+      detachNaverMarker(userMarkerRef.current);
+      userMarkerRef.current = null;
+      return;
+    }
+
+    const position = new maps.LatLng(userPos[0], userPos[1]);
+    if (!userMarkerRef.current) {
+      userMarkerRef.current = new maps.Marker({
+        position,
+        map,
+        icon: {
+          content: '<div class="user-marker"><div class="user-dot"></div></div>',
+          size: new maps.Size(24, 24),
+          anchor: new maps.Point(12, 12),
+        },
+      });
+    } else {
+      userMarkerRef.current.setPosition(position);
+      userMarkerRef.current.setMap(map);
+    }
+  }, [userPos]);
+
+  return (
+    <div className="rv-naver-map">
+      <div ref={containerRef} className="rv-naver-map-canvas" />
+      {loadError ? (
+        <div className="rv-map-empty rv-map-empty--overlay">
+          <MapPin size={32} />
+          <span>{loadError}</span>
+        </div>
+      ) : null}
+    </div>
+  );
+});
+
+NaverReviewMap.displayName = 'NaverReviewMap';
 
 type LocalCommunitySnapshot = {
   posts: CommunityPost[];
@@ -268,6 +544,8 @@ export function CommunityScreen({
   unreadCount,
   friendships,
   onNavigateToProfile,
+  targetPostId,
+  onTargetPostConsumed,
   lang = 'vi',
 }: {
   companions: CompanionProfile[];
@@ -279,6 +557,8 @@ export function CommunityScreen({
   unreadCount: number;
   friendships: any[];
   onNavigateToProfile: () => void;
+  targetPostId?: string | null;
+  onTargetPostConsumed?: () => void;
   lang?: AppLang;
 }) {
   const isKo = lang === 'ko';
@@ -781,6 +1061,26 @@ export function CommunityScreen({
       void incrementPostView(post.id).catch((error) => console.error(error));
     }
   }
+
+  useEffect(() => {
+    if (!targetPostId || loading) return;
+
+    const targetPost = posts.find((post) => post.id === targetPostId);
+    if (!targetPost) {
+      setBoardMode('feed');
+      setSyncMessage(isKo ? '게시글을 찾을 수 없습니다.' : 'Không tìm thấy bài viết này.');
+      onTargetPostConsumed?.();
+      return;
+    }
+
+    setBoardMode('feed');
+    setActiveCategory('all');
+    setFeedFilter('all');
+    setSearchQuery('');
+    setShowSearch(false);
+    openPost(targetPost);
+    onTargetPostConsumed?.();
+  }, [isKo, loading, onTargetPostConsumed, posts, targetPostId]);
 
   function goBack() {
     setView('feed');
@@ -1337,7 +1637,7 @@ export function CommunityScreen({
         <header className={`cm-header${boardMode === 'reviews' ? ' cm-header--hidden' : ''}`}>
           {!showSearch ? (
             <>
-              <Logo />
+              <h1 className="cm-wordmark">Duhoc Mate</h1>
               <div className="cm-header-actions">
                 <button type="button" className="cm-icon-btn" onClick={() => setShowSearch(true)} aria-label={ui.search}>
                   <Search size={20} />
@@ -1845,25 +2145,6 @@ export function CommunityScreen({
 /* ReviewBoard - Standalone component           */
 /* ============================================ */
 
-function MapEvents({ setMapBounds }: { setMapBounds: (bounds: L.LatLngBounds) => void }) {
-  const map = useMap();
-  
-  useEffect(() => {
-    // Initial bounds
-    setMapBounds(map.getBounds());
-  }, [map, setMapBounds]);
-
-  useMapEvents({
-    moveend: () => {
-      setMapBounds(map.getBounds());
-    },
-    zoomend: () => {
-      setMapBounds(map.getBounds());
-    },
-  });
-  return null;
-}
-
 function ReviewBoard({
   session,
   displayName,
@@ -2328,7 +2609,7 @@ function ReviewBoard({
     }
   };
 
-  const [mapBounds, setMapBounds] = useState<L.LatLngBounds | null>(null);
+  const [mapBounds, setMapBounds] = useState<ReviewMapBounds | null>(null);
 
   const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371;
@@ -2370,10 +2651,6 @@ function ReviewBoard({
     });
   }, [reviews, catFilter, mapBounds]);
 
-  const mapPositions: [number, number][] = filtered
-    .filter(r => r.place_lat != null && r.place_lng != null)
-    .map(r => [r.place_lat!, r.place_lng!]);
-
   const avgRating = reviews.length ? (reviews.reduce((s, r) => s + Number(r.rating), 0) / reviews.length).toFixed(1) : '0';
 
   const [sheetExpanded, setSheetExpanded] = useState(false);
@@ -2383,7 +2660,7 @@ function ReviewBoard({
   const [isSearchingMap, setIsSearchingMap] = useState(false);
   const [userPos, setUserPos] = useState<[number, number] | null>(null);
   const reviewRefs = useRef<Map<string, HTMLElement>>(new Map());
-  const mapRef = useRef<L.Map | null>(null);
+  const mapRef = useRef<ReviewMapHandle | null>(null);
   const dragControls = useDragControls();
 
   // Search logic for floating bar
@@ -2433,16 +2710,16 @@ function ReviewBoard({
     setFloatingResults([]);
   };
 
-  const handleMarkerClick = (reviewId: string) => {
+  const handleMarkerClick = useCallback((reviewId: string) => {
     setSelectedReviewId(reviewId);
-    setSheetExpanded(false);
+    setSheetExpanded(true);
     setTimeout(() => {
       const el = reviewRefs.current.get(reviewId);
       if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
-    }, 300);
-  };
+    }, 520);
+  }, []);
 
   // Group reviews by place (address or coords)
   const groupedPlaces = useMemo(() => {
@@ -2458,26 +2735,8 @@ function ReviewBoard({
     });
     return Object.values(groups);
   }, [filtered]);
-  const collapsedSheetY = '72%'; // fixed — sheet stays at bottom, only rises on manual drag
-
-  const createGroupIcon = (reviews: PlaceReview[], isSelected: boolean) => {
-    const avg = (reviews.reduce((s, r) => s + Number(r.rating), 0) / reviews.length).toFixed(1);
-    const count = reviews.length;
-    const cat = reviews[0].category;
-    const category = REVIEW_CATS[cat as keyof typeof REVIEW_CATS] || REVIEW_CATS.other;
-
-    return L.divIcon({
-      className: `rv-custom-marker ${isSelected ? 'selected' : ''}`,
-      html: `<div class="rv-marker-inner" style="background-color: ${isSelected ? '#2752ff' : category.color}; width: 44px; height: 44px;">
-              <div class="rv-marker-group-info">
-                <span class="avg">${avg}</span>
-                ${count > 1 ? `<span class="count">${count}</span>` : ''}
-              </div>
-             </div><div class="rv-marker-arrow" style="border-top-color: ${isSelected ? '#2752ff' : category.color};"></div>`,
-      iconSize: [44, 44],
-      iconAnchor: [22, 44],
-    });
-  };
+  const collapsedSheetY = 'calc(100% - 196px)';
+  const expandedSheetY = '8px';
 
   const closeWriter = () => {
     setIsWriting(false);
@@ -2543,88 +2802,53 @@ function ReviewBoard({
 
         {/* Map Background */}
         <div className="rv-map-wrap">
-          {reviews.length > 0 ? (
-            <MapContainer
-              center={SEOUL_CENTER}
-              zoom={12}
-              scrollWheelZoom={true}
-              style={{ height: '100%', width: '100%' }}
-              zoomControl={false}
-              ref={mapRef}
-            >
-              <TileLayer
-                attribution='&copy; <a href="https://osm.org/copyright">OSM</a>'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              />
-              <MapEvents setMapBounds={setMapBounds} />
-              <FitBounds 
-                positions={mapPositions.length > 0 ? mapPositions : [SEOUL_CENTER]} 
-                totalCount={reviews.length} 
-              />
-
-              {userPos && (
-                <Marker position={userPos} icon={L.divIcon({ className: 'user-marker', html: '<div class="user-dot"></div>' })} />
-              )}
-
-              {groupedPlaces.map((group, idx) => {
-                const isSelected = group.reviews.some(r => r.id === selectedReviewId);
-                return (
-                  <Marker
-                    key={idx}
-                    position={[group.lat, group.lng]}
-                    icon={createGroupIcon(group.reviews, isSelected)}
-                    eventHandlers={{
-                      click: () => handleMarkerClick(group.reviews[0].id)
-                    }}
-                  >
-                    <Popup className="rv-map-popup">
-                      <div className="rv-popup-content">
-                        <strong>{group.name}</strong>
-                        <div className="rv-popup-meta">
-                          <span>{group.reviews.length} {isKo ? '개 리뷰' : 'đánh giá'}</span>
-                          <span>★ {(group.reviews.reduce((s, r) => s + Number(r.rating), 0) / group.reviews.length).toFixed(1)}</span>
-                        </div>
-                      </div>
-                    </Popup>
-                  </Marker>
-                );
-              })}
-            </MapContainer>
-          ) : (
-            <div className="rv-map-empty">
-              <MapPin size={32} />
-              <span>{reviewUi.emptyMap}</span>
+          <NaverReviewMap
+            ref={mapRef}
+            groups={groupedPlaces}
+            selectedReviewId={selectedReviewId}
+            userPos={userPos}
+            onBoundsChange={setMapBounds}
+            onMarkerClick={handleMarkerClick}
+          />
+          <div className="rv-map-controls" aria-label={isKo ? '지도 조작' : 'Điều khiển bản đồ'}>
+            <div className="rv-map-zoom">
+              <button type="button" aria-label={isKo ? '확대' : 'Phóng to'} onClick={() => mapRef.current?.zoomIn()}>
+                +
+              </button>
+              <button type="button" aria-label={isKo ? '축소' : 'Thu nhỏ'} onClick={() => mapRef.current?.zoomOut()}>
+                −
+              </button>
             </div>
-          )}
+            <button type="button" className="rv-map-location" aria-label={isKo ? '내 위치' : 'Vị trí của tôi'} onClick={handleMyLocation}>
+              <Navigation size={18} />
+            </button>
+          </div>
         </div>
 
         {/* Bottom Sheet Review List */}
         <motion.div
-          className="rv-bottom-sheet"
+          className={`rv-bottom-sheet ${sheetExpanded ? 'is-expanded' : 'is-collapsed'}`}
           initial={{ y: collapsedSheetY }}
-          animate={{ y: sheetExpanded ? '6%' : collapsedSheetY }}
+          animate={{ y: sheetExpanded ? expandedSheetY : collapsedSheetY }}
           transition={{ type: 'spring', damping: 25, stiffness: 180 }}
           drag="y"
           dragControls={dragControls}
           dragListener={false}
-          dragConstraints={{ top: 0, bottom: 600 }}
-          dragElastic={0.1}
+          dragConstraints={{ top: 0, bottom: 0 }}
+          dragElastic={0.05}
           onDragEnd={(_, info) => {
             const dragDistance = info.offset.y;
             const dragVelocity = info.velocity.y;
 
-            if (dragDistance < -50 || dragVelocity < -300) {
+            if (dragDistance < -42 || dragVelocity < -260) {
               setSheetExpanded(true);
-            } else if (dragDistance > 50 || dragVelocity > 300) {
+            } else if (dragDistance > 28 || dragVelocity > 180) {
               setSheetExpanded(false);
+            } else {
+              setSheetExpanded((current) => current);
             }
           }}
         >
-          {/* GPS Button attached to the sheet */}
-          <button type="button" className="rv-gps-btn" onClick={handleMyLocation}>
-            <Navigation size={20} />
-          </button>
-
           <div
             className="rv-sheet-header"
             onPointerDown={(event) => dragControls.start(event)}
@@ -2690,6 +2914,7 @@ function ReviewBoard({
             ) : (
               filtered.map((review, idx) => {
                 const cat = REVIEW_CATS[review.category as keyof typeof REVIEW_CATS] || REVIEW_CATS.other;
+                const catIcon = REVIEW_CAT_ICONS[review.category as keyof typeof REVIEW_CAT_ICONS] || REVIEW_CAT_ICONS.other;
                 const isSelected = selectedReviewId === review.id;
                 const userVote = reviewVotes[review.id];
                 const imageUrls = normalizeReviewImages(review.images);
@@ -2708,7 +2933,10 @@ function ReviewBoard({
                       <div className="rv-item-info">
                         <div className="rv-item-place-row">
                           <h4 className="rv-item-place">{review.place_name}</h4>
-                          <span className="rv-item-cat-label">{reviewUi.categories[review.category as Exclude<ReviewCategory, 'all'>] || cat.label}</span>
+                          <span className="rv-item-cat-label">
+                            <span>{catIcon}</span>
+                            {reviewUi.categories[review.category as Exclude<ReviewCategory, 'all'>] || cat.label}
+                          </span>
                         </div>
                         <p className="rv-item-address">{review.place_address.split(',').slice(0, 2).join(', ')}</p>
                         <div className="rv-item-meta">
