@@ -19,9 +19,10 @@ interface ChatViewProps {
   partner: CompanionProfile;
   senderName?: string;
   onBack: () => void;
+  onRead?: (partnerId: string) => void;
 }
 
-export function ChatView({ session, partner, senderName, onBack }: ChatViewProps) {
+export function ChatView({ session, partner, senderName, onBack, onRead }: ChatViewProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
@@ -31,13 +32,30 @@ export function ChatView({ session, partner, senderName, onBack }: ChatViewProps
 
   const markAsRead = useCallback(async () => {
     if (!supabase || !currentUserId) return;
-    await supabase
+    onRead?.(partner.id);
+
+    const { error } = await supabase
       .from('chat_messages')
       .update({ is_read: true })
       .eq('sender_id', partner.id)
       .eq('receiver_id', currentUserId)
       .eq('is_read', false);
-  }, [currentUserId, partner.id]);
+
+    if (error) {
+      console.error('Unable to mark chat as read:', error);
+      return;
+    }
+
+    setMessages((prev) => prev.map((message) => (
+      message.sender_id === partner.id && message.receiver_id === currentUserId
+        ? { ...message, is_read: true }
+        : message
+    )));
+  }, [currentUserId, onRead, partner.id]);
+
+  const handleBack = useCallback(() => {
+    void markAsRead().finally(onBack);
+  }, [markAsRead, onBack]);
 
   const fetchMessages = useCallback(async () => {
     if (!supabase) return;
@@ -153,7 +171,7 @@ export function ChatView({ session, partner, senderName, onBack }: ChatViewProps
   return (
     <div className="chat-view-container">
       <div className="chat-header">
-        <button type="button" className="chat-back-btn" onClick={onBack}>
+        <button type="button" className="chat-back-btn" onClick={handleBack}>
           <ChevronLeft size={24} />
         </button>
         <div className="chat-partner-info">

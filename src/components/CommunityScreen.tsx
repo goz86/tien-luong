@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from 'react';
 import {
   ArrowLeft,
   Bell,
@@ -893,6 +893,14 @@ export function CommunityScreen({
     }
   }, [currentUserId]);
 
+  const markRecentChatRead = useCallback((partnerId: string) => {
+    setRecentChats((current) => current.map((chat) => (
+      chat.partnerId === partnerId
+        ? { ...chat, unreadCount: 0 }
+        : chat
+    )));
+  }, []);
+
   useEffect(() => {
     if (boardMode === 'friends') {
       fetchRecentChats();
@@ -1738,7 +1746,11 @@ export function CommunityScreen({
             session={session}
             partner={activeChatPartner}
             senderName={displayName}
-            onBack={() => setActiveChatPartner(null)}
+            onBack={() => {
+              markRecentChatRead(activeChatPartner.id);
+              setActiveChatPartner(null);
+            }}
+            onRead={markRecentChatRead}
           />
         )}
       </>
@@ -1926,7 +1938,11 @@ export function CommunityScreen({
             session={session}
             partner={activeChatPartner}
             senderName={displayName}
-            onBack={() => setActiveChatPartner(null)}
+            onBack={() => {
+              markRecentChatRead(activeChatPartner.id);
+              setActiveChatPartner(null);
+            }}
+            onRead={markRecentChatRead}
           />
         )}
       </div>
@@ -2659,9 +2675,15 @@ function ReviewBoard({
   const [floatingResults, setFloatingResults] = useState<any[]>([]);
   const [isSearchingMap, setIsSearchingMap] = useState(false);
   const [userPos, setUserPos] = useState<[number, number] | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
   const reviewRefs = useRef<Map<string, HTMLElement>>(new Map());
   const mapRef = useRef<ReviewMapHandle | null>(null);
   const dragControls = useDragControls();
+  const startSheetDrag = useCallback((event: PointerEvent) => {
+    const target = event.target as HTMLElement;
+    if (target.closest('button, input, textarea, select, a, img, .rv-sheet-categories')) return;
+    dragControls.start(event);
+  }, [dragControls]);
 
   // Search logic for floating bar
   useEffect(() => {
@@ -2735,8 +2757,8 @@ function ReviewBoard({
     });
     return Object.values(groups);
   }, [filtered]);
-  const collapsedSheetY = 'calc(100% - 196px)';
-  const expandedSheetY = '8px';
+  const collapsedSheetY = 'calc(100% - 178px)';
+  const expandedSheetY = '14px';
 
   const closeWriter = () => {
     setIsWriting(false);
@@ -2830,19 +2852,20 @@ function ReviewBoard({
           className={`rv-bottom-sheet ${sheetExpanded ? 'is-expanded' : 'is-collapsed'}`}
           initial={{ y: collapsedSheetY }}
           animate={{ y: sheetExpanded ? expandedSheetY : collapsedSheetY }}
-          transition={{ type: 'spring', damping: 25, stiffness: 180 }}
+          transition={{ type: 'spring', damping: 30, stiffness: 260, mass: 0.85 }}
           drag="y"
           dragControls={dragControls}
           dragListener={false}
           dragConstraints={{ top: 0, bottom: 0 }}
-          dragElastic={0.05}
+          dragElastic={0.03}
+          onPointerDownCapture={startSheetDrag}
           onDragEnd={(_, info) => {
             const dragDistance = info.offset.y;
             const dragVelocity = info.velocity.y;
 
-            if (dragDistance < -42 || dragVelocity < -260) {
+            if (dragDistance < -34 || dragVelocity < -220) {
               setSheetExpanded(true);
-            } else if (dragDistance > 28 || dragVelocity > 180) {
+            } else if (dragDistance > 34 || dragVelocity > 220) {
               setSheetExpanded(false);
             } else {
               setSheetExpanded((current) => current);
@@ -2851,7 +2874,6 @@ function ReviewBoard({
         >
           <div
             className="rv-sheet-header"
-            onPointerDown={(event) => dragControls.start(event)}
             style={{ cursor: 'grab' }}
           >
             <div className="rv-sheet-handle" />
@@ -2996,9 +3018,17 @@ function ReviewBoard({
                       {imageUrls.length > 0 && (
                         <div className="rv-review-images">
                           {imageUrls.map((url, i) => (
-                            <div key={`${review.id}-image-${i}`} className="rv-review-image">
+                            <button
+                              key={`${review.id}-image-${i}`}
+                              type="button"
+                              className="rv-review-image"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setPreviewImage(url);
+                              }}
+                            >
                               <img src={url} alt={review.title} loading="lazy" />
-                            </div>
+                            </button>
                           ))}
                         </div>
                       )}
@@ -3010,6 +3040,31 @@ function ReviewBoard({
           </div>
         </motion.div>
       </div>
+
+      <AnimatePresence>
+        {previewImage ? (
+          <motion.div
+            className="rv-image-preview"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setPreviewImage(null)}
+          >
+            <button type="button" className="rv-image-preview-close" aria-label={isKo ? '닫기' : 'Đóng'}>
+              <X size={20} />
+            </button>
+            <motion.img
+              src={previewImage}
+              alt={isKo ? '리뷰 이미지' : 'Ảnh review'}
+              initial={{ scale: 0.92, y: 12 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.92, y: 12 }}
+              transition={{ type: 'spring', damping: 24, stiffness: 260 }}
+              onClick={(event) => event.stopPropagation()}
+            />
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
       {/* Write FAB removed - now using unified cm-write-bar */}
 

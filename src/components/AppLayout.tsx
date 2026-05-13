@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { CalendarDays, House, MessageCircleMore, UserRound, WalletCards, Bell, ThumbsUp, MessageCircle, X } from 'lucide-react';
+import { CalendarDays, House, MessageCircleMore, UserRound, WalletCards, Bell, ThumbsUp, MessageCircle, X, Megaphone } from 'lucide-react';
 import { hasSupabaseConfig, supabase as supabaseClient } from '../lib/supabase';
 import { useAppStore } from '../store/appStore';
 import { HomeScreen } from './HomeScreen';
@@ -32,7 +32,13 @@ type WallpaperKey = string;
 
 const REFRESH_RATE_URL = 'https://open.er-api.com/v6/latest/KRW';
 
-const BANNER_DISMISS_KEY = 'duhocmate-banner-dismissed';
+const ANNOUNCEMENT_HIDE_TODAY_KEY = 'duhocmate-announcement-hide-today';
+const ANNOUNCEMENT_SESSION_DISMISS_KEY = 'duhocmate-announcement-session-dismissed';
+
+function localDateKey() {
+  const date = new Date();
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
 
 export default function AppLayout() {
   const store = useAppStore();
@@ -40,24 +46,64 @@ export default function AppLayout() {
   const [activeBanner, setActiveBanner] = useState<{ id: string; title: string; body: string; severity: string } | null>(null);
   const [communityTargetPostId, setCommunityTargetPostId] = useState<string | null>(null);
 
-  // Fetch latest announcement within 24h
+  // Fetch latest admin announcement and show it as an entry popup for signed-in users.
   useEffect(() => {
-    if (!supabaseClient) return;
-    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    supabaseClient
-      .from('admin_announcements')
-      .select('id, title, body, severity')
-      .eq('is_published', true)
-      .gte('created_at', cutoff)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .then(({ data }) => {
-        if (!data || data.length === 0) return;
-        const item = data[0] as { id: string; title: string; body: string; severity: string };
-        const dismissed = localStorage.getItem(BANNER_DISMISS_KEY);
-        if (dismissed !== item.id) setActiveBanner(item);
-      });
-  }, []);
+    if (!supabaseClient || !store.session) {
+      setActiveBanner(null);
+      return;
+    }
+    const client = supabaseClient;
+
+    const shouldShow = (item: { id: string }) => {
+      const todayDismissed = localStorage.getItem(ANNOUNCEMENT_HIDE_TODAY_KEY);
+      const sessionDismissed = sessionStorage.getItem(ANNOUNCEMENT_SESSION_DISMISS_KEY);
+      return todayDismissed !== `${item.id}:${localDateKey()}` && sessionDismissed !== item.id;
+    };
+
+    const showIfNeeded = (item: { id: string; title: string; body: string; severity: string } | null) => {
+      if (!item) return;
+      if (shouldShow(item)) setActiveBanner(item);
+    };
+
+    const loadLatest = () => {
+      const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+      void client
+        .from('admin_announcements')
+        .select('id, title, body, severity')
+        .eq('is_published', true)
+        .gte('created_at', cutoff)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .then(({ data }) => {
+          showIfNeeded((data?.[0] as { id: string; title: string; body: string; severity: string } | undefined) ?? null);
+        });
+    };
+
+    loadLatest();
+
+    const channel = client
+      .channel('app-admin-announcements')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'admin_announcements' },
+        (payload) => {
+          const row = payload.new as any;
+          if (row?.is_published !== false) {
+            showIfNeeded({
+              id: row.id,
+              title: row.title ?? '',
+              body: row.body ?? '',
+              severity: row.severity ?? 'info',
+            });
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void client.removeChannel(channel);
+    };
+  }, [store.session]);
 
   /* ── tab routing ── */
   const changeTab = useCallback((nextTab: Tab) => {
@@ -388,31 +434,61 @@ export default function AppLayout() {
   return (
     <div className="app-stage">
       <div className="phone-shell" style={wallpaperStyle}>
-        {/* Admin announcement banner */}
+        {/* Admin announcement entry popup */}
         <AnimatePresence>
           {activeBanner ? (
-            <motion.div
-              className={`app-banner app-banner--${activeBanner.severity}`}
-              initial={{ y: -60, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: -60, opacity: 0 }}
-              transition={{ type: 'spring', damping: 26, stiffness: 280 }}
-            >
-              <div className="app-banner-content">
-                <strong>{activeBanner.title}</strong>
-                <span>{activeBanner.body}</span>
-              </div>
-              <button
-                type="button"
-                className="app-banner-close"
-                onClick={() => {
-                  localStorage.setItem(BANNER_DISMISS_KEY, activeBanner.id);
-                  setActiveBanner(null);
-                }}
+            <>
+              <motion.div
+                className="admin-entry-announcement-backdrop"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+              />
+              <motion.section
+                className={`admin-entry-announcement admin-entry-announcement--${activeBanner.severity}`}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="admin-entry-announcement-title"
+                initial={{ opacity: 0, scale: 0.94, y: 18 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.94, y: 18 }}
+                transition={{ type: 'spring', damping: 24, stiffness: 260 }}
               >
-                <X size={16} />
-              </button>
-            </motion.div>
+                <div className="admin-entry-announcement-head">
+                  <span className="admin-entry-announcement-icon">
+                    <Megaphone size={28} />
+                  </span>
+                  <h2 id="admin-entry-announcement-title">{activeBanner.title}</h2>
+                </div>
+                <div className="admin-entry-announcement-body">
+                  {activeBanner.body.split('\n').map((line, index) => (
+                    <p key={`${activeBanner.id}-${index}`}>{line || '\u00a0'}</p>
+                  ))}
+                </div>
+                <div className="admin-entry-announcement-actions">
+                  <button
+                    type="button"
+                    className="admin-entry-announcement-muted"
+                    onClick={() => {
+                      localStorage.setItem(ANNOUNCEMENT_HIDE_TODAY_KEY, `${activeBanner.id}:${localDateKey()}`);
+                      setActiveBanner(null);
+                    }}
+                  >
+                    {store.lang === 'ko' ? '오늘 하루 보지 않기' : 'Hôm nay không xem lại'}
+                  </button>
+                  <button
+                    type="button"
+                    className="admin-entry-announcement-close"
+                    onClick={() => {
+                      sessionStorage.setItem(ANNOUNCEMENT_SESSION_DISMISS_KEY, activeBanner.id);
+                      setActiveBanner(null);
+                    }}
+                  >
+                    {store.lang === 'ko' ? '닫기' : 'Đóng'}
+                  </button>
+                </div>
+              </motion.section>
+            </>
           ) : null}
         </AnimatePresence>
 
