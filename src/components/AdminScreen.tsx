@@ -771,23 +771,6 @@ export function AdminScreen({
     }
   }
 
-  // Merge recent activity (posts + reviews + comments) for overview feed.
-  // Keep hooks before conditional returns so auth/admin restoration cannot change hook order.
-  const activityFeed = useMemo(() => {
-    const items = [
-      ...posts.map(p => ({ type: 'post' as const, id: p.id, title: p.title, sub: p.display_name, badge: p.category, ts: p.created_at, raw: p })),
-      ...reviews.map(r => ({ type: 'review' as const, id: r.id, title: r.place_name, sub: r.display_name, badge: r.category, ts: r.created_at, raw: r })),
-      ...comments.map(c => ({ type: 'comment' as const, id: c.id, title: c.content, sub: c.display_name, badge: c.parent_id ? 'reply' : 'comment', ts: c.created_at, raw: c })),
-    ];
-    return items.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime()).slice(0, 20);
-  }, [posts, reviews, comments]);
-
-  const contentCounts: Record<AdminContentView, number> = {
-    posts: posts.length,
-    reviews: reviews.length,
-    comments: comments.length,
-  };
-
   if (!isAdmin) {
     return (
       <section className="admin-screen admin-access">
@@ -803,6 +786,22 @@ export function AdminScreen({
       </section>
     );
   }
+
+  // Merge recent activity (posts + reviews + comments) for overview feed
+  const activityFeed = useMemo(() => {
+    const items = [
+      ...posts.map(p => ({ type: 'post' as const, id: p.id, title: p.title, sub: p.display_name, badge: p.category, ts: p.created_at, raw: p })),
+      ...reviews.map(r => ({ type: 'review' as const, id: r.id, title: r.place_name, sub: r.display_name, badge: r.category, ts: r.created_at, raw: r })),
+      ...comments.map(c => ({ type: 'comment' as const, id: c.id, title: c.content, sub: c.display_name, badge: c.parent_id ? 'reply' : 'comment', ts: c.created_at, raw: c })),
+    ];
+    return items.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime()).slice(0, 20);
+  }, [posts, reviews, comments]);
+
+  const contentCounts: Record<AdminContentView, number> = {
+    posts: posts.length,
+    reviews: reviews.length,
+    comments: comments.length,
+  };
 
   return (
     <section className="admin-screen">

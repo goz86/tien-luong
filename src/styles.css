@@ -1623,18 +1623,24 @@ select {
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 14px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: linear-gradient(180deg, #ffffff 0%, #f5f8ff 100%);
+  padding-bottom: 12px;
 }
 
 .sheet-head h3 {
   margin: 0;
-  font-size: 22px;
-  line-height: 1.16;
+  font-size: 18px;
+  line-height: 1.2;
   letter-spacing: -0.04em;
   font-weight: 800;
 }
 
 .sheet-preview {
   text-align: right;
+  white-space: nowrap;
 }
 
 .sheet-preview span {
@@ -1644,7 +1650,7 @@ select {
 }
 
 .sheet-preview strong {
-  display: block;
+  display: inline;
   margin-top: 4px;
   font-size: 18px;
   color: var(--blue-700);
