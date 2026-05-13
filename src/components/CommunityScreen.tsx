@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent, type TouchEvent } from 'react';
 import {
   ArrowLeft,
   Bell,
@@ -62,6 +62,26 @@ type BoardMode = 'feed' | 'friends' | 'reviews';
 type AppLang = 'vi' | 'ko';
 
 const LOCAL_COMMUNITY_KEY = 'duhoc-mate-community-local';
+const CHAT_READ_STATE_KEY = 'duhoc-mate-chat-read-state';
+
+function getChatReadState(userId: string): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(`${CHAT_READ_STATE_KEY}:${userId}`);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function setChatReadState(userId: string, partnerId: string, readAt = new Date().toISOString()) {
+  try {
+    const current = getChatReadState(userId);
+    localStorage.setItem(`${CHAT_READ_STATE_KEY}:${userId}`, JSON.stringify({ ...current, [partnerId]: readAt }));
+  } catch {
+    // localStorage can be blocked in private contexts; DB read state still handles the main path.
+  }
+}
 
 const boardTabs: Array<{ id: BoardMode; icon: any }> = [
   { id: 'feed', icon: MessageSquare },
@@ -864,6 +884,7 @@ export function CommunityScreen({
 
   const fetchRecentChats = useCallback(async () => {
     if (!supabase || !currentUserId) return;
+    const readState = getChatReadState(currentUserId);
 
     const { data, error } = await supabase
       .from('chat_messages')
@@ -885,6 +906,10 @@ export function CommunityScreen({
           });
         }
         if (!msg.is_read && msg.receiver_id === currentUserId) {
+          const locallyReadAt = readState[partnerId];
+          if (locallyReadAt && new Date(msg.created_at).getTime() <= new Date(locallyReadAt).getTime()) {
+            return;
+          }
           const current = chatsMap.get(partnerId);
           current.unreadCount += 1;
         }
@@ -894,12 +919,13 @@ export function CommunityScreen({
   }, [currentUserId]);
 
   const markRecentChatRead = useCallback((partnerId: string) => {
+    if (currentUserId) setChatReadState(currentUserId, partnerId);
     setRecentChats((current) => current.map((chat) => (
       chat.partnerId === partnerId
         ? { ...chat, unreadCount: 0 }
         : chat
     )));
-  }, []);
+  }, [currentUserId]);
 
   useEffect(() => {
     if (boardMode === 'friends') {
@@ -1448,13 +1474,33 @@ export function CommunityScreen({
               const friendOnline = Boolean((friend as any).isOnline);
 
               return (
-                <article key={friend.id} className="community-friend-row">
-                  <div className="community-avatar" onClick={() => setViewProfile(friend)} style={{ cursor: 'pointer' }}>
+                <article
+                  key={friend.id}
+                  className="community-friend-row"
+                  onClick={() => {
+                    if (chatData && requireLogin()) setActiveChatPartner(friend);
+                  }}
+                  style={chatData ? { cursor: 'pointer' } : undefined}
+                >
+                  <div
+                    className="community-avatar"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setViewProfile(friend);
+                    }}
+                    style={{ cursor: 'pointer' }}
+                  >
                     {avatarLetter}
                   </div>
                   <div className="community-friend-main">
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <strong onClick={() => setViewProfile(friend)} style={{ cursor: 'pointer' }}>
+                      <strong
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setViewProfile(friend);
+                        }}
+                        style={{ cursor: 'pointer' }}
+                      >
                         {displayStr}
                       </strong>
                       {chatData?.unreadCount > 0 && (
@@ -1520,7 +1566,8 @@ export function CommunityScreen({
                         type="button"
                         className="community-request"
                         style={{ background: '#2752ff', color: 'white' }}
-                        onClick={() => {
+                        onClick={(event) => {
+                          event.stopPropagation();
                           if (requireLogin()) setActiveChatPartner(friend);
                         }}
                       >
@@ -2677,13 +2724,77 @@ function ReviewBoard({
   const [userPos, setUserPos] = useState<[number, number] | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const reviewRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const sheetContentRef = useRef<HTMLDivElement | null>(null);
+  const sheetTouchRef = useRef<{
+    startY: number;
+    startTime: number;
+    startScrollTop: number;
+    interactive: boolean;
+  } | null>(null);
+  const suppressSheetClickRef = useRef(false);
   const mapRef = useRef<ReviewMapHandle | null>(null);
   const dragControls = useDragControls();
   const startSheetDrag = useCallback((event: PointerEvent) => {
     const target = event.target as HTMLElement;
-    if (target.closest('button, input, textarea, select, a, img, .rv-sheet-categories')) return;
+    if (target.closest('button, input, textarea, select, a, img, .rv-sheet-content')) return;
     dragControls.start(event);
   }, [dragControls]);
+
+  const handleSheetTouchStart = useCallback((event: TouchEvent<HTMLElement>) => {
+    if (event.touches.length !== 1) return;
+    const target = event.target as HTMLElement;
+    const content = target.closest('.rv-sheet-content') as HTMLElement | null;
+    sheetTouchRef.current = {
+      startY: event.touches[0].clientY,
+      startTime: performance.now(),
+      startScrollTop: content?.scrollTop ?? sheetContentRef.current?.scrollTop ?? 0,
+      interactive: Boolean(target.closest('input, textarea, select, a, img')),
+    };
+  }, []);
+
+  const handleSheetTouchMove = useCallback((event: TouchEvent<HTMLElement>) => {
+    const touch = sheetTouchRef.current;
+    if (!touch || touch.interactive || event.touches.length !== 1) return;
+    const deltaY = event.touches[0].clientY - touch.startY;
+    const currentScrollTop = sheetContentRef.current?.scrollTop ?? 0;
+
+    if (sheetExpanded && deltaY > 8 && touch.startScrollTop <= 2 && currentScrollTop <= 2) {
+      event.preventDefault();
+    }
+  }, [sheetExpanded]);
+
+  const handleSheetTouchEnd = useCallback((event: TouchEvent<HTMLElement>) => {
+    const touch = sheetTouchRef.current;
+    if (!touch || touch.interactive) {
+      sheetTouchRef.current = null;
+      return;
+    }
+
+    const changedTouch = event.changedTouches[0];
+    const deltaY = changedTouch ? changedTouch.clientY - touch.startY : 0;
+    const elapsed = Math.max(performance.now() - touch.startTime, 1);
+    const velocity = Math.abs(deltaY) / elapsed;
+    const shouldMove = Math.abs(deltaY) > 36 || velocity > 0.45;
+
+    if (shouldMove) {
+      suppressSheetClickRef.current = true;
+      window.setTimeout(() => { suppressSheetClickRef.current = false; }, 0);
+      if (deltaY < 0) {
+        setSheetExpanded(true);
+      } else if (touch.startScrollTop <= 2) {
+        setSheetExpanded(false);
+      }
+    }
+
+    sheetTouchRef.current = null;
+  }, []);
+
+  const handleSheetClickCapture = useCallback((event: ReactMouseEvent<HTMLElement>) => {
+    if (!suppressSheetClickRef.current) return;
+    event.preventDefault();
+    event.stopPropagation();
+    suppressSheetClickRef.current = false;
+  }, []);
 
   // Search logic for floating bar
   useEffect(() => {
@@ -2856,9 +2967,15 @@ function ReviewBoard({
           drag="y"
           dragControls={dragControls}
           dragListener={false}
-          dragConstraints={{ top: 0, bottom: 0 }}
-          dragElastic={0.03}
+          dragConstraints={sheetExpanded ? { top: 0, bottom: 360 } : { top: -360, bottom: 0 }}
+          dragElastic={0}
+          dragMomentum={false}
           onPointerDownCapture={startSheetDrag}
+          onTouchStart={handleSheetTouchStart}
+          onTouchMove={handleSheetTouchMove}
+          onTouchEnd={handleSheetTouchEnd}
+          onTouchCancel={() => { sheetTouchRef.current = null; }}
+          onClickCapture={handleSheetClickCapture}
           onDragEnd={(_, info) => {
             const dragDistance = info.offset.y;
             const dragVelocity = info.velocity.y;
@@ -2899,7 +3016,6 @@ function ReviewBoard({
             {/* Categories inside the sheet */}
             <div
               className="rv-sheet-categories"
-              onPointerDown={e => e.stopPropagation()}
               onClick={e => e.stopPropagation()}
             >
               <button
@@ -2922,7 +3038,7 @@ function ReviewBoard({
             </div>
           </div>
 
-          <div className="rv-sheet-content">
+          <div className="rv-sheet-content" ref={sheetContentRef}>
             {loading ? (
               <div className="rv-sheet-loading">
                 <Loader2 size={24} className="cm-spin" />

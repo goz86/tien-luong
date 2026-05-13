@@ -10,6 +10,7 @@ import { DEFAULT_KRW_TO_VND, calculateShiftPay, shiftHours } from '../lib/salary
 import { startOfMonth } from '../utils/helpers';
 
 const STORAGE_KEY = 'duhoc-mate-redesign-state';
+const NOTIFICATION_SEEN_KEY = 'duhoc-mate-notifications-seen-at';
 const getLocalDateString = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -17,6 +18,34 @@ const getLocalDateString = () => {
 const todayIso = getLocalDateString();
 
 /* ── helpers ── */
+
+function notificationSeenStorageKey(userId: string) {
+  return `${NOTIFICATION_SEEN_KEY}:${userId}`;
+}
+
+function getNotificationSeenAt(userId?: string | null) {
+  if (!userId || typeof window === 'undefined') return null;
+  return window.localStorage.getItem(notificationSeenStorageKey(userId));
+}
+
+function rememberNotificationsSeen(userId?: string | null) {
+  if (!userId || typeof window === 'undefined') return;
+  window.localStorage.setItem(notificationSeenStorageKey(userId), new Date().toISOString());
+}
+
+function applyLocalNotificationReads(notifications: CommunityNotification[], userId?: string | null) {
+  const seenAt = getNotificationSeenAt(userId);
+  if (!seenAt) return notifications;
+  const seenTime = new Date(seenAt).getTime();
+  if (!Number.isFinite(seenTime)) return notifications;
+
+  return notifications.map((notification) => {
+    const createdTime = new Date(notification.created_at).getTime();
+    return Number.isFinite(createdTime) && createdTime <= seenTime
+      ? { ...notification, is_read: true }
+      : notification;
+  });
+}
 
 function fallbackState(): StoredState {
   return {
@@ -235,11 +264,10 @@ export const useAppStore = create<AppState>((set, get) => {
       })
       .slice(0, 4);
 
-    const notifications = state.notifications ?? current?.notifications ?? [];
-    const unreadCount = notifications.filter((n) => !n.is_read).length;
-
     const session = state.session ?? current?.session ?? null;
     const adminRole = state.adminRole ?? current?.adminRole ?? null;
+    const notifications = applyLocalNotificationReads(state.notifications ?? current?.notifications ?? [], session?.user.id);
+    const unreadCount = notifications.filter((n) => !n.is_read).length;
     const email = (session?.user.email || '').toLowerCase();
     const isAdmin = email === 'michintashop@gmail.com' || Boolean(adminRole);
 
@@ -435,7 +463,8 @@ export const useAppStore = create<AppState>((set, get) => {
     // Notifications
     setNotifications: (n) => set((s) => {
       const next = typeof n === 'function' ? n(s.notifications) : n;
-      return { notifications: next, ...derive({ notifications: next }) };
+      const withLocalReads = applyLocalNotificationReads(next, s.session?.user.id);
+      return { notifications: withLocalReads, ...derive({ notifications: withLocalReads }) };
     }),
     setShowNotifications: (v) => set({ showNotifications: v }),
     setToastNotification: (n) => set({ toastNotification: n }),
@@ -444,6 +473,7 @@ export const useAppStore = create<AppState>((set, get) => {
       set({ showNotifications: true });
     },
     markAllAsRead: () => {
+      rememberNotificationsSeen(get().session?.user.id);
       set((s) => {
         const next = s.notifications.map((n) => ({ ...n, is_read: true }));
         return { notifications: next, ...derive({ notifications: next }) };

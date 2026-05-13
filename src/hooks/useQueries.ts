@@ -286,9 +286,30 @@ export function useNotificationsQuery(userId: string | undefined) {
 export function useRankingsQuery(userId: string | undefined) {
   const range = getLocalMonthRange();
   return useQuery({
-    queryKey: queryKeys.rankings(`${range.monthKey}:${range.todayDate}`),
+    queryKey: queryKeys.rankings(`${range.monthKey}:${range.todayDate}:${userId ?? 'guest'}`),
     queryFn: async () => {
       const { monthKey, startDate, todayDate } = getLocalMonthRange();
+
+      const { data: rpcRows, error: rpcError } = await supabase!
+        .rpc('get_monthly_income_rankings', {
+          p_start_date: startDate,
+          p_end_date: todayDate,
+          p_current_user_id: userId ?? null,
+        });
+
+      if (!rpcError && Array.isArray(rpcRows) && rpcRows.length > 0) {
+        return rpcRows
+          .map((r: any) => ({
+            ...r,
+            total_income: Math.max(0, Number(r.total_income) || 0),
+            rank: Number(r.rank) || 0,
+            is_anonymous_rank: r.is_anonymous_rank === true,
+          }))
+          .filter((r: any) => r.total_income > 0)
+          .sort((a: any, b: any) => a.rank - b.rank);
+      }
+
+      let localRankedFallback: any[] = [];
       const { data: shiftRows, error: shiftError } = await supabase!
         .from('shift_entries')
         .select('*')
@@ -330,12 +351,14 @@ export function useRankingsQuery(userId: string | undefined) {
           display_name: profileMap[item.user_id]?.display_name || 'Ẩn danh',
           is_anonymous_rank: profileMap[item.user_id]?.is_anonymous_rank ?? false,
         }));
+        localRankedFallback = ranked;
 
         if (ranked.length > 0) {
           const top3 = ranked.slice(0, 3);
-          if (!userId || top3.some((item) => item.user_id === userId)) return top3;
+          const canSeeCommunityRows = !userId || ranked.some((item) => item.user_id !== userId);
+          if (canSeeCommunityRows && (!userId || top3.some((item) => item.user_id === userId))) return top3;
           const me = ranked.find((item) => item.user_id === userId);
-          return me ? [...top3, me] : top3;
+          if (canSeeCommunityRows) return me ? [...top3, me] : top3;
         }
       }
 
@@ -377,12 +400,19 @@ export function useRankingsQuery(userId: string | undefined) {
       if (uids.length > 0) {
         const { data: profiles } = await supabase!
           .from('profiles')
-          .select('id, is_anonymous_rank')
+          .select('id, display_name, is_anonymous_rank')
           .in('id', uids);
-        const pmap = (profiles || []).reduce((acc: any, p: any) => { acc[p.id] = p.is_anonymous_rank; return acc; }, {});
-        final = final.map((item: any) => ({ ...item, is_anonymous_rank: pmap[item.user_id] ?? item.is_anonymous_rank }));
+        const pmap = (profiles || []).reduce((acc: any, p: any) => {
+          acc[p.id] = { display_name: p.display_name, is_anonymous_rank: p.is_anonymous_rank };
+          return acc;
+        }, {});
+        final = final.map((item: any) => ({
+          ...item,
+          display_name: item.display_name || pmap[item.user_id]?.display_name || '梳쮖 danh',
+          is_anonymous_rank: pmap[item.user_id]?.is_anonymous_rank ?? item.is_anonymous_rank,
+        }));
       }
-      return final;
+      return final.length > 0 ? final : localRankedFallback;
     },
     enabled: !!supabase,
     staleTime: 60_000,

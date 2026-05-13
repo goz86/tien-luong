@@ -310,6 +310,29 @@
 
 html,
 body,
+#root,
+.app-stage,
+.phone-shell,
+.screen-shell,
+.phone-shell * {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+#root::-webkit-scrollbar,
+.app-stage::-webkit-scrollbar,
+.phone-shell::-webkit-scrollbar,
+.screen-shell::-webkit-scrollbar,
+.phone-shell *::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+}
+
+html,
+body,
 #root {
   min-height: 100%;
   overscroll-behavior: auto;
