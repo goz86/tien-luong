@@ -7895,10 +7895,37 @@ button.ticker-inner {
   box-shadow: 0 0 0 3px rgba(39, 82, 255, 0.1);
 }
 
+.rv-postcode-btn {
+  width: 100%;
+  min-height: 46px;
+  margin-top: 10px;
+  border: 1px solid rgba(39, 82, 255, 0.14);
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(39, 82, 255, 0.1), rgba(38, 217, 164, 0.08));
+  color: #2752ff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 850;
+  cursor: pointer;
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.rv-postcode-btn:active {
+  transform: scale(0.98);
+}
+
+.rv-postcode-btn:disabled {
+  cursor: wait;
+  opacity: 0.78;
+}
+
 .rv-search-icon {
   position: absolute;
   left: 14px;
-  top: 50%;
+  top: 24px;
   transform: translateY(-50%);
   color: var(--text-soft);
   pointer-events: none;
@@ -8595,6 +8622,7 @@ button.ticker-inner {
   padding: 10px 12px 118px;
   touch-action: pan-y;
   overscroll-behavior: contain;
+  overscroll-behavior-y: contain;
   scroll-behavior: smooth;
   background: #f7f9fc;
 }

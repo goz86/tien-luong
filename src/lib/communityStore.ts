@@ -159,7 +159,27 @@ export async function loadCommunityState(userId?: string): Promise<CommunityStat
     return emptyState();
   }
 
-  const posts = (postRows as DbPost[] | null)?.map(normalizePost) ?? [];
+  let posts = (postRows as DbPost[] | null)?.map(normalizePost) ?? [];
+
+  if (posts.length > 0) {
+    const { data: countRows, error: countError } = await client
+      .from('community_comments')
+      .select('post_id')
+      .in('post_id', posts.map((post) => post.id));
+
+    if (!countError && countRows) {
+      const actualCounts = new Map<string, number>();
+      (countRows as Array<{ post_id: string }>).forEach((row) => {
+        actualCounts.set(row.post_id, (actualCounts.get(row.post_id) || 0) + 1);
+      });
+      posts = posts.map((post) => ({
+        ...post,
+        comments_count: Math.max(post.comments_count || 0, actualCounts.get(post.id) || 0),
+      }));
+    } else if (countError) {
+      console.warn('loadCommunityState comment counts', countError);
+    }
+  }
 
   let likedPostIds: string[] = [];
   let dislikedPostIds: string[] = [];

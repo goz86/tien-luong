@@ -30,6 +30,7 @@ import {
   Navigation,
 } from 'lucide-react';
 import { motion, AnimatePresence, animate, useDragControls, useMotionValue } from 'framer-motion';
+import { useKakaoPostcodePopup, type Address as KakaoPostcodeAddress } from 'react-daum-postcode';
 import type { Session } from '@supabase/supabase-js';
 import type { CompanionProfile } from '../lib/types';
 import { supabase } from '../lib/supabase';
@@ -135,16 +136,13 @@ interface PlaceReviewVote {
   vote_type: ReviewVoteType;
 }
 
-interface NominatimResult {
-  place_id: number;
-  display_name: string;
-  lat: string;
-  lon: string;
-}
-
 const SEOUL_CENTER: [number, number] = [37.5665, 126.978];
 const REVIEW_ADMIN_EMAILS = new Set(['michintashop@gmail.com']);
 const NAVER_MAP_CLIENT_ID = import.meta.env.VITE_NAVER_MAP_CLIENT_ID as string | undefined;
+const KAKAO_POSTCODE_SCRIPT_URL = 'https://t1.kakaocdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js';
+const REVIEW_SHEET_EXPANDED_Y = 86;
+const REVIEW_SHEET_COLLAPSED_MIN_Y = 210;
+const REVIEW_SHEET_COLLAPSED_PEEK = 232;
 
 declare global {
   interface Window {
@@ -270,6 +268,26 @@ function getRegionParts(review: PlaceReview) {
     .flatMap((part) => part.split(/\s+/))
     .map((part) => part.trim())
     .filter((part) => part && part !== '대한민국' && !/^\d/.test(part));
+}
+
+function buildKakaoAddress(data: KakaoPostcodeAddress) {
+  const baseAddress = data.userSelectedType === 'J'
+    ? data.jibunAddress || data.autoJibunAddress || data.address
+    : data.roadAddress || data.autoRoadAddress || data.address;
+  let extraAddress = '';
+
+  if (data.userSelectedType === 'R' || data.addressType === 'R') {
+    if (data.bname) extraAddress += data.bname;
+    if (data.buildingName) {
+      extraAddress += extraAddress ? `, ${data.buildingName}` : data.buildingName;
+    }
+  }
+
+  const fullAddress = extraAddress ? `${baseAddress} (${extraAddress})` : baseAddress;
+  const displayAddress = data.zonecode ? `${fullAddress}, ${data.zonecode}, 대한민국` : `${fullAddress}, 대한민국`;
+  const placeName = data.buildingName || data.roadname || data.bname || data.sigungu || data.sido || fullAddress;
+
+  return { fullAddress, displayAddress, placeName };
 }
 
 function compactProvinceLabel(value: string) {
@@ -1020,6 +1038,7 @@ export function CommunityScreen({
             };
             setComments((prev) => {
               if (prev.some(c => c.id === newComment.id)) return prev;
+              bumpVisiblePostCommentCount(newComment.post_id, 1);
               return [...prev, newComment];
             });
           } else if (payload.eventType === 'UPDATE') {
@@ -1030,7 +1049,12 @@ export function CommunityScreen({
               likes_count: Number(row.likes_count ?? c.likes_count),
             } : c));
           } else if (payload.eventType === 'DELETE') {
-            setComments((prev) => prev.filter(c => c.id !== payload.old.id));
+            const oldRow = payload.old as any;
+            setComments((prev) => {
+              const existed = prev.some(c => c.id === oldRow.id);
+              if (existed && oldRow.post_id) bumpVisiblePostCommentCount(oldRow.post_id, -1);
+              return prev.filter(c => c.id !== oldRow.id);
+            });
           }
         }
       )
@@ -1303,6 +1327,20 @@ export function CommunityScreen({
     setSelectedPost((current) => (current?.id === postId ? updater(current) : current));
   }
 
+  function syncPostCommentCount(postId: string, count: number) {
+    updatePost(postId, (post) => ({
+      ...post,
+      comments_count: Math.max(0, count),
+    }));
+  }
+
+  function bumpVisiblePostCommentCount(postId: string, delta: number) {
+    updatePost(postId, (post) => ({
+      ...post,
+      comments_count: Math.max(0, (post.comments_count || 0) + delta),
+    }));
+  }
+
   function closeComposer() {
     setIsWritingPost(false);
     setIsWritingReview(false);
@@ -1338,6 +1376,7 @@ export function CommunityScreen({
             ...current.filter((comment) => comment.post_id !== post.id),
             ...nextComments,
           ]);
+          syncPostCommentCount(post.id, nextComments.length);
         })
         .catch((error) => console.error(error));
     }
@@ -2542,6 +2581,7 @@ function ReviewBoard({
   const [reviewNotice, setReviewNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [catFilter, setCatFilter] = useState<ReviewCategory>('all');
+  const openKakaoPostcode = useKakaoPostcodePopup(KAKAO_POSTCODE_SCRIPT_URL);
   const currentUserId = session?.user.id ?? null;
   const isReviewAdmin = REVIEW_ADMIN_EMAILS.has((session?.user.email ?? '').toLowerCase());
   const [deletingReviewId, setDeletingReviewId] = useState<string | null>(null);
@@ -2565,7 +2605,6 @@ function ReviewBoard({
 
   // Write form state
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<NominatimResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [selectedPlace, setSelectedPlace] = useState<{ name: string; address: string; lat: number; lng: number } | null>(null);
   const [writeCat, setWriteCat] = useState<Exclude<ReviewCategory, 'all'>>('food');
@@ -2577,7 +2616,6 @@ function ReviewBoard({
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [isAnon, setIsAnon] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
   // Image compression utility
   const compressImage = (file: File): Promise<Blob> => {
@@ -2761,40 +2799,70 @@ function ReviewBoard({
     };
   }, [currentUserId]);
 
-  // Nominatim search with debounce
-  const searchPlaces = useCallback((q: string) => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (!q.trim()) { setSearchResults([]); setSearching(false); return; }
-    setSearching(true);
-    debounceRef.current = setTimeout(async () => {
-      try {
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&countrycodes=kr&limit=5&addressdetails=1`,
-          { headers: { 'Accept-Language': 'ko,vi,en' } }
-        );
-        const data: NominatimResult[] = await res.json();
-        setSearchResults(data);
-      } catch { setSearchResults([]); }
-      setSearching(false);
-    }, 500);
+  const geocodeKoreanAddress = useCallback(async (address: string) => {
+    try {
+      const maps = await loadNaverMapsSdk();
+      return await new Promise<{ lat: number; lng: number } | null>((resolve) => {
+        if (!maps?.Service?.geocode) {
+          resolve(null);
+          return;
+        }
+
+        maps.Service.geocode({ query: address }, (status: any, response: any) => {
+          if (status !== maps.Service.Status.OK) {
+            resolve(null);
+            return;
+          }
+
+          const result = response?.v2?.addresses?.[0];
+          const lat = Number(result?.y);
+          const lng = Number(result?.x);
+          resolve(Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null);
+        });
+      });
+    } catch (error) {
+      console.warn('Unable to geocode Kakao postcode address:', error);
+      return null;
+    }
   }, []);
 
-  const handleSearchChange = (val: string) => {
-    setSearchQuery(val);
-    searchPlaces(val);
-  };
+  const handleAddressComplete = useCallback(async (data: KakaoPostcodeAddress) => {
+    const address = buildKakaoAddress(data);
+    setSearching(true);
+    setSearchQuery(address.fullAddress);
 
-  const selectPlace = (result: NominatimResult) => {
-    const parts = result.display_name.split(',');
+    const coords = await geocodeKoreanAddress(address.fullAddress);
+    setSearching(false);
+
+    if (!coords) {
+      showReviewNotice(isKo
+        ? '주소 좌표를 찾지 못했습니다. 다른 주소로 다시 선택해주세요.'
+        : 'Chưa lấy được tọa độ địa chỉ. Bạn chọn lại địa chỉ khác nhé.');
+      return;
+    }
+
     setSelectedPlace({
-      name: parts[0]?.trim() || result.display_name,
-      address: result.display_name,
-      lat: parseFloat(result.lat),
-      lng: parseFloat(result.lon),
+      name: address.placeName,
+      address: address.displayAddress,
+      lat: coords.lat,
+      lng: coords.lng,
     });
     setSearchQuery('');
-    setSearchResults([]);
-  };
+  }, [geocodeKoreanAddress, isKo, showReviewNotice]);
+
+  const openAddressSearch = useCallback(() => {
+    void openKakaoPostcode({
+      defaultQuery: searchQuery,
+      popupTitle: isKo ? '주소 검색' : 'Tìm kiếm địa chỉ',
+      onComplete: (data) => void handleAddressComplete(data),
+      onError: (error) => {
+        console.error('Kakao postcode failed:', error);
+        showReviewNotice(isKo
+          ? '주소 검색창을 열지 못했습니다. 잠시 후 다시 시도해주세요.'
+          : 'Chưa mở được cửa sổ tìm địa chỉ. Bạn thử lại sau nhé.');
+      },
+    });
+  }, [handleAddressComplete, isKo, openKakaoPostcode, searchQuery, showReviewNotice]);
 
   const handleReviewReaction = async (reviewId: string, type: 'up' | 'down') => {
     if (!session || !supabase) {
@@ -2996,17 +3064,25 @@ function ReviewBoard({
   const reviewRefs = useRef<Map<string, HTMLElement>>(new Map());
   const sheetRef = useRef<HTMLDivElement | null>(null);
   const sheetContentRef = useRef<HTMLDivElement | null>(null);
+  const sheetContentDragRef = useRef<{
+    pointerId: number;
+    startY: number;
+    startX: number;
+    startTime: number;
+    startScrollTop: number;
+    active: boolean;
+  } | null>(null);
   const mapRef = useRef<ReviewMapHandle | null>(null);
   const dragControls = useDragControls();
   const sheetY = useMotionValue(520);
-  const [sheetBounds, setSheetBounds] = useState({ expanded: 86, collapsed: 520 });
+  const [sheetBounds, setSheetBounds] = useState({ expanded: REVIEW_SHEET_EXPANDED_Y, collapsed: 520 });
 
   const measureSheetBounds = useCallback(() => {
     const sheetHeight = sheetRef.current?.offsetHeight || 0;
     if (!sheetHeight) return;
     const nextBounds = {
-      expanded: 86,
-      collapsed: Math.max(210, sheetHeight - 188),
+      expanded: REVIEW_SHEET_EXPANDED_Y,
+      collapsed: Math.max(REVIEW_SHEET_COLLAPSED_MIN_Y, sheetHeight - REVIEW_SHEET_COLLAPSED_PEEK),
     };
 
     setSheetBounds((current) => {
@@ -3047,9 +3123,72 @@ function ReviewBoard({
     const target = event.target as HTMLElement;
     if (target.closest('button, input, textarea, select, a, img')) return;
     const content = target.closest('.rv-sheet-content') as HTMLElement | null;
-    if (sheetExpanded && content && content.scrollTop > 2) return;
+    if (content) return;
     dragControls.start(event);
-  }, [dragControls, sheetExpanded]);
+  }, [dragControls]);
+
+  const snapSheet = useCallback((expanded: boolean) => {
+    setSheetExpanded(expanded);
+    animate(sheetY, expanded ? sheetBounds.expanded : sheetBounds.collapsed, {
+      type: 'spring',
+      damping: 42,
+      stiffness: 150,
+      mass: 1.05,
+    });
+  }, [sheetBounds, sheetY]);
+
+  const handleSheetContentPointerDown = useCallback((event: PointerEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement;
+    const isSheetNearExpanded = sheetY.get() <= sheetBounds.expanded + 90;
+    if ((!sheetExpanded && !isSheetNearExpanded) || target.closest('button, input, textarea, select, a, img')) return;
+
+    sheetContentDragRef.current = {
+      pointerId: event.pointerId,
+      startY: event.clientY,
+      startX: event.clientX,
+      startTime: performance.now(),
+      startScrollTop: event.currentTarget.scrollTop,
+      active: false,
+    };
+  }, [sheetBounds.expanded, sheetExpanded, sheetY]);
+
+  const handleSheetContentPointerMove = useCallback((event: PointerEvent<HTMLDivElement>) => {
+    const drag = sheetContentDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+
+    const deltaY = event.clientY - drag.startY;
+    const deltaX = event.clientX - drag.startX;
+    const currentScrollTop = event.currentTarget.scrollTop;
+
+    if (!drag.active) {
+      if (deltaY <= 10 || Math.abs(deltaY) <= Math.abs(deltaX) || drag.startScrollTop > 2 || currentScrollTop > 2) {
+        return;
+      }
+      drag.active = true;
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+    }
+
+    const travel = sheetBounds.collapsed - sheetBounds.expanded;
+    const nextY = Math.min(sheetBounds.collapsed, sheetBounds.expanded + Math.min(deltaY * 0.92, travel));
+    sheetY.set(nextY);
+  }, [sheetBounds, sheetY]);
+
+  const finishSheetContentDrag = useCallback((event: PointerEvent<HTMLDivElement>) => {
+    const drag = sheetContentDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+
+    const deltaY = event.clientY - drag.startY;
+    const elapsed = Math.max(performance.now() - drag.startTime, 1);
+    const velocity = deltaY / elapsed;
+    const midpoint = sheetBounds.expanded + ((sheetBounds.collapsed - sheetBounds.expanded) * 0.42);
+    const shouldCollapse = drag.active && (sheetY.get() > midpoint || deltaY > 120 || velocity > 0.9);
+
+    if (drag.active) {
+      snapSheet(!shouldCollapse);
+      event.currentTarget.releasePointerCapture?.(event.pointerId);
+    }
+    sheetContentDragRef.current = null;
+  }, [sheetBounds, sheetY, snapSheet]);
 
   // Search logic for floating bar
   useEffect(() => {
@@ -3131,7 +3270,6 @@ function ReviewBoard({
     setWriteTitle('');
     setWriteContent('');
     setSearchQuery('');
-    setSearchResults([]);
     setIsAnon(false);
   };
 
@@ -3287,7 +3425,14 @@ function ReviewBoard({
             </div>
           </div>
 
-          <div className="rv-sheet-content" ref={sheetContentRef}>
+          <div
+            className="rv-sheet-content"
+            ref={sheetContentRef}
+            onPointerDown={handleSheetContentPointerDown}
+            onPointerMove={handleSheetContentPointerMove}
+            onPointerUp={finishSheetContentDrag}
+            onPointerCancel={finishSheetContentDrag}
+          >
             {loading ? (
               <div className="rv-sheet-loading">
                 <Loader2 size={24} className="cm-spin" />
@@ -3469,24 +3614,21 @@ function ReviewBoard({
                   <Search size={16} className="rv-search-icon" />
                   <input
                     className="rv-search-input"
-                    placeholder={isKo ? '한국 내 장소 검색...' : 'Tìm kiếm địa điểm tại Hàn Quốc...'}
+                    placeholder={isKo ? '주소를 검색해주세요' : 'Tìm kiếm địa chỉ tại Hàn Quốc...'}
                     value={searchQuery}
-                    onChange={e => handleSearchChange(e.target.value)}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    onFocus={openAddressSearch}
+                    onClick={openAddressSearch}
                   />
-                  {(searchResults.length > 0 || searching) && (
-                    <div className="rv-search-results">
-                      {searching ? (
-                        <div className="rv-search-loading">{isKo ? '검색 중...' : 'Đang tìm kiếm...'}</div>
-                      ) : (
-                        searchResults.map(result => (
-                          <div key={result.place_id} className="rv-search-item" onClick={() => selectPlace(result)}>
-                            <MapPin size={16} />
-                            <span>{result.display_name}</span>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  )}
+                  <button
+                    type="button"
+                    className="rv-postcode-btn"
+                    onClick={openAddressSearch}
+                    disabled={searching}
+                  >
+                    {searching ? <Loader2 size={16} className="cm-spin" /> : <MapPin size={16} />}
+                    <span>{isKo ? '주소 검색' : 'Tìm địa chỉ'}</span>
+                  </button>
                 </div>
               )}
             </div>
