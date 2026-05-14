@@ -21,8 +21,13 @@ requestAnimationFrame(() => {
   });
 });
 
+const isLocalPreview =
+  window.location.hostname === 'localhost' ||
+  window.location.hostname === '127.0.0.1' ||
+  window.location.hostname === '::1';
+
 // Service Worker registration with update detection
-if ('serviceWorker' in navigator && import.meta.env.DEV) {
+if ('serviceWorker' in navigator && (import.meta.env.DEV || isLocalPreview)) {
   window.addEventListener('load', async () => {
     try {
       const registrations = await navigator.serviceWorker.getRegistrations();
@@ -33,8 +38,8 @@ if ('serviceWorker' in navigator && import.meta.env.DEV) {
         await Promise.all(keys.filter((key) => key.startsWith('duhoc-mate-')).map((key) => caches.delete(key)));
       }
 
-      if (navigator.serviceWorker.controller && !sessionStorage.getItem('duhoc-mate-dev-sw-reset')) {
-        sessionStorage.setItem('duhoc-mate-dev-sw-reset', '1');
+      if (navigator.serviceWorker.controller && !sessionStorage.getItem('duhoc-mate-local-sw-reset')) {
+        sessionStorage.setItem('duhoc-mate-local-sw-reset', '1');
         window.location.reload();
       }
     } catch {

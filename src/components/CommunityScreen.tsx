@@ -65,6 +65,19 @@ type AppLang = 'vi' | 'ko';
 
 const LOCAL_COMMUNITY_KEY = 'duhoc-mate-community-local';
 const CHAT_READ_STATE_KEY = 'duhoc-mate-chat-read-state';
+const COMMUNITY_LOAD_TIMEOUT_MS = 9000;
+const FLOATING_SEARCH_TIMEOUT_MS = 6500;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  let timer: number | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer) window.clearTimeout(timer);
+  });
+}
 
 function getChatReadState(userId: string): Record<string, string> {
   try {
@@ -288,6 +301,25 @@ function buildKakaoAddress(data: KakaoPostcodeAddress) {
   const placeName = data.buildingName || data.roadname || data.bname || data.sigungu || data.sido || fullAddress;
 
   return { fullAddress, displayAddress, placeName };
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function getFloatingPlaceTitle(result: any) {
+  const nameKo = result?.namedetails?.name || result?.namedetails?.['name:ko'] || '';
+  const nameEn = result?.namedetails?.['name:en'] || '';
+  if (nameKo && nameEn && nameKo !== nameEn) return `${nameKo} (${nameEn})`;
+  if (nameKo) return nameKo;
+  return String(result?.name || result?.display_name || '').split(',')[0].trim();
+}
+
+function getFloatingPlaceAddress(result: any) {
+  const displayName = String(result?.display_name || '').trim();
+  const title = getFloatingPlaceTitle(result);
+  if (!displayName) return title;
+  return displayName.replace(new RegExp(`^${escapeRegExp(title)}\\s*,\\s*`, 'i'), '').trim() || displayName;
 }
 
 function compactProvinceLabel(value: string) {
@@ -913,7 +945,11 @@ export function CommunityScreen({
     setNotifications([]);
     setRecentChats([]);
 
-    loadCommunityState(currentUserId || undefined)
+    withTimeout(
+      loadCommunityState(currentUserId || undefined),
+      COMMUNITY_LOAD_TIMEOUT_MS,
+      'Community load timed out',
+    )
       .then((state) => {
         if (!alive) return;
         const local = readLocalCommunity(currentUserId || null);
@@ -3058,16 +3094,20 @@ function ReviewBoard({
   const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null);
   const [floatingSearch, setFloatingSearch] = useState('');
   const [floatingResults, setFloatingResults] = useState<any[]>([]);
+  const [floatingSelectedAddress, setFloatingSelectedAddress] = useState('');
+  const [floatingSearchDone, setFloatingSearchDone] = useState(false);
   const [isSearchingMap, setIsSearchingMap] = useState(false);
   const [userPos, setUserPos] = useState<[number, number] | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const reviewRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const skipNextFloatingSearchRef = useRef(false);
   const sheetRef = useRef<HTMLDivElement | null>(null);
   const sheetContentRef = useRef<HTMLDivElement | null>(null);
   const sheetContentDragRef = useRef<{
     pointerId: number;
     startY: number;
     startX: number;
+    originY: number;
     startTime: number;
     startScrollTop: number;
     active: boolean;
@@ -3146,6 +3186,7 @@ function ReviewBoard({
       pointerId: event.pointerId,
       startY: event.clientY,
       startX: event.clientX,
+      originY: sheetY.get(),
       startTime: performance.now(),
       startScrollTop: event.currentTarget.scrollTop,
       active: false,
@@ -3165,11 +3206,16 @@ function ReviewBoard({
         return;
       }
       drag.active = true;
+      event.currentTarget.classList.add('is-sheet-dragging');
       event.currentTarget.setPointerCapture?.(event.pointerId);
     }
 
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.scrollTop = 0;
     const travel = sheetBounds.collapsed - sheetBounds.expanded;
-    const nextY = Math.min(sheetBounds.collapsed, sheetBounds.expanded + Math.min(deltaY * 0.92, travel));
+    const dampedDelta = deltaY > 0 ? deltaY * 0.72 : deltaY * 0.38;
+    const nextY = Math.min(sheetBounds.collapsed, Math.max(sheetBounds.expanded, drag.originY + Math.min(dampedDelta, travel)));
     sheetY.set(nextY);
   }, [sheetBounds, sheetY]);
 
@@ -3185,6 +3231,7 @@ function ReviewBoard({
 
     if (drag.active) {
       snapSheet(!shouldCollapse);
+      event.currentTarget.classList.remove('is-sheet-dragging');
       event.currentTarget.releasePointerCapture?.(event.pointerId);
     }
     sheetContentDragRef.current = null;
@@ -3192,29 +3239,50 @@ function ReviewBoard({
 
   // Search logic for floating bar
   useEffect(() => {
-    if (floatingSearch.length < 1) {
-      setFloatingResults([]);
+    if (skipNextFloatingSearchRef.current) {
+      skipNextFloatingSearchRef.current = false;
+      setIsSearchingMap(false);
+      setFloatingSearchDone(false);
       return;
     }
+    const query = floatingSearch.trim();
+    if (query.length < 2) {
+      setFloatingResults([]);
+      setIsSearchingMap(false);
+      setFloatingSearchDone(false);
+      return;
+    }
+    const controller = new AbortController();
     const timer = setTimeout(async () => {
       setIsSearchingMap(true);
+      setFloatingSearchDone(false);
       try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(floatingSearch)}&addressdetails=1&namedetails=1&limit=5&countrycodes=kr`, {
+        const abortTimer = window.setTimeout(() => controller.abort(), FLOATING_SEARCH_TIMEOUT_MS);
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&namedetails=1&limit=5&countrycodes=kr`, {
           headers: {
             'Accept-Language': 'ko,en;q=0.9',
-          }
+          },
+          signal: controller.signal,
         });
+        window.clearTimeout(abortTimer);
         const data = await res.json();
         if (Array.isArray(data)) {
           setFloatingResults(data);
         }
       } catch (err) {
-        console.error('Search error:', err);
+        if (!(err instanceof DOMException && err.name === 'AbortError')) {
+          console.error('Search error:', err);
+        }
+        setFloatingResults([]);
       } finally {
         setIsSearchingMap(false);
+        setFloatingSearchDone(true);
       }
     }, 500);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
   }, [floatingSearch]);
 
   const handleMyLocation = () => {
@@ -3233,7 +3301,9 @@ function ReviewBoard({
     const lat = parseFloat(res.lat);
     const lon = parseFloat(res.lon);
     mapRef.current?.setView([lat, lon], 16);
-    setFloatingSearch(res.display_name);
+    skipNextFloatingSearchRef.current = true;
+    setFloatingSearch(getFloatingPlaceTitle(res));
+    setFloatingSelectedAddress(getFloatingPlaceAddress(res));
     setFloatingResults([]);
   };
 
@@ -3298,29 +3368,45 @@ function ReviewBoard({
               placeholder={reviewUi.searchPlaceholder}
               className="rv-search-input-field"
               value={floatingSearch}
-              onChange={e => setFloatingSearch(e.target.value)}
+              onChange={e => {
+                setFloatingSelectedAddress('');
+                setFloatingSearchDone(false);
+                setFloatingSearch(e.target.value);
+              }}
             />
             {isSearchingMap && <Loader2 size={16} className="cm-spin" color="#2752ff" />}
           </div>
+          {floatingSelectedAddress ? (
+            <div className="rv-floating-selected-address">
+              <MapPin size={13} />
+              <span>{floatingSelectedAddress}</span>
+            </div>
+          ) : null}
 
-          {floatingResults.length > 0 && (
+          {floatingResults.length > 0 ? (
             <div className="rv-floating-results">
               {floatingResults.map((res, i) => {
-                const nameKo = res.namedetails?.name || res.namedetails?.['name:ko'] || '';
-                const nameEn = res.namedetails?.['name:en'] || '';
-                const displayName = nameKo && nameEn && nameKo !== nameEn
-                  ? `${nameKo} (${nameEn})`
-                  : res.display_name;
+                const displayName = getFloatingPlaceTitle(res);
+                const address = getFloatingPlaceAddress(res);
 
                 return (
                   <div key={i} className="rv-floating-item" onClick={() => handleFloatingSelect(res)}>
                     <MapPin size={14} />
-                    <span>{displayName}</span>
+                    <span className="rv-floating-item-copy">
+                      <strong>{displayName}</strong>
+                      <small>{address}</small>
+                    </span>
                   </div>
                 );
               })}
             </div>
-          )}
+          ) : floatingSearchDone && floatingSearch.trim().length >= 2 && !isSearchingMap ? (
+            <div className="rv-floating-results rv-floating-results--empty">
+              <div className="rv-floating-empty">
+                {isKo ? '검색 결과가 없습니다.' : 'Không tìm thấy địa chỉ, thử từ khoá khác nhé.'}
+              </div>
+            </div>
+          ) : null}
         </div>
 
         {/* Map Background */}
