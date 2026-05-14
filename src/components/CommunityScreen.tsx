@@ -487,8 +487,8 @@ async function searchNaverAddressResults(query: string) {
           });
 
         // Merge, avoiding duplicates by address
-        const addressSet = new Set(results.map(r => r.formattedAddress));
-        results.push(...osmResults.filter(r => !addressSet.has(r.formattedAddress)));
+        const addressSet = new Set(results.map((r: any) => r.formattedAddress));
+        results.push(...osmResults.filter((r: any) => !addressSet.has(r.formattedAddress)));
       }
     } catch (err) {
       // Nominatim failed, return what we have from Naver
