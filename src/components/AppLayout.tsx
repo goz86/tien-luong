@@ -34,6 +34,7 @@ const REFRESH_RATE_URL = 'https://open.er-api.com/v6/latest/KRW';
 
 const ANNOUNCEMENT_HIDE_TODAY_KEY = 'duhocmate-announcement-hide-today';
 const ANNOUNCEMENT_SESSION_DISMISS_KEY = 'duhocmate-announcement-session-dismissed';
+const ANNOUNCEMENT_AUTO_DISMISS_MS = 12000;
 
 function localDateKey() {
   const date = new Date();
@@ -104,6 +105,16 @@ export default function AppLayout() {
       void client.removeChannel(channel);
     };
   }, [store.session]);
+
+  useEffect(() => {
+    if (!activeBanner) return;
+    const timer = window.setTimeout(() => {
+      sessionStorage.setItem(ANNOUNCEMENT_SESSION_DISMISS_KEY, activeBanner.id);
+      setActiveBanner((current) => (current?.id === activeBanner.id ? null : current));
+    }, ANNOUNCEMENT_AUTO_DISMISS_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [activeBanner?.id]);
 
   /* ── tab routing ── */
   const changeTab = useCallback((nextTab: Tab) => {
@@ -465,6 +476,13 @@ export default function AppLayout() {
                     <p key={`${activeBanner.id}-${index}`}>{line || '\u00a0'}</p>
                   ))}
                 </div>
+                <motion.div
+                  key={activeBanner.id}
+                  className="admin-entry-announcement-progress"
+                  initial={{ scaleX: 1 }}
+                  animate={{ scaleX: 0 }}
+                  transition={{ duration: ANNOUNCEMENT_AUTO_DISMISS_MS / 1000, ease: 'linear' }}
+                />
                 <div className="admin-entry-announcement-actions">
                   <button
                     type="button"
@@ -474,7 +492,7 @@ export default function AppLayout() {
                       setActiveBanner(null);
                     }}
                   >
-                    {store.lang === 'ko' ? '오늘 하루 보지 않기' : 'Hôm nay không xem lại'}
+                    {store.lang === 'ko' ? '오늘 하루 보지 않기' : 'không hiển thị lại'}
                   </button>
                   <button
                     type="button"

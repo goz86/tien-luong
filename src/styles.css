@@ -548,12 +548,21 @@ select {
   margin-bottom: 0;
 }
 
+.admin-entry-announcement-progress {
+  width: 100%;
+  height: 3px;
+  margin-top: 20px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #7cc8e8, #2752ff);
+  transform-origin: left center;
+}
+
 .admin-entry-announcement-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding-top: 24px;
+  padding-top: 18px;
 }
 
 .admin-entry-announcement-actions button {
@@ -1623,14 +1632,20 @@ select {
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 0;
-  padding: 16px 0 14px 0;
+  padding: 16px 16px 14px 16px;
+  margin-left: -16px;
+  margin-right: -16px;
   position: sticky;
   top: 0;
   z-index: 10000;
-  background: linear-gradient(180deg, #ffffff 0%, #f5f8ff 100%);
+  background: #ffffff;
   box-shadow: 0 4px 12px rgba(20, 45, 109, 0.08);
   border-bottom: 1px solid rgba(112, 129, 159, 0.08);
   isolation: isolate;
+}
+
+.dark .sheet-head {
+  background: var(--surface);
 }
 
 .sheet-head h3 {
@@ -1715,13 +1730,13 @@ select {
 
 .day-sheet {
   width: 100%;
-  max-height: min(74vh, 650px);
+  max-height: min(85vh, 720px);
   height: auto;
   overflow-y: auto;
   scrollbar-width: none;
   border-radius: 32px 32px 0 0;
   background: linear-gradient(180deg, #ffffff 0%, #f5f8ff 100%);
-  padding: 14px 16px calc(24px + env(safe-area-inset-bottom, 0px));
+  padding: 0 16px calc(24px + env(safe-area-inset-bottom, 0px));
   box-shadow: 0 -20px 40px rgba(20, 45, 109, 0.16);
   overscroll-behavior: contain;
 }
@@ -1735,7 +1750,7 @@ select {
   height: 5px;
   border-radius: 999px;
   background: #d8e0ee;
-  margin: 0 auto 14px;
+  margin: 14px auto 14px;
 }
 
 .preset-chip {
@@ -11295,5 +11310,342 @@ button.admin-stat-card {
   .income-snapshot-grid,
   .income-analysis-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Compact phone pass: keep the 430px composition intact on 390/375/360px screens. */
+@media (max-width: 430px) {
+  .screen-shell {
+    padding-left: max(4px, env(safe-area-inset-left));
+    padding-right: max(4px, env(safe-area-inset-right));
+  }
+
+  .cm-header {
+    padding: 14px 16px 8px;
+    gap: 10px;
+  }
+
+  .cm-wordmark {
+    min-width: 0;
+    font-size: clamp(24px, 6vw, 28px);
+    letter-spacing: -0.035em;
+    white-space: nowrap;
+  }
+
+  .cm-header-actions {
+    flex: 0 0 auto;
+    gap: 3px;
+  }
+
+  .cm-icon-btn {
+    width: 38px;
+    height: 38px;
+    border-radius: 13px;
+  }
+
+  .cm-sync-strip {
+    margin: 4px 16px 10px;
+    max-width: calc(100% - 32px);
+  }
+
+  .cm-board-tabs {
+    gap: 8px;
+    padding: 11px 16px;
+  }
+
+  .cm-board-tabs button {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 40px;
+    padding: 0 10px;
+    justify-content: center;
+    gap: 6px;
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .cm-board-tabs button svg {
+    width: 16px;
+    height: 16px;
+    flex: 0 0 auto;
+  }
+
+  .cm-trending {
+    margin: 0 16px 14px;
+    padding: 19px 18px;
+    border-radius: 19px;
+  }
+
+  .cm-trending-head {
+    margin-bottom: 13px;
+  }
+
+  .cm-trending-title {
+    font-size: 21px;
+  }
+
+  .cm-trending-post-title {
+    font-size: 16px;
+  }
+
+  .cm-trending-preview {
+    font-size: 13px;
+  }
+
+  .cm-category-tabs {
+    padding: 0 16px 11px;
+  }
+
+  .cm-category-tabs button {
+    padding: 8px 14px;
+    font-size: 12px;
+  }
+
+  .cm-post-list {
+    padding: 0 16px 118px;
+  }
+
+  .cm-post-card {
+    padding: 18px 0;
+  }
+
+  .cm-post-title {
+    font-size: 15.5px;
+  }
+
+  .cm-post-preview {
+    font-size: 13px;
+  }
+
+  .cm-fab {
+    right: max(16px, env(safe-area-inset-right));
+    bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+    padding: 13px 22px;
+    font-size: 14px;
+  }
+
+  .bottom-tabs {
+    width: min(calc(100vw - 24px), 400px);
+    bottom: 10px;
+    padding: 7px 8px calc(7px + env(safe-area-inset-bottom));
+  }
+
+  .tab-item {
+    min-height: 55px;
+    border-radius: 22px;
+    font-size: 9.5px;
+  }
+
+  .tab-icon-wrap {
+    width: 27px;
+    height: 27px;
+  }
+
+  .tab-item.active .tab-icon-wrap {
+    width: 29px;
+    height: 29px;
+  }
+
+  .rv-floating-search {
+    padding: 10px 12px 7px;
+  }
+
+  .rv-search-inner {
+    gap: 10px;
+    padding: 9px 12px;
+  }
+
+  .screen-shell:has(.rv-container) .cm-board-tabs {
+    margin-top: 54px;
+    padding: 8px 12px 9px;
+    gap: 8px;
+  }
+
+  .rv-bottom-sheet {
+    bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+    height: calc(100% - 112px);
+    max-height: calc(100% - 112px);
+  }
+
+  .rv-sheet-header {
+    padding: 11px 16px 14px;
+  }
+
+  .rv-sheet-title-row {
+    gap: 10px;
+  }
+
+  .rv-sheet-title-row > div:first-child {
+    min-width: 0;
+    flex: 1 1 auto;
+    gap: 7px !important;
+  }
+
+  .rv-sheet-title-row h3 {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 15.5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .rv-avg-score {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+    font-size: 13px;
+  }
+
+  .rv-sheet-write-btn {
+    flex: 0 0 auto;
+    padding: 6px 11px;
+    font-size: 12px;
+  }
+
+  .rv-cat-chip {
+    padding: 8px 14px;
+    font-size: 12px;
+  }
+
+  .rv-sheet-content {
+    padding: 9px 10px 112px;
+  }
+
+  .rv-item-card {
+    padding: 13px 10px 12px;
+  }
+
+  .rv-item-main {
+    gap: 8px;
+    padding-left: 28px;
+  }
+
+  .rv-item-place {
+    max-width: clamp(118px, 42vw, 168px);
+  }
+
+  .rv-item-address {
+    max-width: clamp(150px, 54vw, 210px);
+  }
+}
+
+@media (max-width: 374px) {
+  .screen-shell {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .cm-header {
+    padding: 12px 14px 7px;
+  }
+
+  .cm-wordmark {
+    font-size: 23px;
+  }
+
+  .cm-icon-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 12px;
+  }
+
+  .cm-icon-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .cm-board-tabs {
+    gap: 6px;
+    padding: 9px 12px;
+  }
+
+  .cm-board-tabs button {
+    min-height: 38px;
+    padding: 0 8px;
+    gap: 5px;
+    font-size: 12px;
+  }
+
+  .cm-board-tabs button svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .cm-trending {
+    margin-inline: 12px;
+    padding: 17px 16px;
+  }
+
+  .cm-category-tabs,
+  .cm-post-list {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .cm-post-footer,
+  .cm-trending-footer {
+    gap: 8px;
+  }
+
+  .cm-time,
+  .cm-post-stats {
+    font-size: 12px;
+  }
+
+  .cm-post-stats {
+    gap: 8px;
+  }
+
+  .bottom-tabs {
+    width: calc(100vw - 16px);
+    gap: 2px;
+    padding-inline: 6px;
+  }
+
+  .tab-item {
+    min-height: 52px;
+    gap: 3px;
+    font-size: 9px;
+  }
+
+  .tab-active-bg {
+    inset: 4px 1px;
+  }
+
+  .rv-title-marker-label {
+    width: 116px;
+    max-width: 116px;
+  }
+
+  .rv-title-marker-text {
+    max-width: 58px;
+  }
+
+  .rv-cluster-marker {
+    min-width: 78px;
+    min-height: 54px;
+  }
+
+  .rv-sheet-title-row h3 {
+    font-size: 14.5px;
+  }
+
+  .rv-avg-score {
+    font-size: 12px;
+  }
+
+  .rv-sheet-write-btn {
+    padding: 6px 9px;
+    max-width: 124px;
+    white-space: nowrap;
+  }
+
+  .rv-item-cat-label {
+    max-width: 84px;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }

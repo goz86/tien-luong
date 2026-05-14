@@ -3027,13 +3027,9 @@ function ReviewBoard({
   const handleSheetTouchMove = useCallback((event: TouchEvent<HTMLElement>) => {
     const touch = sheetTouchRef.current;
     if (!touch || touch.interactive || event.touches.length !== 1) return;
-    const deltaY = event.touches[0].clientY - touch.startY;
-    const currentScrollTop = sheetContentRef.current?.scrollTop ?? 0;
-
-    if (sheetExpanded && deltaY > 8 && touch.startScrollTop <= 2 && currentScrollTop <= 2) {
-      event.preventDefault();
-    }
-  }, [sheetExpanded]);
+    // Keep this passive-safe. The drag decision happens on pointer/framer events;
+    // calling preventDefault here makes mobile Chrome spam passive listener errors.
+  }, []);
 
   const handleSheetTouchEnd = useCallback((event: TouchEvent<HTMLElement>) => {
     const touch = sheetTouchRef.current;
@@ -3046,7 +3042,7 @@ function ReviewBoard({
     const deltaY = changedTouch ? changedTouch.clientY - touch.startY : 0;
     const elapsed = Math.max(performance.now() - touch.startTime, 1);
     const velocity = Math.abs(deltaY) / elapsed;
-    const shouldMove = Math.abs(deltaY) > 72 || velocity > 0.7;
+    const shouldMove = Math.abs(deltaY) > 118 || velocity > 1.1;
 
     if (shouldMove) {
       suppressSheetClickRef.current = true;
@@ -3235,12 +3231,12 @@ function ReviewBoard({
           className={`rv-bottom-sheet ${sheetExpanded ? 'is-expanded' : 'is-collapsed'}`}
           initial={{ y: collapsedSheetY }}
           animate={{ y: sheetExpanded ? expandedSheetY : collapsedSheetY }}
-          transition={{ type: 'spring', damping: 36, stiffness: 210, mass: 0.95 }}
+          transition={{ type: 'spring', damping: 46, stiffness: 145, mass: 1.12 }}
           drag="y"
           dragControls={dragControls}
           dragListener={false}
           dragConstraints={sheetExpanded ? { top: 0, bottom: 360 } : { top: -360, bottom: 0 }}
-          dragElastic={0}
+          dragElastic={0.035}
           dragMomentum={false}
           onPointerDownCapture={startSheetDrag}
           onTouchStart={handleSheetTouchStart}
@@ -3252,9 +3248,9 @@ function ReviewBoard({
             const dragDistance = info.offset.y;
             const dragVelocity = info.velocity.y;
 
-            if (dragDistance < -72 || dragVelocity < -520) {
+            if (dragDistance < -118 || dragVelocity < -860) {
               setSheetExpanded(true);
-            } else if (dragDistance > 58 || dragVelocity > 420) {
+            } else if (dragDistance > 102 || dragVelocity > 760) {
               setSheetExpanded(false);
             } else {
               setSheetExpanded((current) => current);
