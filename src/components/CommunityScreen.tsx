@@ -407,50 +407,96 @@ function getLocalKoreanSearchResults(query: string) {
 }
 
 async function searchNaverAddressResults(query: string) {
-  // Race against a timeout so we never hang if the SDK or geocoder is unavailable
-  let maps: any;
+  let results: any[] = [];
+
+  // 1. Try Naver Geocoding (exact addresses)
   try {
-    maps = await Promise.race([
+    const maps = await Promise.race([
       loadNaverMapsSdk(),
       new Promise<null>((_, reject) => setTimeout(() => reject(new Error('SDK timeout')), 4000)),
     ]);
-  } catch {
-    return [];
-  }
-  return new Promise<any[]>((resolve) => {
-    if (!maps?.Service?.geocode) {
-      resolve([]);
-      return;
+
+    if (maps?.Service?.geocode) {
+      const naverResults = await new Promise<any[]>((resolve) => {
+        maps.Service.geocode({ query }, (status: unknown, response: any) => {
+          const rows = (response?.v2?.addresses ?? []) as Array<{
+            x?: string;
+            y?: string;
+            roadAddress?: string;
+            jibunAddress?: string;
+            englishAddress?: string;
+          }>;
+
+          if (status !== maps.Service.Status.OK && status !== 'OK' && rows.length === 0) {
+            resolve([]);
+            return;
+          }
+
+          resolve(rows.slice(0, 5).map((row) => {
+            const rawAddress = row.jibunAddress || row.roadAddress || row.englishAddress || query;
+            const formattedAddress = compactKoreanAddress(rawAddress);
+            return {
+              source: 'naver',
+              title: buildKoreanAddressTitle(rawAddress),
+              formattedAddress,
+              display_name: formattedAddress,
+              lat: row.y,
+              lon: row.x,
+            };
+          }).filter((row) => Number.isFinite(Number(row.lat)) && Number.isFinite(Number(row.lon))));
+        });
+      });
+      results.push(...naverResults);
     }
+  } catch {
+    // Naver SDK failed or timed out
+  }
 
-    maps.Service.geocode({ query }, (status: unknown, response: any) => {
-      const rows = (response?.v2?.addresses ?? []) as Array<{
-        x?: string;
-        y?: string;
-        roadAddress?: string;
-        jibunAddress?: string;
-        englishAddress?: string;
-      }>;
+  // 2. Fallback to Nominatim OSM if we have fewer than 3 results (finds place names)
+  if (results.length < 3) {
+    try {
+      // Use fetch directly without AbortSignal for better compatibility
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
 
-      if (status !== maps.Service.Status.OK && status !== 'OK' && rows.length === 0) {
-        resolve([]);
-        return;
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&countrycodes=vn,kr`,
+        { signal: controller.signal }
+      );
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        const nominatimResults = await response.json();
+        const osmResults = nominatimResults
+          .slice(0, 5)
+          .map((item: any) => {
+            const title = item.name || (typeof item.display_name === 'string' ? item.display_name.split(',')[0] : item.display_name);
+            return {
+              source: 'nominatim',
+              title,
+              formattedAddress: item.display_name || title,
+              display_name: item.display_name,
+              lat: String(item.lat),
+              lon: String(item.lon),
+            };
+          })
+          .filter((row: any) => {
+            const lat = Number(row.lat);
+            const lon = Number(row.lon);
+            return Number.isFinite(lat) && Number.isFinite(lon);
+          });
+
+        // Merge, avoiding duplicates by address
+        const addressSet = new Set(results.map(r => r.formattedAddress));
+        results.push(...osmResults.filter(r => !addressSet.has(r.formattedAddress)));
       }
+    } catch (err) {
+      // Nominatim failed, return what we have from Naver
+      console.debug('Nominatim fallback failed:', err instanceof Error ? err.message : err);
+    }
+  }
 
-      resolve(rows.slice(0, 5).map((row) => {
-        const rawAddress = row.jibunAddress || row.roadAddress || row.englishAddress || query;
-        const formattedAddress = compactKoreanAddress(rawAddress);
-        return {
-          source: 'naver',
-          title: buildKoreanAddressTitle(rawAddress),
-          formattedAddress,
-          display_name: formattedAddress,
-          lat: row.y,
-          lon: row.x,
-        };
-      }).filter((row) => Number.isFinite(Number(row.lat)) && Number.isFinite(Number(row.lon))));
-    });
-  });
+  return results.slice(0, 5);
 }
 
 function compactProvinceLabel(value: string) {
