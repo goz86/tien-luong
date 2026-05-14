@@ -407,7 +407,16 @@ function getLocalKoreanSearchResults(query: string) {
 }
 
 async function searchNaverAddressResults(query: string) {
-  const maps = await loadNaverMapsSdk();
+  // Race against a timeout so we never hang if the SDK or geocoder is unavailable
+  let maps: any;
+  try {
+    maps = await Promise.race([
+      loadNaverMapsSdk(),
+      new Promise<null>((_, reject) => setTimeout(() => reject(new Error('SDK timeout')), 4000)),
+    ]);
+  } catch {
+    return [];
+  }
   return new Promise<any[]>((resolve) => {
     if (!maps?.Service?.geocode) {
       resolve([]);
@@ -2765,6 +2774,9 @@ function ReviewBoard({
   const [searchQuery, setSearchQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [selectedPlace, setSelectedPlace] = useState<{ name: string; address: string; lat: number; lng: number } | null>(null);
+  const [addressSuggestions, setAddressSuggestions] = useState<Array<{ title: string; formattedAddress: string; lat: string; lon: string }>>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [fetchingSuggestions, setFetchingSuggestions] = useState(false);
   const [writeCat, setWriteCat] = useState<Exclude<ReviewCategory, 'all'>>('food');
   const [writeRating, setWriteRating] = useState(0);
   const [writeTitle, setWriteTitle] = useState('');
@@ -2774,6 +2786,42 @@ function ReviewBoard({
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [isAnon, setIsAnon] = useState(false);
+
+  // Address autocomplete: debounced search as user types
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (q.length < 2) {
+      setAddressSuggestions([]);
+      setShowSuggestions(false);
+      setFetchingSuggestions(false);
+      return;
+    }
+    setFetchingSuggestions(true);
+    const timer = setTimeout(() => {
+      searchNaverAddressResults(q).then((results) => {
+        setAddressSuggestions(results);
+        setShowSuggestions(results.length > 0);
+        setFetchingSuggestions(false);
+      }).catch(() => {
+        setAddressSuggestions([]);
+        setShowSuggestions(false);
+        setFetchingSuggestions(false);
+      });
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const handleSelectSuggestion = useCallback((s: { title: string; formattedAddress: string; lat: string; lon: string }) => {
+    setSelectedPlace({
+      name: s.formattedAddress,
+      address: s.formattedAddress,
+      lat: Number(s.lat),
+      lng: Number(s.lon),
+    });
+    setSearchQuery('');
+    setAddressSuggestions([]);
+    setShowSuggestions(false);
+  }, []);
 
   // Image compression utility
   const compressImage = (file: File): Promise<Blob> => {
@@ -3600,6 +3648,8 @@ function ReviewBoard({
     setWriteTitle('');
     setWriteContent('');
     setSearchQuery('');
+    setAddressSuggestions([]);
+    setShowSuggestions(false);
     setIsAnon(false);
   };
 
@@ -3967,18 +4017,28 @@ function ReviewBoard({
                     placeholder={isKo ? '주소를 검색해주세요' : 'Tìm kiếm địa chỉ tại Hàn Quốc...'}
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
-                    onFocus={openAddressSearch}
-                    onClick={openAddressSearch}
+                    onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                    onFocus={() => { if (addressSuggestions.length > 0) setShowSuggestions(true); }}
+                    autoComplete="off"
                   />
-                  <button
-                    type="button"
-                    className="rv-postcode-btn"
-                    onClick={openAddressSearch}
-                    disabled={searching}
-                  >
-                    {searching ? <Loader2 size={16} className="cm-spin" /> : <MapPin size={16} />}
-                    <span>{isKo ? '주소 검색' : 'Tìm địa chỉ'}</span>
-                  </button>
+                  {fetchingSuggestions && <Loader2 size={15} className="cm-spin rv-suggest-spinner" />}
+                  {showSuggestions && addressSuggestions.length > 0 && (
+                    <ul className="rv-address-suggestions">
+                      {addressSuggestions.map((s, i) => (
+                        <li
+                          key={i}
+                          className="rv-address-suggestion-item"
+                          onMouseDown={() => handleSelectSuggestion(s)}
+                        >
+                          <MapPin size={14} className="rv-suggest-pin" />
+                          <div className="rv-suggest-texts">
+                            <span className="rv-suggest-title">{s.title}</span>
+                            <span className="rv-suggest-addr">{s.formattedAddress}</span>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               )}
             </div>
