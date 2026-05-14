@@ -48,6 +48,29 @@ type DbNotification = {
   created_at: string | null;
 };
 
+const REQUIRED_QUERY_TIMEOUT_MS = 9000;
+const OPTIONAL_QUERY_TIMEOUT_MS = 4200;
+
+async function withQueryTimeout<T>(query: PromiseLike<T>, timeoutMs: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out`)), timeoutMs);
+  });
+
+  return Promise.race([Promise.resolve(query), timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
+async function optionalQuery<T>(query: PromiseLike<unknown>, fallback: T, label: string): Promise<T> {
+  try {
+    return await withQueryTimeout(query, OPTIONAL_QUERY_TIMEOUT_MS, label) as T;
+  } catch (error) {
+    console.warn(label, error);
+    return fallback;
+  }
+}
+
 export type CommunityState = {
   posts: CommunityPost[];
   comments: CommunityComment[];
@@ -148,11 +171,15 @@ export async function loadCommunityState(userId?: string): Promise<CommunityStat
   if (!canUseSupabase()) return emptyState();
   const client = supabase!;
 
-  const { data: postRows, error: postsError } = await client
-    .from('community_posts')
-    .select('id,user_id,category,title,content,is_anonymous,display_name,likes_count,dislikes_count,comments_count,views_count,created_at')
-    .order('created_at', { ascending: false })
-    .limit(50);
+  const { data: postRows, error: postsError } = await withQueryTimeout(
+    client
+      .from('community_posts')
+      .select('id,user_id,category,title,content,is_anonymous,display_name,likes_count,dislikes_count,comments_count,views_count,created_at')
+      .order('created_at', { ascending: false })
+      .limit(50),
+    REQUIRED_QUERY_TIMEOUT_MS,
+    'loadCommunityState posts',
+  );
 
   if (postsError) {
     console.error('loadCommunityState posts', postsError);
@@ -162,10 +189,14 @@ export async function loadCommunityState(userId?: string): Promise<CommunityStat
   let posts = (postRows as DbPost[] | null)?.map(normalizePost) ?? [];
 
   if (posts.length > 0) {
-    const { data: countRows, error: countError } = await client
-      .from('community_comments')
-      .select('post_id')
-      .in('post_id', posts.map((post) => post.id));
+    const { data: countRows, error: countError } = await optionalQuery(
+      client
+        .from('community_comments')
+        .select('post_id')
+        .in('post_id', posts.map((post) => post.id)),
+      { data: null, error: null },
+      'loadCommunityState comment counts',
+    );
 
     if (!countError && countRows) {
       const actualCounts = new Map<string, number>();
@@ -189,14 +220,26 @@ export async function loadCommunityState(userId?: string): Promise<CommunityStat
 
   if (userId) {
     const [{ data: likeRows }, { data: bookmarkRows }, { data: notificationRows }] = await Promise.all([
-      client.from('community_likes').select('post_id, comment_id, is_like').eq('user_id', userId),
-      client.from('community_bookmarks').select('post_id').eq('user_id', userId),
-      client
-        .from('community_notifications')
-        .select('*')
-        .eq('recipient_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(20),
+      optionalQuery(
+        client.from('community_likes').select('post_id, comment_id, is_like').eq('user_id', userId),
+        { data: null, error: null },
+        'loadCommunityState likes',
+      ),
+      optionalQuery(
+        client.from('community_bookmarks').select('post_id').eq('user_id', userId),
+        { data: null, error: null },
+        'loadCommunityState bookmarks',
+      ),
+      optionalQuery(
+        client
+          .from('community_notifications')
+          .select('*')
+          .eq('recipient_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(20),
+        { data: null, error: null },
+        'loadCommunityState notifications',
+      ),
     ]);
 
     const reactions = (likeRows as Array<{ post_id: string | null; comment_id: string | null; is_like: boolean | null }> | null) ?? [];
