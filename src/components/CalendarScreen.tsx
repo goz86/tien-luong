@@ -820,10 +820,14 @@ export function CalendarScreen({
                     <span className="field-label">{ui.hourlyWage}</span>
                     <div className="settings-select-wrap">
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="numeric"
                         className="premium-input"
-                        value={draft.hourlyWage}
-                        onChange={(event) => setDraft({ ...draft, hourlyWage: Number(event.target.value) })}
+                        value={draft.hourlyWage ? draft.hourlyWage.toLocaleString('en-US') : ''}
+                        onChange={(event) => {
+                          const val = event.target.value.replace(/\D/g, '');
+                          setDraft({ ...draft, hourlyWage: val ? Number(val) : 0 });
+                        }}
                       />
                       <span className="input-unit">KRW</span>
                     </div>
@@ -885,10 +889,14 @@ export function CalendarScreen({
                     <strong style={{ fontSize: '14px', color: '#08162b' }}>{ui.holiday}</strong>
                     <div className="settings-select-wrap">
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="numeric"
                         className="premium-input"
-                        value={draft.holidayAllowance || ''}
-                        onChange={(event) => setDraft({ ...draft, holidayAllowance: Number(event.target.value) })}
+                        value={draft.holidayAllowance ? draft.holidayAllowance.toLocaleString('en-US') : ''}
+                        onChange={(event) => {
+                          const val = event.target.value.replace(/\D/g, '');
+                          setDraft({ ...draft, holidayAllowance: val ? Number(val) : 0 });
+                        }}
                         placeholder={ui.holidayPlaceholder}
                       />
                       <span style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', color: '#657080', fontSize: '13px', fontWeight: 700 }}>KRW</span>

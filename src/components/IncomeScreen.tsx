@@ -165,7 +165,7 @@ export function IncomeScreen({
     goalDone: 'Bạn đã vượt mục tiêu tháng này.',
     incomeTabs: 'Mục thu nhập',
     weeklyRhythm: 'Nhịp làm việc tuần này',
-    weeklyIncome: 'Thu theo ngày trong tuần',
+    weeklyIncome: 'Thu nhập theo ngày trong tuần',
     monthOverview: 'Tổng quan tháng',
     monthIncome: (days: number) => `Thu nhập ${days} ngày`,
     prevMonth: 'Tháng trước',
@@ -502,7 +502,16 @@ export function IncomeScreen({
             <span>{ui.monthlyGoal}</span>
             {isEditingTarget ? (
               <div className="income-target-edit">
-                <input type="number" value={tempTarget} onChange={(event) => setTempTarget(event.target.value)} autoFocus />
+                <input 
+                  type="text" 
+                  inputMode="numeric"
+                  value={tempTarget ? Number(tempTarget).toLocaleString('en-US') : ''} 
+                  onChange={(event) => {
+                    const val = event.target.value.replace(/\D/g, '');
+                    setTempTarget(val);
+                  }} 
+                  autoFocus 
+                />
                 <button type="button" onClick={handleSaveTarget} aria-label={ui.saveGoal}>
                   <Check size={18} />
                 </button>
@@ -742,10 +751,14 @@ export function IncomeScreen({
                 <label>
                   <span>{ui.amount}</span>
                   <input
-                    type="number"
-                    value={expenseForm.amount || ''}
+                    type="text"
+                    inputMode="numeric"
+                    value={expenseForm.amount ? expenseForm.amount.toLocaleString('en-US') : ''}
                     placeholder="0"
-                    onChange={(event) => setExpenseForm({ ...expenseForm, amount: Number(event.target.value) })}
+                    onChange={(event) => {
+                      const val = event.target.value.replace(/\D/g, '');
+                      setExpenseForm({ ...expenseForm, amount: val ? Number(val) : 0 });
+                    }}
                   />
                 </label>
                 <label>

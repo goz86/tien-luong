@@ -2799,7 +2799,6 @@ button.ticker-inner {
   color: var(--text-main);
   font-size: 22px;
   line-height: 1.14;
-  letter-spacing: 0;
   font-weight: 900;
 }
 
