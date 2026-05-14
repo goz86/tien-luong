@@ -451,6 +451,11 @@ select {
   overflow: hidden;
 }
 
+.phone-shell:has(.rv-container) {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 .phone-shell:has(.chat-view-container) .bottom-tabs {
   display: none;
 }
@@ -8928,6 +8933,19 @@ button.ticker-inner {
 
 .rv-write-section {
   margin-bottom: 24px;
+}
+
+.rv-write-section .rv-cat-chips {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 2px 0 8px;
+  scrollbar-width: none;
+}
+
+.rv-write-section .rv-cat-chips::-webkit-scrollbar {
+  display: none;
 }
 
 .rv-write-label {

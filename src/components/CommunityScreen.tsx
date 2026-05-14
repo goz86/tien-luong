@@ -308,6 +308,7 @@ function escapeRegExp(value: string) {
 }
 
 function getFloatingPlaceTitle(result: any) {
+  if (result?.title) return String(result.title);
   const nameKo = result?.namedetails?.name || result?.namedetails?.['name:ko'] || '';
   const nameEn = result?.namedetails?.['name:en'] || '';
   if (nameKo && nameEn && nameKo !== nameEn) return `${nameKo} (${nameEn})`;
@@ -316,10 +317,131 @@ function getFloatingPlaceTitle(result: any) {
 }
 
 function getFloatingPlaceAddress(result: any) {
+  if (result?.formattedAddress) return String(result.formattedAddress);
   const displayName = String(result?.display_name || '').trim();
   const title = getFloatingPlaceTitle(result);
   if (!displayName) return title;
   return displayName.replace(new RegExp(`^${escapeRegExp(title)}\\s*,\\s*`, 'i'), '').trim() || displayName;
+}
+
+function compactKoreanAddress(address: string) {
+  return address
+    .replace(/^대한민국\s+/, '')
+    .replace(/^서울특별시\s+/, '서울 ')
+    .replace(/^부산광역시\s+/, '부산 ')
+    .replace(/^대구광역시\s+/, '대구 ')
+    .replace(/^인천광역시\s+/, '인천 ')
+    .replace(/^광주광역시\s+/, '광주 ')
+    .replace(/^대전광역시\s+/, '대전 ')
+    .replace(/^울산광역시\s+/, '울산 ')
+    .replace(/^세종특별자치시\s+/, '세종 ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildKoreanAddressTitle(address: string) {
+  const compact = compactKoreanAddress(address);
+  const parts = compact.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return parts.slice(-2).join(' ');
+  return compact;
+}
+
+function extractKoreanAddressTail(query: string) {
+  const match = query.match(/([가-힣]+(?:동|읍|면|리|가))\s*([0-9]+(?:-[0-9]+)?)/);
+  return match ? `${match[1]} ${match[2]}` : '';
+}
+
+function formatOsmKoreanAddress(result: any) {
+  const address = result?.address || {};
+  const city = address.city || address.state || address.province || '';
+  const district = address.borough || address.city_district || address.county || '';
+  const town = address.suburb || address.town || address.village || address.neighbourhood || '';
+  const road = address.road || address.pedestrian || '';
+  const houseNumber = address.house_number || '';
+  const postcode = address.postcode || '';
+  const parts = [city, district, town, road, houseNumber].filter(Boolean);
+  const formatted = compactKoreanAddress(parts.join(' '));
+  const title = [road || town || district, houseNumber || postcode].filter(Boolean).join(' ');
+  return {
+    title: title || buildKoreanAddressTitle(formatted || String(result?.display_name || '')),
+    formattedAddress: formatted || String(result?.display_name || ''),
+  };
+}
+
+function getLocalKoreanSearchResults(query: string) {
+  const normalized = query.trim().toLowerCase();
+  const candidates = [
+    {
+      keywords: ['seoul', '서울', '서울시', '서울특별시'],
+      title: '서울',
+      formattedAddress: '서울특별시',
+      lat: 37.5665,
+      lon: 126.978,
+    },
+    {
+      keywords: ['gangnam', '강남', '강남구'],
+      title: '강남구',
+      formattedAddress: '서울 강남구',
+      lat: 37.5172,
+      lon: 127.0473,
+    },
+    {
+      keywords: ['nowon', '노원', '노원구'],
+      title: '노원구',
+      formattedAddress: '서울 노원구',
+      lat: 37.6542,
+      lon: 127.0568,
+    },
+  ];
+
+  return candidates
+    .filter((item) => item.keywords.some((keyword) => normalized.includes(keyword)))
+    .map((item) => ({
+      source: 'local',
+      title: item.title,
+      formattedAddress: item.formattedAddress,
+      display_name: item.formattedAddress,
+      lat: String(item.lat),
+      lon: String(item.lon),
+    }));
+}
+
+async function searchNaverAddressResults(query: string) {
+  const maps = await loadNaverMapsSdk();
+  return new Promise<any[]>((resolve) => {
+    if (!maps?.Service?.geocode) {
+      resolve([]);
+      return;
+    }
+
+    maps.Service.geocode({ query }, (status: unknown, response: any) => {
+      const rows = (response?.v2?.addresses ?? []) as Array<{
+        x?: string;
+        y?: string;
+        roadAddress?: string;
+        jibunAddress?: string;
+        englishAddress?: string;
+      }>;
+
+      if (status !== maps.Service.Status.OK && status !== 'OK' && rows.length === 0) {
+        resolve([]);
+        return;
+      }
+
+      resolve(rows.slice(0, 5).map((row) => {
+        const rawAddress = row.jibunAddress || row.roadAddress || row.englishAddress || query;
+        const formattedAddress = compactKoreanAddress(rawAddress);
+        return {
+          source: 'naver',
+          title: buildKoreanAddressTitle(rawAddress),
+          formattedAddress,
+          display_name: formattedAddress,
+          lat: row.y,
+          lon: row.x,
+        };
+      }).filter((row) => Number.isFinite(Number(row.lat)) && Number.isFinite(Number(row.lon))));
+    });
+  });
 }
 
 function compactProvinceLabel(value: string) {
@@ -2738,13 +2860,37 @@ function ReviewBoard({
   // Fetch reviews
   useEffect(() => {
     if (!supabase) { setLoading(false); return; }
-    supabase.from('place_reviews')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        if (data) setReviews(data as PlaceReview[]);
-        setLoading(false);
+    let cancelled = false;
+    setLoading(true);
+
+    withTimeout(
+      supabase.from('place_reviews')
+        .select('*')
+        .order('created_at', { ascending: false }) as unknown as Promise<{ data: PlaceReview[] | null; error: unknown }>,
+      COMMUNITY_LOAD_TIMEOUT_MS,
+      'Place reviews load timed out',
+    )
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          console.warn('Unable to load place reviews:', error);
+          setReviews([]);
+          return;
+        }
+        setReviews(data ?? []);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.warn('Unable to load place reviews:', error);
+        setReviews([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -3202,9 +3348,12 @@ function ReviewBoard({
     const currentScrollTop = event.currentTarget.scrollTop;
 
     if (!drag.active) {
-      if (deltaY <= 10 || Math.abs(deltaY) <= Math.abs(deltaX) || drag.startScrollTop > 2 || currentScrollTop > 2) {
+      if (deltaY <= 10 || Math.abs(deltaY) <= Math.abs(deltaX) || currentScrollTop > 2) {
         return;
       }
+      drag.startY = event.clientY;
+      drag.originY = sheetY.get();
+      drag.startTime = performance.now();
       drag.active = true;
       event.currentTarget.classList.add('is-sheet-dragging');
       event.currentTarget.setPointerCapture?.(event.pointerId);
@@ -3257,20 +3406,51 @@ function ReviewBoard({
       setIsSearchingMap(true);
       setFloatingSearchDone(false);
       try {
+        const localResults = getLocalKoreanSearchResults(query);
+        if (localResults.length > 0) {
+          setFloatingResults(localResults);
+          return;
+        }
+
+        const naverResults = await withTimeout(searchNaverAddressResults(query), FLOATING_SEARCH_TIMEOUT_MS, 'Naver search timed out');
+        if (naverResults.length > 0) {
+          setFloatingResults(naverResults);
+          return;
+        }
+
         const abortTimer = window.setTimeout(() => controller.abort(), FLOATING_SEARCH_TIMEOUT_MS);
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&namedetails=1&limit=5&countrycodes=kr`, {
-          headers: {
-            'Accept-Language': 'ko,en;q=0.9',
-          },
-          signal: controller.signal,
-        });
-        window.clearTimeout(abortTimer);
-        const data = await res.json();
-        if (Array.isArray(data)) {
-          setFloatingResults(data);
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&namedetails=1&limit=5&countrycodes=kr`, {
+            headers: {
+              'Accept-Language': 'ko,en;q=0.9',
+            },
+            signal: controller.signal,
+          });
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            const addressTail = extractKoreanAddressTail(query);
+            setFloatingResults(data.map((row) => {
+              const formatted = formatOsmKoreanAddress(row);
+              if (!addressTail) {
+                return { ...row, ...formatted };
+              }
+              const cityDistrict = compactKoreanAddress([
+                row?.address?.city || row?.address?.state || row?.address?.province || '',
+                row?.address?.borough || row?.address?.city_district || row?.address?.county || '',
+              ].filter(Boolean).join(' '));
+              return {
+                ...row,
+                title: addressTail,
+                formattedAddress: [cityDistrict, addressTail].filter(Boolean).join(' '),
+              };
+            }));
+          }
+        } finally {
+          window.clearTimeout(abortTimer);
         }
       } catch (err) {
-        if (!(err instanceof DOMException && err.name === 'AbortError')) {
+        const isExpectedTimeout = err instanceof Error && err.message.toLowerCase().includes('timed out');
+        if (!(err instanceof DOMException && err.name === 'AbortError') && !isExpectedTimeout) {
           console.error('Search error:', err);
         }
         setFloatingResults([]);
@@ -3383,7 +3563,7 @@ function ReviewBoard({
             </div>
           ) : null}
 
-          {floatingResults.length > 0 ? (
+          {!isWriting && floatingResults.length > 0 ? (
             <div className="rv-floating-results">
               {floatingResults.map((res, i) => {
                 const displayName = getFloatingPlaceTitle(res);
@@ -3400,7 +3580,7 @@ function ReviewBoard({
                 );
               })}
             </div>
-          ) : floatingSearchDone && floatingSearch.trim().length >= 2 && !isSearchingMap ? (
+          ) : !isWriting && floatingSearchDone && floatingSearch.trim().length >= 2 && !isSearchingMap ? (
             <div className="rv-floating-results rv-floating-results--empty">
               <div className="rv-floating-empty">
                 {isKo ? '검색 결과가 없습니다.' : 'Không tìm thấy địa chỉ, thử từ khoá khác nhé.'}
@@ -3478,6 +3658,8 @@ function ReviewBoard({
                 onPointerDown={(event) => event.stopPropagation()}
                 onClick={(event) => {
                   event.stopPropagation();
+                  setFloatingResults([]);
+                  setFloatingSearchDone(false);
                   setIsWriting(true);
                 }}
               >
