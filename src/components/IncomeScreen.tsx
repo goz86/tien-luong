@@ -528,7 +528,6 @@ export function IncomeScreen({
                 <span key={i} className={`iga-p iga-p${i}`}>{e}</span>
               ))}
             </div>
-            <Sparkles size={16} />
             <span>{ui.goalDone}</span>
           </div>
         )}
