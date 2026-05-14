@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent, type TouchEvent } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from 'react';
 import {
   ArrowLeft,
   Bell,
@@ -29,7 +29,7 @@ import {
   MessageSquare,
   Navigation,
 } from 'lucide-react';
-import { motion, AnimatePresence, useDragControls } from 'framer-motion';
+import { motion, AnimatePresence, animate, useDragControls, useMotionValue } from 'framer-motion';
 import type { Session } from '@supabase/supabase-js';
 import type { CompanionProfile } from '../lib/types';
 import { supabase } from '../lib/supabase';
@@ -2994,16 +2994,55 @@ function ReviewBoard({
   const [userPos, setUserPos] = useState<[number, number] | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const reviewRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const sheetRef = useRef<HTMLDivElement | null>(null);
   const sheetContentRef = useRef<HTMLDivElement | null>(null);
-  const sheetTouchRef = useRef<{
-    startY: number;
-    startTime: number;
-    startScrollTop: number;
-    interactive: boolean;
-  } | null>(null);
-  const suppressSheetClickRef = useRef(false);
   const mapRef = useRef<ReviewMapHandle | null>(null);
   const dragControls = useDragControls();
+  const sheetY = useMotionValue(520);
+  const [sheetBounds, setSheetBounds] = useState({ expanded: 86, collapsed: 520 });
+
+  const measureSheetBounds = useCallback(() => {
+    const sheetHeight = sheetRef.current?.offsetHeight || 0;
+    if (!sheetHeight) return;
+    const nextBounds = {
+      expanded: 86,
+      collapsed: Math.max(210, sheetHeight - 188),
+    };
+
+    setSheetBounds((current) => {
+      if (current.expanded === nextBounds.expanded && current.collapsed === nextBounds.collapsed) {
+        return current;
+      }
+      return nextBounds;
+    });
+  }, []);
+
+  useEffect(() => {
+    measureSheetBounds();
+    const target = sheetRef.current;
+    const observer = typeof ResizeObserver !== 'undefined' && target
+      ? new ResizeObserver(measureSheetBounds)
+      : null;
+    observer?.observe(target!);
+    window.addEventListener('resize', measureSheetBounds);
+
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', measureSheetBounds);
+    };
+  }, [measureSheetBounds]);
+
+  useEffect(() => {
+    const controls = animate(sheetY, sheetExpanded ? sheetBounds.expanded : sheetBounds.collapsed, {
+      type: 'spring',
+      damping: 42,
+      stiffness: 150,
+      mass: 1.05,
+    });
+
+    return () => controls.stop();
+  }, [sheetBounds, sheetExpanded, sheetY]);
+
   const startSheetDrag = useCallback((event: PointerEvent) => {
     const target = event.target as HTMLElement;
     if (target.closest('button, input, textarea, select, a, img')) return;
@@ -3011,58 +3050,6 @@ function ReviewBoard({
     if (sheetExpanded && content && content.scrollTop > 2) return;
     dragControls.start(event);
   }, [dragControls, sheetExpanded]);
-
-  const handleSheetTouchStart = useCallback((event: TouchEvent<HTMLElement>) => {
-    if (event.touches.length !== 1) return;
-    const target = event.target as HTMLElement;
-    const content = target.closest('.rv-sheet-content') as HTMLElement | null;
-    sheetTouchRef.current = {
-      startY: event.touches[0].clientY,
-      startTime: performance.now(),
-      startScrollTop: content?.scrollTop ?? sheetContentRef.current?.scrollTop ?? 0,
-      interactive: Boolean(target.closest('input, textarea, select, a, img')),
-    };
-  }, []);
-
-  const handleSheetTouchMove = useCallback((event: TouchEvent<HTMLElement>) => {
-    const touch = sheetTouchRef.current;
-    if (!touch || touch.interactive || event.touches.length !== 1) return;
-    // Keep this passive-safe. The drag decision happens on pointer/framer events;
-    // calling preventDefault here makes mobile Chrome spam passive listener errors.
-  }, []);
-
-  const handleSheetTouchEnd = useCallback((event: TouchEvent<HTMLElement>) => {
-    const touch = sheetTouchRef.current;
-    if (!touch || touch.interactive) {
-      sheetTouchRef.current = null;
-      return;
-    }
-
-    const changedTouch = event.changedTouches[0];
-    const deltaY = changedTouch ? changedTouch.clientY - touch.startY : 0;
-    const elapsed = Math.max(performance.now() - touch.startTime, 1);
-    const velocity = Math.abs(deltaY) / elapsed;
-    const shouldMove = Math.abs(deltaY) > 118 || velocity > 1.1;
-
-    if (shouldMove) {
-      suppressSheetClickRef.current = true;
-      window.setTimeout(() => { suppressSheetClickRef.current = false; }, 0);
-      if (deltaY < 0) {
-        setSheetExpanded(true);
-      } else if (touch.startScrollTop <= 2) {
-        setSheetExpanded(false);
-      }
-    }
-
-    sheetTouchRef.current = null;
-  }, []);
-
-  const handleSheetClickCapture = useCallback((event: ReactMouseEvent<HTMLElement>) => {
-    if (!suppressSheetClickRef.current) return;
-    event.preventDefault();
-    event.stopPropagation();
-    suppressSheetClickRef.current = false;
-  }, []);
 
   // Search logic for floating bar
   useEffect(() => {
@@ -3136,9 +3123,6 @@ function ReviewBoard({
     });
     return Object.values(groups);
   }, [filtered]);
-  const collapsedSheetY = 'calc(100% - 188px)';
-  const expandedSheetY = '86px';
-
   const closeWriter = () => {
     setIsWriting(false);
     setSelectedPlace(null);
@@ -3228,32 +3212,29 @@ function ReviewBoard({
 
         {/* Bottom Sheet Review List */}
         <motion.div
+          ref={sheetRef}
           className={`rv-bottom-sheet ${sheetExpanded ? 'is-expanded' : 'is-collapsed'}`}
-          initial={{ y: collapsedSheetY }}
-          animate={{ y: sheetExpanded ? expandedSheetY : collapsedSheetY }}
-          transition={{ type: 'spring', damping: 46, stiffness: 145, mass: 1.12 }}
+          style={{ y: sheetY }}
           drag="y"
           dragControls={dragControls}
           dragListener={false}
-          dragConstraints={sheetExpanded ? { top: 0, bottom: 360 } : { top: -360, bottom: 0 }}
-          dragElastic={0.035}
+          dragConstraints={{ top: sheetBounds.expanded, bottom: sheetBounds.collapsed }}
+          dragElastic={0.02}
           dragMomentum={false}
           onPointerDownCapture={startSheetDrag}
-          onTouchStart={handleSheetTouchStart}
-          onTouchMove={handleSheetTouchMove}
-          onTouchEnd={handleSheetTouchEnd}
-          onTouchCancel={() => { sheetTouchRef.current = null; }}
-          onClickCapture={handleSheetClickCapture}
           onDragEnd={(_, info) => {
-            const dragDistance = info.offset.y;
+            const currentY = sheetY.get();
+            const midpoint = sheetBounds.expanded + ((sheetBounds.collapsed - sheetBounds.expanded) * 0.52);
             const dragVelocity = info.velocity.y;
 
-            if (dragDistance < -118 || dragVelocity < -860) {
+            if (dragVelocity < -760) {
               setSheetExpanded(true);
-            } else if (dragDistance > 102 || dragVelocity > 760) {
+            } else if (dragVelocity > 720) {
               setSheetExpanded(false);
+            } else if (currentY < midpoint) {
+              setSheetExpanded(true);
             } else {
-              setSheetExpanded((current) => current);
+              setSheetExpanded(false);
             }
           }}
         >
