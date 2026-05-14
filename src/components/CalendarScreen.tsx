@@ -159,7 +159,7 @@ export function CalendarScreen({
     holiday: 'Phụ cấp nghỉ / Cuối tuần (주휴수당)',
     holidayPlaceholder: 'Nhập số tiền phụ cấp (nếu có)',
     saveChanges: 'Lưu thay đổi',
-    saveShift: 'Lưu ca cho ngày này',
+    saveShift: 'Lưu',
     deleteTitle: 'Xác nhận',
     deleteBody: 'Bạn có chắc chắn muốn xoá ca làm việc này không? Dữ liệu đã xoá sẽ không thể khôi phục.',
     datePicker: 'Chọn ngày',
