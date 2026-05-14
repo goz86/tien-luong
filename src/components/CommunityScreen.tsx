@@ -166,6 +166,13 @@ type ReviewPlaceGroup = {
   reviews: PlaceReview[];
 };
 
+type ReviewMapMarkerGroup = ReviewPlaceGroup & {
+  markerType: 'place' | 'cluster';
+  label: string;
+  count: number;
+  clusterLevel?: 'province' | 'district';
+};
+
 type ReviewMapHandle = {
   setView: (center: [number, number], zoom?: number) => void;
   zoomIn: () => void;
@@ -227,6 +234,21 @@ function buildReviewMarkerHtml(reviews: PlaceReview[], isSelected: boolean) {
   </div>`;
 }
 
+function buildReviewClusterMarkerHtml(group: ReviewMapMarkerGroup) {
+  const label = escapeHtml(group.label);
+  const targetZoom = group.clusterLevel === 'province' ? 11 : 14;
+
+  return `<div
+    class="rv-cluster-marker rv-cluster-marker--${group.clusterLevel || 'district'}"
+    data-cluster-lat="${group.lat}"
+    data-cluster-lng="${group.lng}"
+    data-cluster-zoom="${targetZoom}"
+  >
+    <span>${label}</span>
+    <strong>${group.count}</strong>
+  </div>`;
+}
+
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, '&amp;')
@@ -234,6 +256,99 @@ function escapeHtml(value: string) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+function normalizeReviewPlaceKey(group: ReviewPlaceGroup) {
+  const name = (group.name || group.reviews[0]?.place_name || '').trim().toLowerCase();
+  return `${group.lat.toFixed(4)}_${group.lng.toFixed(4)}_${name}`;
+}
+
+function getRegionParts(review: PlaceReview) {
+  const raw = `${review.place_address || ''}, ${review.place_name || ''}`;
+  return raw
+    .split(/[,\n]/)
+    .flatMap((part) => part.split(/\s+/))
+    .map((part) => part.trim())
+    .filter((part) => part && part !== '대한민국' && !/^\d/.test(part));
+}
+
+function compactProvinceLabel(value: string) {
+  return value
+    .replace(/특별자치도$/, '')
+    .replace(/특별자치시$/, '')
+    .replace(/특별시$/, '')
+    .replace(/광역시$/, '')
+    .replace(/자치도$/, '')
+    .replace(/도$/, '')
+    .replace(/시$/, '');
+}
+
+function getReviewRegionLabel(review: PlaceReview, level: 'province' | 'district') {
+  const parts = getRegionParts(review);
+  const province = parts.find((part) => /(특별시|광역시|특별자치시|특별자치도|자치도|도|시)$/.test(part));
+
+  if (level === 'province') {
+    return province ? compactProvinceLabel(province) : compactProvinceLabel(parts[0] || review.place_name || '기타');
+  }
+
+  const district = parts.find((part) => /(구|군|시)$/.test(part) && part !== province);
+  return district || province || parts[0] || review.place_name || '기타';
+}
+
+function buildReviewMapMarkerGroups(groups: ReviewPlaceGroup[], zoom: number): ReviewMapMarkerGroup[] {
+  if (zoom >= 14) {
+    return groups.map((group) => ({
+      ...group,
+      markerType: 'place',
+      label: group.reviews[0]?.title || group.name,
+      count: group.reviews.length,
+    }));
+  }
+
+  const clusterLevel: 'province' | 'district' = zoom >= 10 ? 'district' : 'province';
+  const clusters = new Map<string, {
+    latTotal: number;
+    lngTotal: number;
+    places: Set<string>;
+    reviews: PlaceReview[];
+    label: string;
+  }>();
+
+  groups.forEach((group) => {
+    const firstReview = group.reviews[0];
+    if (!firstReview) return;
+    const label = getReviewRegionLabel(firstReview, clusterLevel);
+    const key = `${clusterLevel}:${label}`;
+    const existing = clusters.get(key) || {
+      latTotal: 0,
+      lngTotal: 0,
+      places: new Set<string>(),
+      reviews: [],
+      label,
+    };
+    const placeKey = normalizeReviewPlaceKey(group);
+    if (!existing.places.has(placeKey)) {
+      existing.latTotal += group.lat;
+      existing.lngTotal += group.lng;
+      existing.places.add(placeKey);
+    }
+    existing.reviews.push(...group.reviews);
+    clusters.set(key, existing);
+  });
+
+  return [...clusters.entries()].map(([key, cluster]) => {
+    const count = Math.max(cluster.places.size, 1);
+    return {
+      lat: cluster.latTotal / count,
+      lng: cluster.lngTotal / count,
+      name: cluster.label,
+      reviews: cluster.reviews,
+      markerType: 'cluster',
+      clusterLevel,
+      label: cluster.label,
+      count,
+    };
+  });
 }
 
 function detachNaverMarker(marker: any) {
@@ -259,21 +374,7 @@ const NaverReviewMap = forwardRef<ReviewMapHandle, {
   const userMarkerRef = useRef<any>(null);
   const hasFitOnce = useRef(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const handleMarkerDomClick = (event: MouseEvent) => {
-      const target = event.target as HTMLElement | null;
-      const marker = target?.closest?.('.rv-title-marker') as HTMLElement | null;
-      const reviewId = marker?.dataset.reviewId;
-      if (!reviewId) return;
-      event.preventDefault();
-      event.stopPropagation();
-      onMarkerClick(reviewId);
-    };
-
-    document.addEventListener('click', handleMarkerDomClick, true);
-    return () => document.removeEventListener('click', handleMarkerDomClick, true);
-  }, [onMarkerClick]);
+  const [zoomLevel, setZoomLevel] = useState(12);
 
   const pushBounds = useCallback(() => {
     const maps = mapsRef.current;
@@ -291,6 +392,46 @@ const NaverReviewMap = forwardRef<ReviewMapHandle, {
     });
   }, [onBoundsChange]);
 
+  const syncZoomLevel = useCallback(() => {
+    const nextZoom = Number(mapRef.current?.getZoom?.() || 12);
+    setZoomLevel((current) => (current === nextZoom ? current : nextZoom));
+  }, []);
+
+  useEffect(() => {
+    const handleMarkerDomClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      const cluster = target?.closest?.('.rv-cluster-marker') as HTMLElement | null;
+      if (cluster) {
+        const maps = mapsRef.current;
+        const map = mapRef.current;
+        const lat = Number(cluster.dataset.clusterLat);
+        const lng = Number(cluster.dataset.clusterLng);
+        const targetZoom = Number(cluster.dataset.clusterZoom || 14);
+        if (maps && map && Number.isFinite(lat) && Number.isFinite(lng)) {
+          event.preventDefault();
+          event.stopPropagation();
+          map.setCenter(new maps.LatLng(lat, lng));
+          map.setZoom(Math.max(Number(map.getZoom?.() || 12) + 1, targetZoom));
+          window.setTimeout(() => {
+            syncZoomLevel();
+            pushBounds();
+          }, 180);
+        }
+        return;
+      }
+
+      const marker = target?.closest?.('.rv-title-marker') as HTMLElement | null;
+      const reviewId = marker?.dataset.reviewId;
+      if (!reviewId) return;
+      event.preventDefault();
+      event.stopPropagation();
+      onMarkerClick(reviewId);
+    };
+
+    document.addEventListener('click', handleMarkerDomClick, true);
+    return () => document.removeEventListener('click', handleMarkerDomClick, true);
+  }, [onMarkerClick, pushBounds, syncZoomLevel]);
+
   useEffect(() => {
     let disposed = false;
 
@@ -307,9 +448,16 @@ const NaverReviewMap = forwardRef<ReviewMapHandle, {
           mapDataControl: false,
         });
         mapRef.current = map;
+        setZoomLevel(Number(map.getZoom?.() || 12));
         listenersRef.current = [
-          maps.Event.addListener(map, 'idle', pushBounds),
-          maps.Event.addListener(map, 'zoom_changed', pushBounds),
+          maps.Event.addListener(map, 'idle', () => {
+            syncZoomLevel();
+            pushBounds();
+          }),
+          maps.Event.addListener(map, 'zoom_changed', () => {
+            syncZoomLevel();
+            pushBounds();
+          }),
         ];
         window.setTimeout(pushBounds, 150);
         window.setTimeout(() => {
@@ -340,7 +488,7 @@ const NaverReviewMap = forwardRef<ReviewMapHandle, {
       markersRef.current = [];
       mapRef.current = null;
     };
-  }, [pushBounds]);
+  }, [pushBounds, syncZoomLevel]);
 
   useImperativeHandle(ref, () => ({
     setView(center, zoom) {
@@ -371,15 +519,17 @@ const NaverReviewMap = forwardRef<ReviewMapHandle, {
     if (!maps || !map) return;
 
     markersRef.current.forEach(detachNaverMarker);
-    markersRef.current = groups.map((group) => {
+    const markerGroups = buildReviewMapMarkerGroups(groups, zoomLevel);
+    markersRef.current = markerGroups.map((group) => {
+      const isCluster = group.markerType === 'cluster';
       const isSelected = group.reviews.some((review) => review.id === selectedReviewId);
       const marker = new maps.Marker({
         position: new maps.LatLng(group.lat, group.lng),
         map,
         icon: {
-          content: buildReviewMarkerHtml(group.reviews, isSelected),
-          size: new maps.Size(172, 54),
-          anchor: new maps.Point(86, 50),
+          content: isCluster ? buildReviewClusterMarkerHtml(group) : buildReviewMarkerHtml(group.reviews, isSelected),
+          size: isCluster ? new maps.Size(98, 62) : new maps.Size(172, 54),
+          anchor: isCluster ? new maps.Point(49, 31) : new maps.Point(86, 50),
         },
       });
       return marker;
@@ -399,7 +549,7 @@ const NaverReviewMap = forwardRef<ReviewMapHandle, {
     } else {
       window.setTimeout(pushBounds, 80);
     }
-  }, [groups, selectedReviewId, onMarkerClick, pushBounds]);
+  }, [groups, selectedReviewId, onMarkerClick, pushBounds, zoomLevel]);
 
   useEffect(() => {
     const maps = mapsRef.current;

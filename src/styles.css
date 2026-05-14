@@ -8240,6 +8240,53 @@ button.ticker-inner {
   border-top: 6px solid;
 }
 
+.rv-cluster-marker {
+  min-width: 84px;
+  min-height: 58px;
+  padding: 8px 12px 9px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #8ed0ee 0%, #6fbbe2 100%);
+  color: #ffffff;
+  border: 2px solid rgba(255, 255, 255, 0.92);
+  box-shadow: 0 12px 24px rgba(14, 116, 144, 0.24);
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  cursor: pointer;
+  pointer-events: auto;
+  transform: translateZ(0);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.rv-cluster-marker:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 28px rgba(14, 116, 144, 0.3);
+}
+
+.rv-cluster-marker span {
+  max-width: 74px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.05;
+}
+
+.rv-cluster-marker strong {
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.rv-cluster-marker--province {
+  min-width: 92px;
+  background: linear-gradient(180deg, #7dc7e7 0%, #60add8 100%);
+}
+
 /* User Location Marker */
 .user-marker {
   background: none;
