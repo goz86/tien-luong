@@ -3753,7 +3753,7 @@ function ReviewBoard({
           dragControls={dragControls}
           dragListener={false}
           dragConstraints={{ top: sheetBounds.expanded, bottom: sheetBounds.collapsed }}
-          dragElastic={{ top: 0.15, bottom: 0 }}
+          dragElastic={0}
           dragMomentum={false}
           onPointerDownCapture={startSheetDrag}
           onDragEnd={(_, info) => {

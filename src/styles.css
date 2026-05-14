@@ -429,7 +429,7 @@ select {
 .screen-shell {
   position: relative;
   z-index: 1;
-  padding: 8px 6px 132px;
+  padding: 8px 16px 132px;
 }
 
 .screen-shell:has(.cm-detail-screen),
@@ -646,7 +646,7 @@ select {
   gap: 12px;
   margin-top: 12px;
   margin-bottom: 18px;
-  padding: 0 18px;
+  padding: 0 2px;
 }
 
 .appbar-kicker {
@@ -678,7 +678,7 @@ select {
 
 .appbar:has(.home-wordmark) + .activity-ticker {
   height: 24px;
-  padding: 0 18px;
+  padding: 0 2px;
   margin: 0 0 8px;
 }
 
@@ -2305,9 +2305,9 @@ button.ticker-inner {
     font-size: 16px;
   }
 
-  /* Reduce appbar padding for tighter screens */
+  /* screen-shell already provides 16px horizontal padding */
   .appbar {
-    padding: 0 14px;
+    padding: 0 2px;
   }
 }
 
@@ -5703,7 +5703,7 @@ button.ticker-inner {
   background: var(--bg-card);
   border-radius: 24px;
   padding: 60px 24px 24px;
-  margin: 0 6px 16px;
+  margin: 0 0 16px;
   text-align: center;
   overflow: hidden;
   border: 1px solid var(--line);
@@ -6703,7 +6703,7 @@ button.ticker-inner {
   background: var(--bg-card);
   border-radius: 20px;
   padding: 20px;
-  margin: 0 6px 12px;
+  margin: 0 0 12px;
   border: 1px solid var(--line);
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.03);
 }
