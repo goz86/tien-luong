@@ -390,7 +390,7 @@ export const useAppStore = create<AppState>((set, get) => {
     setSession: (nextSession) => set((state) => {
       const previousUserId = state.session?.user.id ?? null;
       const nextUserId = nextSession?.user.id ?? null;
-      const userChanged = previousUserId !== nextUserId || !nextSession;
+      const userChanged = previousUserId !== nextUserId;
       const cleared = userChanged ? clearUserScopedState() : {};
       const nextNotifications = userChanged ? [] : state.notifications;
       const nextAdminRole = userChanged ? null : state.adminRole;
@@ -430,12 +430,14 @@ export const useAppStore = create<AppState>((set, get) => {
           ...next,
         };
       });
+      get().persist();
     },
     updateShift: (nextShift) => {
       set((state) => {
         const nextShifts = state.shifts.map((s) => (s.id === nextShift.id ? nextShift : s));
         return { shifts: nextShifts, ...derive({ shifts: nextShifts, calendarMonth: state.calendarMonth }) };
       });
+      get().persist();
     },
     deleteShift: (id) => {
       set((state) => {
@@ -447,15 +449,25 @@ export const useAppStore = create<AppState>((set, get) => {
           ...derive({ shifts: nextShifts, calendarMonth: state.calendarMonth }),
         };
       });
+      get().persist();
     },
 
     // Profile
-    setProfile: (p) => set((s) => ({ profile: typeof p === 'function' ? p(s.profile) : p })),
+    setProfile: (p) => {
+      set((s) => ({ profile: typeof p === 'function' ? p(s.profile) : p }));
+      get().persist();
+    },
 
     // Expenses
     setExpenses: (e) => set({ expenses: e }),
-    addExpenseLocally: (expense) => set((s) => ({ expenses: [...s.expenses, expense] })),
-    removeExpenseLocally: (id) => set((s) => ({ expenses: s.expenses.filter((e) => e.id !== id) })),
+    addExpenseLocally: (expense) => {
+      set((s) => ({ expenses: [...s.expenses, expense] }));
+      get().persist();
+    },
+    removeExpenseLocally: (id) => {
+      set((s) => ({ expenses: s.expenses.filter((e) => e.id !== id) }));
+      get().persist();
+    },
 
     // Friends
     setCompanions: (c) => set((s) => ({ companions: typeof c === 'function' ? c(s.companions) : c })),
@@ -473,7 +485,10 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     // Income target
-    setIncomeTarget: (n) => set({ incomeTarget: n }),
+    setIncomeTarget: (n) => {
+      set({ incomeTarget: n });
+      get().persist();
+    },
 
     // UI
     setDraft: (d) => set((s) => ({ draft: typeof d === 'function' ? d(s.draft) : d })),
