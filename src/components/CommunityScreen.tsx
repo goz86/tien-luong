@@ -3345,10 +3345,14 @@ function ReviewBoard({
 
     const deltaY = event.clientY - drag.startY;
     const deltaX = event.clientX - drag.startX;
-    const currentScrollTop = event.currentTarget.scrollTop;
 
     if (!drag.active) {
-      if (deltaY <= 10 || Math.abs(deltaY) <= Math.abs(deltaX) || currentScrollTop > 2) {
+      // Use startScrollTop (captured at pointerDown) NOT current scrollTop,
+      // because the browser may have micro-scrolled a few px before this event fires.
+      // Also allow a generous tolerance (≤8px) so minor scroll drift doesn't block drag.
+      const scrolledDown = drag.startScrollTop > 8;
+
+      if (deltaY <= 8 || Math.abs(deltaY) <= Math.abs(deltaX) || scrolledDown) {
         return;
       }
       drag.startY = event.clientY;
@@ -3385,6 +3389,82 @@ function ReviewBoard({
     }
     sheetContentDragRef.current = null;
   }, [sheetBounds, sheetY, snapSheet]);
+
+  // Stable refs so touch handlers always see the latest values without re-registering
+  const touchSheetBoundsRef = useRef(sheetBounds);
+  const touchSnapSheetRef = useRef(snapSheet);
+  useEffect(() => { touchSheetBoundsRef.current = sheetBounds; }, [sheetBounds]);
+  useEffect(() => { touchSnapSheetRef.current = snapSheet; }, [snapSheet]);
+
+  // Mobile touch handler (non-passive) — fixes drag on real devices/emulation.
+  // On touch devices touch-action:pan-y causes the browser to commit to native scroll
+  // before pointer events fire, making event.preventDefault() ineffective.
+  // Native touch listeners registered with { passive: false } can still preventDefault.
+  useEffect(() => {
+    const content = sheetContentRef.current;
+    if (!content) return;
+
+    let touchStartY = 0;
+    let touchStartScrollTop = 0;
+    let touchOriginY = 0;
+    let touchDragging = false;
+
+    const onTouchStart = (e: TouchEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('button, input, textarea, select, a')) return;
+      touchStartY = e.touches[0].clientY;
+      touchStartScrollTop = content.scrollTop;
+      touchOriginY = sheetY.get();
+      touchDragging = false;
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      const deltaY = e.touches[0].clientY - touchStartY;
+
+      if (!touchDragging) {
+        // Only intercept clear downward drag when content is at (or near) the top
+        if (deltaY > 8 && touchStartScrollTop <= 8) {
+          touchDragging = true;
+          sheetContentDragRef.current = null; // cancel pointer-event handler
+          content.classList.add('is-sheet-dragging');
+        } else {
+          return;
+        }
+      }
+
+      e.preventDefault(); // works because this listener is non-passive
+      const { expanded, collapsed } = touchSheetBoundsRef.current;
+      const travel = collapsed - expanded;
+      const nextY = Math.min(collapsed, Math.max(expanded, touchOriginY + Math.min(deltaY * 0.72, travel)));
+      sheetY.set(nextY);
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      if (!touchDragging) return;
+      touchDragging = false;
+      content.classList.remove('is-sheet-dragging');
+
+      const deltaY = e.changedTouches[0].clientY - touchStartY;
+      const { expanded, collapsed } = touchSheetBoundsRef.current;
+      const midpoint = expanded + ((collapsed - expanded) * 0.42);
+      const shouldCollapse = sheetY.get() > midpoint || deltaY > 120;
+      touchSnapSheetRef.current(!shouldCollapse);
+    };
+
+    content.addEventListener('touchstart', onTouchStart, { passive: true });
+    content.addEventListener('touchmove', onTouchMove, { passive: false });
+    content.addEventListener('touchend', onTouchEnd, { passive: true });
+    content.addEventListener('touchcancel', onTouchEnd, { passive: true });
+
+    return () => {
+      content.removeEventListener('touchstart', onTouchStart);
+      content.removeEventListener('touchmove', onTouchMove);
+      content.removeEventListener('touchend', onTouchEnd);
+      content.removeEventListener('touchcancel', onTouchEnd);
+    };
+  // sheetY, sheetContentDragRef are stable refs — safe to omit from deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Search logic for floating bar
   useEffect(() => {
@@ -3623,7 +3703,7 @@ function ReviewBoard({
           dragControls={dragControls}
           dragListener={false}
           dragConstraints={{ top: sheetBounds.expanded, bottom: sheetBounds.collapsed }}
-          dragElastic={0.02}
+          dragElastic={{ top: 0.15, bottom: 0 }}
           dragMomentum={false}
           onPointerDownCapture={startSheetDrag}
           onDragEnd={(_, info) => {
@@ -3631,14 +3711,16 @@ function ReviewBoard({
             const midpoint = sheetBounds.expanded + ((sheetBounds.collapsed - sheetBounds.expanded) * 0.52);
             const dragVelocity = info.velocity.y;
 
+            // Use snapSheet (not setSheetExpanded) so the spring animation starts
+            // immediately, overriding any residual Framer Motion elastic animation.
             if (dragVelocity < -760) {
-              setSheetExpanded(true);
+              snapSheet(true);
             } else if (dragVelocity > 720) {
-              setSheetExpanded(false);
+              snapSheet(false);
             } else if (currentY < midpoint) {
-              setSheetExpanded(true);
+              snapSheet(true);
             } else {
-              setSheetExpanded(false);
+              snapSheet(false);
             }
           }}
         >
