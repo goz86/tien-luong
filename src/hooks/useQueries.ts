@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient, useIsFetching } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { useAppStore } from '../store/appStore';
 import type { Shift, Expense, ProfileDraft, CompanionProfile } from '../lib/types';

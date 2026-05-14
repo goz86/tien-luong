@@ -48,6 +48,7 @@ import {
   createCommunityPost,
   deleteCommunityPost,
   incrementPostView,
+  loadCommunityComments,
   loadCommunityState,
   toggleCommentLike as persistCommentLike,
   toggleCommunityBookmark,
@@ -529,10 +530,14 @@ function isOnlineNow(lastSeenAt?: string | null, fallback?: boolean) {
   return Number.isFinite(timestamp) && Date.now() - timestamp <= ONLINE_WINDOW_MS;
 }
 
-function readLocalCommunity(): LocalCommunitySnapshot | null {
+function communityLocalKey(ownerId?: string | null) {
+  return `${LOCAL_COMMUNITY_KEY}:${ownerId || 'guest'}`;
+}
+
+function readLocalCommunity(ownerId?: string | null): LocalCommunitySnapshot | null {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = window.localStorage.getItem(LOCAL_COMMUNITY_KEY);
+    const raw = window.localStorage.getItem(communityLocalKey(ownerId));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<LocalCommunitySnapshot>;
     if (!Array.isArray(parsed.posts) || !Array.isArray(parsed.comments)) return null;
@@ -549,9 +554,9 @@ function readLocalCommunity(): LocalCommunitySnapshot | null {
   }
 }
 
-function writeLocalCommunity(snapshot: LocalCommunitySnapshot) {
+function writeLocalCommunity(ownerId: string | null | undefined, snapshot: LocalCommunitySnapshot) {
   if (typeof window === 'undefined') return;
-  window.localStorage.setItem(LOCAL_COMMUNITY_KEY, JSON.stringify(snapshot));
+  window.localStorage.setItem(communityLocalKey(ownerId), JSON.stringify(snapshot));
 }
 
 export function CommunityScreen({
@@ -663,6 +668,7 @@ export function CommunityScreen({
   const [dislikedPosts, setDislikedPosts] = useState<Set<string>>(new Set());
   const [bookmarkedPosts, setBookmarkedPosts] = useState<Set<string>>(new Set());
   const [likedComments, setLikedComments] = useState<Set<string>>(new Set());
+  const [postReactionBusy, setPostReactionBusy] = useState<Set<string>>(new Set());
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncMessage, setSyncMessage] = useState('Đang làm mới');
@@ -732,11 +738,17 @@ export function CommunityScreen({
   useEffect(() => {
     let alive = true;
     setLoading(true);
+    setLikedPosts(new Set());
+    setDislikedPosts(new Set());
+    setBookmarkedPosts(new Set());
+    setLikedComments(new Set());
+    setNotifications([]);
+    setRecentChats([]);
 
     loadCommunityState(currentUserId || undefined)
       .then((state) => {
         if (!alive) return;
-        const local = readLocalCommunity();
+        const local = readLocalCommunity(currentUserId || null);
         const useLocalSnapshot = state.source !== 'supabase' && local && local.posts.length > 0;
 
         setPosts(useLocalSnapshot ? local.posts : state.posts);
@@ -758,7 +770,7 @@ export function CommunityScreen({
       .catch((error) => {
         console.error(error);
         if (!alive) return;
-        const local = readLocalCommunity();
+        const local = readLocalCommunity(currentUserId || null);
         if (local) {
           setPosts(local.posts);
           setComments(local.comments);
@@ -882,6 +894,80 @@ export function CommunityScreen({
     };
   }, []);
 
+  useEffect(() => {
+    if (!supabase || !currentUserId) return;
+
+    const applyReactionRow = (row: any, remove = false) => {
+      const postId = row?.post_id as string | null | undefined;
+      const commentId = row?.comment_id as string | null | undefined;
+      const isLike = row?.is_like !== false;
+
+      if (postId) {
+        setLikedPosts((current) => {
+          const next = new Set(current);
+          if (remove || !isLike) next.delete(postId);
+          else next.add(postId);
+          return next;
+        });
+        setDislikedPosts((current) => {
+          const next = new Set(current);
+          if (remove || isLike) next.delete(postId);
+          else next.add(postId);
+          return next;
+        });
+      }
+
+      if (commentId) {
+        setLikedComments((current) => {
+          const next = new Set(current);
+          if (remove) next.delete(commentId);
+          else next.add(commentId);
+          return next;
+        });
+      }
+    };
+
+    const reactionsChannel = supabase
+      .channel(`community-reactions:${currentUserId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'community_likes', filter: `user_id=eq.${currentUserId}` },
+        (payload) => {
+          if (payload.eventType === 'DELETE') {
+            applyReactionRow(payload.old, true);
+          } else {
+            applyReactionRow(payload.new, false);
+          }
+        },
+      )
+      .subscribe();
+
+    const bookmarksChannel = supabase
+      .channel(`community-bookmarks:${currentUserId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'community_bookmarks', filter: `user_id=eq.${currentUserId}` },
+        (payload) => {
+          const row = (payload.eventType === 'DELETE' ? payload.old : payload.new) as any;
+          const postId = row?.post_id as string | undefined;
+          if (!postId) return;
+
+          setBookmarkedPosts((current) => {
+            const next = new Set(current);
+            if (payload.eventType === 'DELETE') next.delete(postId);
+            else next.add(postId);
+            return next;
+          });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase?.removeChannel(reactionsChannel);
+      void supabase?.removeChannel(bookmarksChannel);
+    };
+  }, [currentUserId]);
+
   const fetchRecentChats = useCallback(async () => {
     if (!supabase || !currentUserId) return;
     const readState = getChatReadState(currentUserId);
@@ -988,7 +1074,7 @@ export function CommunityScreen({
 
   useEffect(() => {
     if (loading || !isLocalMode) return;
-    writeLocalCommunity({
+    writeLocalCommunity(currentUserId || null, {
       posts,
       comments,
       likedPostIds: [...likedPosts],
@@ -996,7 +1082,7 @@ export function CommunityScreen({
       bookmarkedPostIds: [...bookmarkedPosts],
       likedCommentIds: [...likedComments],
     });
-  }, [bookmarkedPosts, comments, dislikedPosts, isLocalMode, likedComments, likedPosts, loading, posts]);
+  }, [bookmarkedPosts, comments, currentUserId, dislikedPosts, isLocalMode, likedComments, likedPosts, loading, posts]);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -1037,8 +1123,11 @@ export function CommunityScreen({
     comments.forEach(c => {
       counts[c.post_id] = (counts[c.post_id] || 0) + 1;
     });
+    posts.forEach((post) => {
+      counts[post.id] = Math.max(counts[post.id] || 0, post.comments_count || 0);
+    });
     return counts;
-  }, [comments]);
+  }, [comments, posts]);
 
   const hotPosts = useMemo(
     () => [...posts].sort((a, b) => {
@@ -1093,6 +1182,14 @@ export function CommunityScreen({
 
     if (isUuid(post.id)) {
       void incrementPostView(post.id).catch((error) => console.error(error));
+      void loadCommunityComments(post.id)
+        .then((nextComments) => {
+          setComments((current) => [
+            ...current.filter((comment) => comment.post_id !== post.id),
+            ...nextComments,
+          ]);
+        })
+        .catch((error) => console.error(error));
     }
   }
 
@@ -1145,10 +1242,16 @@ export function CommunityScreen({
 
   async function handlePostReaction(postId: string, reaction: 'like' | 'dislike') {
     if (!requireLogin()) return;
+    if (postReactionBusy.has(postId)) return;
+
     const hadLike = likedPosts.has(postId);
     const hadDislike = dislikedPosts.has(postId);
     const nextLikes = new Set(likedPosts);
     const nextDislikes = new Set(dislikedPosts);
+    const previousLikes = new Set(likedPosts);
+    const previousDislikes = new Set(dislikedPosts);
+    const previousPost = posts.find((post) => post.id === postId);
+    const previousSelectedPost = selectedPost?.id === postId ? selectedPost : null;
     let likeDelta = 0;
     let dislikeDelta = 0;
 
@@ -1178,6 +1281,7 @@ export function CommunityScreen({
 
     setLikedPosts(nextLikes);
     setDislikedPosts(nextDislikes);
+    setPostReactionBusy((current) => new Set(current).add(postId));
     updatePost(postId, (post) => ({
       ...post,
       likes_count: Math.max(post.likes_count + likeDelta, 0),
@@ -1185,27 +1289,41 @@ export function CommunityScreen({
     }));
 
     if (!currentUserId || !isUuid(postId)) {
-      setSyncMessage('Tương tác đang lưu tạm trên máy');
+      setSyncMessage('Dang luu tuong tac tren may.');
+      setPostReactionBusy((current) => {
+        const next = new Set(current);
+        next.delete(postId);
+        return next;
+      });
       return;
     }
 
     try {
       await togglePostReaction(currentUserId, postId, reaction);
-      const targetPost = posts.find((post) => post.id === postId);
-      if (reaction === 'like' && !hadLike && targetPost?.user_id && targetPost.user_id !== currentUserId) {
+      if (reaction === 'like' && !hadLike && previousPost?.user_id && previousPost.user_id !== currentUserId) {
         await createCommunityNotification({
-          recipientId: targetPost.user_id,
+          recipientId: previousPost.user_id,
           actorId: currentUserId,
           postId,
           type: 'like',
-          title: 'Có lượt thích mới',
-          body: `${isAnonymous ? 'Ẩn danh' : displayName} đã thích "${targetPost.title}".`,
+          title: 'Co luot thich moi',
+          body: `${isAnonymous ? 'An danh' : displayName} da thich "${previousPost.title}".`,
         });
       }
-      setSyncMessage('Đã lưu tương tác vào Supabase');
+      setSyncMessage('Da luu tuong tac vao Supabase');
     } catch (error) {
       console.error(error);
-      setSyncMessage('Chưa lưu được tương tác. Kiểm tra kết nối Supabase.');
+      setLikedPosts(previousLikes);
+      setDislikedPosts(previousDislikes);
+      if (previousPost) setPosts((current) => current.map((post) => (post.id === postId ? previousPost : post)));
+      if (previousSelectedPost) setSelectedPost(previousSelectedPost);
+      setSyncMessage('Chua luu duoc tuong tac. Kiem tra ket noi Supabase.');
+    } finally {
+      setPostReactionBusy((current) => {
+        const next = new Set(current);
+        next.delete(postId);
+        return next;
+      });
     }
   }
 
@@ -1873,6 +1991,7 @@ export function CommunityScreen({
             <button
               type="button"
               className={`cm-action-btn ${likedPosts.has(selectedPost.id) ? 'active' : ''}`}
+              disabled={postReactionBusy.has(selectedPost.id)}
               onClick={() => void handlePostReaction(selectedPost.id, 'like')}
             >
               <ThumbsUp size={16} /> {selectedPost.likes_count}
@@ -1880,6 +1999,7 @@ export function CommunityScreen({
             <button
               type="button"
               className={`cm-action-btn ${dislikedPosts.has(selectedPost.id) ? 'active dislike' : ''}`}
+              disabled={postReactionBusy.has(selectedPost.id)}
               onClick={() => void handlePostReaction(selectedPost.id, 'dislike')}
             >
               <ThumbsDown size={16} /> {selectedPost.dislikes_count}
@@ -2736,9 +2856,11 @@ function ReviewBoard({
   const dragControls = useDragControls();
   const startSheetDrag = useCallback((event: PointerEvent) => {
     const target = event.target as HTMLElement;
-    if (target.closest('button, input, textarea, select, a, img, .rv-sheet-content')) return;
+    if (target.closest('button, input, textarea, select, a, img')) return;
+    const content = target.closest('.rv-sheet-content') as HTMLElement | null;
+    if (sheetExpanded && content && content.scrollTop > 2) return;
     dragControls.start(event);
-  }, [dragControls]);
+  }, [dragControls, sheetExpanded]);
 
   const handleSheetTouchStart = useCallback((event: TouchEvent<HTMLElement>) => {
     if (event.touches.length !== 1) return;
@@ -2774,7 +2896,7 @@ function ReviewBoard({
     const deltaY = changedTouch ? changedTouch.clientY - touch.startY : 0;
     const elapsed = Math.max(performance.now() - touch.startTime, 1);
     const velocity = Math.abs(deltaY) / elapsed;
-    const shouldMove = Math.abs(deltaY) > 36 || velocity > 0.45;
+    const shouldMove = Math.abs(deltaY) > 72 || velocity > 0.7;
 
     if (shouldMove) {
       suppressSheetClickRef.current = true;
@@ -2868,8 +2990,8 @@ function ReviewBoard({
     });
     return Object.values(groups);
   }, [filtered]);
-  const collapsedSheetY = 'calc(100% - 178px)';
-  const expandedSheetY = '14px';
+  const collapsedSheetY = 'calc(100% - 188px)';
+  const expandedSheetY = '86px';
 
   const closeWriter = () => {
     setIsWriting(false);
@@ -2963,7 +3085,7 @@ function ReviewBoard({
           className={`rv-bottom-sheet ${sheetExpanded ? 'is-expanded' : 'is-collapsed'}`}
           initial={{ y: collapsedSheetY }}
           animate={{ y: sheetExpanded ? expandedSheetY : collapsedSheetY }}
-          transition={{ type: 'spring', damping: 30, stiffness: 260, mass: 0.85 }}
+          transition={{ type: 'spring', damping: 36, stiffness: 210, mass: 0.95 }}
           drag="y"
           dragControls={dragControls}
           dragListener={false}
@@ -2980,9 +3102,9 @@ function ReviewBoard({
             const dragDistance = info.offset.y;
             const dragVelocity = info.velocity.y;
 
-            if (dragDistance < -34 || dragVelocity < -220) {
+            if (dragDistance < -72 || dragVelocity < -520) {
               setSheetExpanded(true);
-            } else if (dragDistance > 34 || dragVelocity > 220) {
+            } else if (dragDistance > 58 || dragVelocity > 420) {
               setSheetExpanded(false);
             } else {
               setSheetExpanded((current) => current);

@@ -60,6 +60,25 @@ function fallbackState(): StoredState {
   };
 }
 
+function clearUserScopedState() {
+  return {
+    shifts: [],
+    profile: fallbackState().profile,
+    companions: [],
+    requested: [],
+    friendships: [],
+    expenses: [],
+    notifications: [],
+    showNotifications: false,
+    toastNotification: null,
+    earnedBadges: [],
+    rankings: [],
+    userStats: { postsCount: 0, commentsCount: 0, likesCount: 0 },
+    savingProfile: false,
+    adminRole: null,
+  };
+}
+
 function loadState(): StoredState {
   if (typeof window === 'undefined') return fallbackState();
   try {
@@ -368,10 +387,25 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     // Auth
-    setSession: (nextSession) => set((state) => ({
-      session: nextSession,
-      ...derive({ session: nextSession, adminRole: state.adminRole, notifications: state.notifications }),
-    })),
+    setSession: (nextSession) => set((state) => {
+      const previousUserId = state.session?.user.id ?? null;
+      const nextUserId = nextSession?.user.id ?? null;
+      const userChanged = previousUserId !== nextUserId || !nextSession;
+      const cleared = userChanged ? clearUserScopedState() : {};
+      const nextNotifications = userChanged ? [] : state.notifications;
+      const nextAdminRole = userChanged ? null : state.adminRole;
+
+      return {
+        ...cleared,
+        session: nextSession,
+        ...derive({
+          session: nextSession,
+          adminRole: nextAdminRole,
+          notifications: nextNotifications,
+          shifts: userChanged ? [] : state.shifts,
+        }),
+      };
+    }),
     setAdminRole: (role) => set((state) => ({
       adminRole: role,
       ...derive({ session: state.session, adminRole: role, notifications: state.notifications }),
@@ -432,9 +466,11 @@ export const useAppStore = create<AppState>((set, get) => {
     // Rate
     setRate: (r) => set((s) => ({ rate: typeof r === 'function' ? r(s.rate) : r })),
 
-    // Venue colors
     setVenueColors: (c) => set({ venueColors: c }),
-    setVenueColor: (venue, color) => set((s) => ({ venueColors: { ...s.venueColors, [venue]: color } })),
+    setVenueColor: (venue, color) => {
+      set((s) => ({ venueColors: { ...s.venueColors, [venue]: color } }));
+      get().persist();
+    },
 
     // Income target
     setIncomeTarget: (n) => set({ incomeTarget: n }),

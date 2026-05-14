@@ -150,9 +150,9 @@ export async function loadCommunityState(userId?: string): Promise<CommunityStat
 
   const { data: postRows, error: postsError } = await client
     .from('community_posts')
-    .select('*')
+    .select('id,user_id,category,title,content,is_anonymous,display_name,likes_count,dislikes_count,comments_count,views_count,created_at')
     .order('created_at', { ascending: false })
-    .limit(80);
+    .limit(50);
 
   if (postsError) {
     console.error('loadCommunityState posts', postsError);
@@ -160,18 +160,6 @@ export async function loadCommunityState(userId?: string): Promise<CommunityStat
   }
 
   const posts = (postRows as DbPost[] | null)?.map(normalizePost) ?? [];
-  const postIds = posts.map((post) => post.id);
-
-  let comments: CommunityComment[] = [];
-  if (postIds.length) {
-    const { data: commentRows, error: commentsError } = await client
-      .from('community_comments')
-      .select('*')
-      .in('post_id', postIds)
-      .order('created_at', { ascending: true });
-
-    if (!commentsError) comments = (commentRows as DbComment[] | null)?.map(normalizeComment) ?? [];
-  }
 
   let likedPostIds: string[] = [];
   let dislikedPostIds: string[] = [];
@@ -201,7 +189,7 @@ export async function loadCommunityState(userId?: string): Promise<CommunityStat
 
   return {
     posts,
-    comments,
+    comments: [],
     likedPostIds,
     dislikedPostIds,
     bookmarkedPostIds,
@@ -209,6 +197,22 @@ export async function loadCommunityState(userId?: string): Promise<CommunityStat
     notifications,
     source: 'supabase',
   };
+}
+
+export async function loadCommunityComments(postId: string): Promise<CommunityComment[]> {
+  if (!canUseSupabase()) return [];
+  const { data, error } = await supabase!
+    .from('community_comments')
+    .select('id,post_id,parent_id,user_id,content,is_anonymous,display_name,is_author,likes_count,created_at')
+    .eq('post_id', postId)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    console.error('loadCommunityComments', error);
+    return [];
+  }
+
+  return (data as DbComment[] | null)?.map(normalizeComment) ?? [];
 }
 
 export async function createCommunityPost(draft: PostDraft): Promise<CommunityPost> {
@@ -295,6 +299,13 @@ export async function createCommunityComment(draft: CommentDraft): Promise<Commu
 async function bumpPostCounter(postId: string, field: 'likes_count' | 'dislikes_count' | 'comments_count' | 'views_count', delta: number) {
   if (!canUseSupabase()) return;
   const client = supabase!;
+  const { error: rpcError } = await client.rpc('increment_community_post_counter', {
+    row_id: postId,
+    column_name: field,
+    delta_value: delta,
+  });
+  if (!rpcError) return;
+
   const { data } = await client.from('community_posts').select(field).eq('id', postId).maybeSingle();
   const current = Number((data as Record<string, unknown> | null)?.[field] ?? 0);
   await client.from('community_posts').update({ [field]: Math.max(current + delta, 0) }).eq('id', postId);
@@ -303,6 +314,12 @@ async function bumpPostCounter(postId: string, field: 'likes_count' | 'dislikes_
 async function bumpCommentCounter(commentId: string, delta: number) {
   if (!canUseSupabase()) return;
   const client = supabase!;
+  const { error: rpcError } = await client.rpc('increment_community_comment_likes', {
+    row_id: commentId,
+    delta_value: delta,
+  });
+  if (!rpcError) return;
+
   const { data } = await client.from('community_comments').select('likes_count').eq('id', commentId).maybeSingle();
   const current = Number((data as { likes_count?: number } | null)?.likes_count ?? 0);
   await client.from('community_comments').update({ likes_count: Math.max(current + delta, 0) }).eq('id', commentId);

@@ -4,8 +4,11 @@ dist
 .env.local
 *.log
 *.tsbuildinfo
+vite.config.js
+vite.config.d.ts
 
 # Android Bubblewrap Build
 android/app/build/
 android/.gradle/
+android/build/
 android/app-release-unsigned.apk
