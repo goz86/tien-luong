@@ -3390,10 +3390,9 @@ function ReviewBoard({
 
   useEffect(() => {
     const controls = animate(sheetY, sheetExpanded ? sheetBounds.expanded : sheetBounds.collapsed, {
-      type: 'spring',
-      damping: 42,
-      stiffness: 150,
-      mass: 1.05,
+      type: 'tween',
+      duration: 0.18,
+      ease: [0.22, 1, 0.36, 1],
     });
 
     return () => controls.stop();
@@ -3410,10 +3409,9 @@ function ReviewBoard({
   const snapSheet = useCallback((expanded: boolean) => {
     setSheetExpanded(expanded);
     animate(sheetY, expanded ? sheetBounds.expanded : sheetBounds.collapsed, {
-      type: 'spring',
-      damping: 42,
-      stiffness: 150,
-      mass: 1.05,
+      type: 'tween',
+      duration: 0.18,
+      ease: [0.22, 1, 0.36, 1],
     });
   }, [sheetBounds, sheetY]);
 
@@ -3807,8 +3805,8 @@ function ReviewBoard({
             const midpoint = sheetBounds.expanded + ((sheetBounds.collapsed - sheetBounds.expanded) * 0.52);
             const dragVelocity = info.velocity.y;
 
-            // Use snapSheet (not setSheetExpanded) so the spring animation starts
-            // immediately, overriding any residual Framer Motion elastic animation.
+            // Snap through our no-bounce tween so a hard pull cannot leave
+            // the sheet feeling like it fell past its resting point.
             if (dragVelocity < -760) {
               snapSheet(true);
             } else if (dragVelocity > 720) {
@@ -3900,7 +3898,7 @@ function ReviewBoard({
                 return (
                   <article
                     key={review.id}
-                    className={`rv-item-card ${isSelected ? 'selected' : ''}`}
+                    className={`rv-item-card ${imageUrls.length > 0 ? 'has-image' : ''} ${isSelected ? 'selected' : ''}`}
                     ref={el => { if (el) reviewRefs.current.set(review.id, el); }}
                     onClick={() => setSelectedReviewId(review.id)}
                   >
