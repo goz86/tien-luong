@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Plus, ChevronLeft, ChevronRight, X, Edit3, Trash2, Bell, TrendingUp, ShieldCheck } from 'lucide-react';
 import { formatKrw, calculateShiftPay, shiftHours } from '../lib/salary';
 import { RateState, Shift, VenueColors } from '../lib/types';
-import { formatDateChip, getVenueColor } from '../utils/helpers';
+import { formatDateChip, getVenueColor, formatHoursCompact } from '../utils/helpers';
 import { FinanceMetric } from './shared/ui';
 import { ActivityTicker } from './shared/ActivityTicker';
 
@@ -181,7 +181,7 @@ export function HomeScreen({
         </div>
 
         <div className="hero-metrics">
-          <FinanceMetric label={ui.totalHours} value={`${monthlyHours.toFixed(1)}h`} />
+          <FinanceMetric label={ui.totalHours} value={formatHoursCompact(monthlyHours)} />
           <FinanceMetric label={ui.averageHourly} value={formatKrw(averageHourly)} />
           <FinanceMetric label={ui.exchangeRate} value={rate.source === 'live' ? `${rate.value.toFixed(2)} VND` : ui.cachedRate} />
         </div>
@@ -327,7 +327,7 @@ export function HomeScreen({
               <div className="workplace-copy">
                 <strong>{workplace.label}</strong>
                 <span>
-                  {workplace.count} ca • {workplace.hours.toFixed(1)}h
+                  {workplace.count} ca · {formatHoursCompact(workplace.hours)}
                 </span>
               </div>
               <strong className="workplace-amount">{formatKrw(workplace.total)}</strong>
@@ -358,7 +358,8 @@ export function HomeScreen({
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 800, fontSize: '16px', color: 'var(--text-main)' }}>{formatDateChip(shift.date)}</div>
                     <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px', fontWeight: 500 }}>
-                      {shift.startTime} - {shift.endTime} • {shiftHours(shift)}h
+                      {shift.startTime} - {shift.endTime} · {formatHoursCompact(shiftHours(shift))}
+                      {shift.notes && <div style={{ fontSize: '11px', color: '#94a3b8', fontStyle: 'italic', marginTop: '2px' }}>{shift.notes}</div>}
                     </div>
                   </div>
                   <div style={{ textAlign: 'right', marginRight: '16px' }}>
@@ -495,7 +496,8 @@ export function HomeScreen({
               <div className="workplace-copy">
                 <strong>{shift.label}</strong>
                 <span>
-                  {formatDateChip(shift.date)} • {shift.startTime}-{shift.endTime}
+                  {formatDateChip(shift.date)} · {shift.startTime}-{shift.endTime}
+                  {shift.notes && <span style={{ display: 'block', fontStyle: 'italic', color: '#94a3b8', fontSize: '11px', marginTop: '2px' }}>{shift.notes}</span>}
                 </span>
               </div>
               <strong className="workplace-amount">{formatKrw(calculateShiftPay(shift).total)}</strong>

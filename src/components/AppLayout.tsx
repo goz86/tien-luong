@@ -372,7 +372,7 @@ export default function AppLayout() {
       endTime: s.draft.endTime,
       hourlyWage: s.draft.hourlyWage,
       breakMinutes: s.draft.breakMinutes,
-      notes: s.draft.note || s.draft.label,
+      notes: s.draft.note || '',
       nightShift: s.draft.nightShift,
       taxDeduction: s.draft.taxDeduction,
       holidayAllowance: s.draft.holidayAllowance,

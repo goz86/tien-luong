@@ -2106,9 +2106,9 @@ export function CommunityScreen({
                         <div className="community-nearby-meta">
                           <span className={`community-presence-dot ${friendOnline ? 'online' : ''}`} />
                           <span>{friendOnline ? ui.online : friend.lastSeenAt ? ui.activeAgo(timeAgo(friend.lastSeenAt)) : ui.noOnline}</span>
-                          {friendDistance != null ? <span>• {formatDistance(friendDistance)}</span> : null}
+                          {friendDistance != null ? <span>· {formatDistance(friendDistance)}</span> : null}
                         </div>
-                        <span>{friend.school} • {friend.region}</span>
+                        <span>{friend.school} · {friend.region}</span>
                         <p>{friend.focus}</p>
                         <div className="community-chip-row">
                           {friend.tags.slice(0, 3).map((tag) => <span key={tag}>{tag}</span>)}
@@ -2194,7 +2194,7 @@ export function CommunityScreen({
             <p className="cm-trending-preview">{shortText(trendingPost.content, 110)}</p>
             <div className="cm-trending-footer">
               <span className="cm-time">
-                <strong>{trendingPost.display_name}</strong> • {timeAgo(trendingPost.created_at)}
+                <strong>{trendingPost.display_name}</strong> · {timeAgo(trendingPost.created_at)}
               </span>
               <div className="cm-post-stats">
                 <span><ThumbsUp size={14} /> {trendingPost.likes_count}</span>
@@ -2243,7 +2243,7 @@ export function CommunityScreen({
                 <p className="cm-post-preview">{shortText(post.content, 90)}</p>
                 <div className="cm-post-footer">
                   <span className="cm-time">
-                    <strong>{post.display_name}</strong> • {timeAgo(post.created_at)}
+                    <strong>{post.display_name}</strong> · {timeAgo(post.created_at)}
                   </span>
                   <div className="cm-post-stats">
                     <span><ThumbsUp size={14} /> {post.likes_count}</span>
@@ -2703,7 +2703,7 @@ export function CommunityScreen({
           </h2>
 
           <p style={{ margin: '0 0 16px', color: '#64748b', fontSize: 14 }}>
-            {viewProfile.school} • {viewProfile.region}
+            {viewProfile.school} · {viewProfile.region}
           </p>
 
           <p style={{ margin: '0 0 20px', color: '#334155', fontSize: 15, lineHeight: 1.5 }}>
@@ -4052,7 +4052,7 @@ function ReviewBoard({
                         <p className="rv-item-address">{review.place_address.split(',').slice(0, 2).join(', ')}</p>
                         <div className="rv-item-meta">
                           <span className="rv-item-author">{review.display_name}</span>
-                          <span className="rv-item-dot">•</span>
+                          <span className="rv-item-dot">·</span>
                           <span className="rv-item-time">{timeAgo(review.created_at)}</span>
                         </div>
                       </div>

@@ -603,7 +603,7 @@ export function ProfileScreen({
               <div className="pf-field">
                 <label>{isKo ? '비밀번호' : 'Mật khẩu'}</label>
                 <div className="pf-password-wrap">
-                  <input className="pf-input" type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••" required minLength={6} />
+                  <input className="pf-input" type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="······" required minLength={6} />
                   <button type="button" className="pf-eye-btn" onClick={() => setShowPassword(!showPassword)}>
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
@@ -616,7 +616,7 @@ export function ProfileScreen({
               <>
                 <div className="pf-field">
                   <label>{isKo ? '비밀번호 확인' : 'Xác nhận mật khẩu'}</label>
-                  <input className="pf-input" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="••••••" required minLength={6} />
+                  <input className="pf-input" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="······" required minLength={6} />
                 </div>
                 <div className="pf-divider" />
                 <div className="pf-field">

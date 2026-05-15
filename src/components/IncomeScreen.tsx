@@ -34,7 +34,7 @@ import confetti from 'canvas-confetti';
 import { calculateShiftPay, formatKrw } from '../lib/salary';
 import type { Expense, RateState, Shift, VenueColors } from '../lib/types';
 import { DateWheelModal } from './shared/DateWheelModal';
-import { getVenueColor, shiftMonth } from '../utils/helpers';
+import { getVenueColor, shiftMonth, formatHoursCompact } from '../utils/helpers';
 
 type AppLang = 'vi' | 'ko';
 type IncomeTab = 'overview' | 'expenses' | 'workplaces';
@@ -491,7 +491,7 @@ export function IncomeScreen({
           </article>
           <article>
             <span>{ui.totalHours}</span>
-            <strong>{monthlyHours.toFixed(1)}h</strong>
+            <strong>{formatHoursCompact(monthlyHours)}</strong>
           </article>
         </div>
       </section>
@@ -694,7 +694,7 @@ export function IncomeScreen({
               <article>
                 <Clock size={20} />
                 <span>{ui.bestHours}</span>
-                <strong>{maxHoursInDay.toFixed(1)}h</strong>
+                <strong>{formatHoursCompact(maxHoursInDay)}</strong>
               </article>
               <article className="gold">
                 <Trophy size={20} />
@@ -797,7 +797,7 @@ export function IncomeScreen({
                       </div>
                       <div>
                         <strong>{expense.note || categoryLabels[expense.category]}</strong>
-                        <span>{categoryLabels[expense.category]} • {new Date(expense.date).getDate()}/{new Date(expense.date).getMonth() + 1}</span>
+                        <span>{categoryLabels[expense.category]} · {new Date(expense.date).getDate()}/{new Date(expense.date).getMonth() + 1}</span>
                       </div>
                       <div className="income-expense-amount">
                         <b>{formatMoney(expense.amount)}</b>
@@ -835,7 +835,7 @@ export function IncomeScreen({
                     <span className="income-venue-dot" style={{ background: getVenueColor(workplace.label, venueColors) }} />
                     <div>
                       <strong>{workplace.label}</strong>
-                      <small>{workplace.count} {ui.shifts} • {workplace.hours.toFixed(1)}h • {workplace.share.toFixed(0)}%</small>
+                      <small>{workplace.count} {ui.shifts} · {formatHoursCompact(workplace.hours)} · {workplace.share.toFixed(0)}%</small>
                       <div className="income-workplace-track">
                         <span style={{ width: `${Math.min(workplace.share, 100)}%`, background: getVenueColor(workplace.label, venueColors) }} />
                       </div>

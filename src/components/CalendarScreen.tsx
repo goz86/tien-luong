@@ -141,7 +141,7 @@ export function CalendarScreen({
     editShift: 'Sửa giờ làm',
     addShift: 'Thêm giờ làm thêm',
     totalDay: 'Tổng ngày',
-    addNewShift: 'Thêm ca làm mới cho ngày này',
+    addNewShift: 'Thêm mới',
     workplace: 'Nơi làm',
     quickNote: 'Ghi chú nhanh',
     notePlaceholder: 'Nhập ghi chú...',
@@ -179,7 +179,7 @@ export function CalendarScreen({
   const grid = buildCalendar(month, gridShifts);
   const monthTotal = filteredMonthShifts.reduce((sum, shift) => sum + calculateShiftPay(shift).total, 0);
   const monthHours = filteredMonthShifts.reduce((sum, shift) => sum + shiftHours(shift), 0);
-  
+
   const [calendarDisplay, setCalendarDisplay] = useState<'duration' | 'range'>('duration');
   const [isMonthPickerOpen, setIsMonthPickerOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -446,7 +446,7 @@ export function CalendarScreen({
                   flexShrink: 0
                 }}
               >
-                  {ui.today}
+                {ui.today}
               </button>
             )}
           </div>
@@ -656,7 +656,7 @@ export function CalendarScreen({
                   <button type="button" className="history-main" onClick={() => startEditShift(shift)}>
                     <strong>{formatDateChip(shift.date)}</strong>
                     <span>
-                      {shift.startTime}-{shift.endTime} • {formatHoursCompact(shiftHours(shift))}
+                      {shift.startTime}-{shift.endTime} · {formatHoursCompact(shiftHours(shift))}
                     </span>
                   </button>
                   <strong className="history-pay">{formatCalendarKrw(calculateShiftPay(shift).total)}</strong>
@@ -719,7 +719,8 @@ export function CalendarScreen({
                         <button type="button" onClick={() => startEditShift(shift)}>
                           <strong>{shift.label}</strong>
                           <span>
-                            {shift.startTime}-{shift.endTime} • {formatCalendarKrw(calculateShiftPay(shift).total)}
+                            {shift.startTime}-{shift.endTime} · {formatCalendarKrw(calculateShiftPay(shift).total)}
+                            {shift.notes && <span style={{ display: 'block', fontSize: '11px', color: '#94a3b8', fontStyle: 'italic', marginTop: '2px' }}>{shift.notes}</span>}
                           </span>
                         </button>
                         <button type="button" className="danger" onClick={() => setDeleteConfirmId(shift.id)}>{ui.delete}</button>

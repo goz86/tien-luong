@@ -953,7 +953,7 @@ export function AdminScreen({
                       <h3>{name}</h3>
                       <span className={`admin-status ${status}`}>{ui[STATUS_LABELS[status] || 'active']}</span>
                     </div>
-                    <p>{[user.school, user.region].filter(Boolean).join(' • ') || user.id}</p>
+                    <p>{[user.school, user.region].filter(Boolean).join(' · ') || user.id}</p>
                     <small>{user.last_seen_at ? `${timeAgo(user.last_seen_at)} · ${localTime(user.last_seen_at, lang)}` : user.id}</small>
                     {user.moderation?.reason ? <em>{user.moderation.reason}</em> : null}
                   </div>
@@ -990,7 +990,7 @@ export function AdminScreen({
                 <ContentRow
                   key={comment.id}
                   title={comment.display_name || ui.unknownUser}
-                  meta={`${timeAgo(comment.created_at)} • post ${comment.post_id.slice(0, 8)} • ${comment.likes_count || 0} likes`}
+                  meta={`${timeAgo(comment.created_at)} · post ${comment.post_id.slice(0, 8)} · ${comment.likes_count || 0} likes`}
                   body={comment.content}
                   badge={comment.parent_id ? 'reply' : 'comment'}
                   actionLabel={ui.delete}
@@ -1026,7 +1026,7 @@ export function AdminScreen({
                   <ContentRow
                     key={post.id}
                     title={post.title}
-                    meta={`${post.display_name || ui.unknownUser} • ${timeAgo(post.created_at)} • ${post.comments_count || 0} comments`}
+                    meta={`${post.display_name || ui.unknownUser} · ${timeAgo(post.created_at)} · ${post.comments_count || 0} comments`}
                     body={post.content}
                     badge={post.category}
                     actionLabel={ui.delete}
@@ -1043,7 +1043,7 @@ export function AdminScreen({
                   <ContentRow
                     key={review.id}
                     title={`${review.place_name} · ${Number(review.rating).toFixed(1)}`}
-                    meta={`${review.display_name || ui.unknownUser} • ${timeAgo(review.created_at)} • ${review.upvotes_count || 0}/${review.downvotes_count || 0}`}
+                    meta={`${review.display_name || ui.unknownUser} · ${timeAgo(review.created_at)} · ${review.upvotes_count || 0}/${review.downvotes_count || 0}`}
                     body={`${review.title} - ${review.content}`}
                     badge={review.category}
                     actionLabel={ui.delete}
@@ -1060,7 +1060,7 @@ export function AdminScreen({
                   <ContentRow
                     key={comment.id}
                     title={comment.display_name || ui.unknownUser}
-                    meta={`${timeAgo(comment.created_at)} • post ${comment.post_id.slice(0, 8)} • ${comment.likes_count || 0} likes`}
+                    meta={`${timeAgo(comment.created_at)} · post ${comment.post_id.slice(0, 8)} · ${comment.likes_count || 0} likes`}
                     body={comment.content}
                     badge={comment.parent_id ? 'reply' : 'comment'}
                     actionLabel={ui.delete}
@@ -1255,7 +1255,7 @@ function NotificationRow({ item, lang }: { item: AdminNotification; lang: AppLan
       <span className="admin-row-badge">{item.type || 'system'}</span>
       <h3>{item.title}</h3>
       <p>{shortText(item.body, 120)}</p>
-      <small>{[localTime(item.created_at, lang), status, target].filter(Boolean).join(' • ')}</small>
+      <small>{[localTime(item.created_at, lang), status, target].filter(Boolean).join(' · ')}</small>
     </article>
   );
 }
