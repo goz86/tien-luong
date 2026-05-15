@@ -9030,6 +9030,11 @@ button.ticker-inner {
   overflow: hidden;
 }
 
+.rv-item-card.menu-open {
+  overflow: visible;
+  z-index: 4;
+}
+
 .rv-item-card.selected {
   background: #fffaf0;
   border-color: rgba(245, 158, 11, 0.42);
@@ -9181,7 +9186,6 @@ button.ticker-inner {
   opacity: 0.72;
 }
 
-.rv-safety-actions,
 .cm-profile-safety-actions {
   display: flex;
   gap: 6px;
@@ -9190,7 +9194,6 @@ button.ticker-inner {
   margin-top: 8px;
 }
 
-.rv-safety-actions button,
 .cm-profile-safety-actions button {
   border: 1px solid #e2e8f0;
   background: #ffffff;
@@ -9202,7 +9205,6 @@ button.ticker-inner {
   cursor: pointer;
 }
 
-.rv-safety-actions button:last-child,
 .cm-profile-safety-actions button:last-child {
   color: #e11d48;
   background: #fff1f2;
@@ -9212,6 +9214,61 @@ button.ticker-inner {
 .cm-profile-safety-actions {
   justify-content: center;
   margin-top: 12px;
+}
+
+.rv-review-menu-wrap {
+  position: relative;
+  margin-top: 2px;
+}
+
+.rv-review-menu-trigger {
+  width: 30px;
+  height: 30px;
+  border: 1px solid #e2e8f0;
+  border-radius: 11px;
+  background: #fff;
+  color: #64748b;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.rv-review-menu {
+  position: absolute;
+  right: 0;
+  top: 32px;
+  width: 92px;
+  padding: 4px;
+  border: 1px solid #dbe3ef;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.2);
+  z-index: 20;
+}
+
+.rv-review-menu button {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: #334155;
+  border-radius: 8px;
+  padding: 8px 9px;
+  font-size: 11.5px;
+  font-weight: 850;
+  line-height: 1;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.rv-review-menu button:hover,
+.rv-review-menu button:active {
+  background: #f8fafc;
+}
+
+.rv-review-menu button.danger {
+  color: #e11d48;
 }
 
 .rv-sort-chips {
@@ -9249,6 +9306,10 @@ button.ticker-inner {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.rv-item-body {
+  position: relative;
 }
 
 .rv-item-text {

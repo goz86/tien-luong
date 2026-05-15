@@ -2903,6 +2903,7 @@ function ReviewBoard({
   const [loading, setLoading] = useState(true);
   const [catFilter, setCatFilter] = useState<ReviewCategory>('all');
   const [sortMode, setSortMode] = useState<ReviewSortMode>('trusted');
+  const [activeSafetyReviewId, setActiveSafetyReviewId] = useState<string | null>(null);
   const openKakaoPostcode = useKakaoPostcodePopup(KAKAO_POSTCODE_SCRIPT_URL);
   const currentUserId = session?.user.id ?? null;
   const isReviewAdmin = REVIEW_ADMIN_EMAILS.has((session?.user.email ?? '').toLowerCase());
@@ -4030,12 +4031,16 @@ function ReviewBoard({
                 const userVote = reviewVotes[review.id];
                 const imageUrls = normalizeReviewImages(review.images);
                 const canDeleteReview = review.user_id === currentUserId || isReviewAdmin;
+                const isSafetyMenuOpen = activeSafetyReviewId === review.id;
                 return (
                   <article
                     key={review.id}
-                    className={`rv-item-card ${imageUrls.length > 0 ? 'has-image' : ''} ${isSelected ? 'selected' : ''}`}
+                    className={`rv-item-card ${imageUrls.length > 0 ? 'has-image' : ''} ${isSelected ? 'selected' : ''} ${isSafetyMenuOpen ? 'menu-open' : ''}`}
                     ref={el => { if (el) reviewRefs.current.set(review.id, el); }}
-                    onClick={() => setSelectedReviewId(review.id)}
+                    onClick={() => {
+                      setActiveSafetyReviewId(null);
+                      setSelectedReviewId(review.id);
+                    }}
                   >
                     <div className="rv-item-rank" style={{ background: isSelected ? '#2752ff' : '#94a3b8' }}>
                       {idx + 1}
@@ -4099,25 +4104,41 @@ function ReviewBoard({
                           </button>
                         ) : null}
                         {!canDeleteReview && review.user_id ? (
-                          <div className="rv-safety-actions">
+                          <div className="rv-review-menu-wrap">
                             <button
                               type="button"
+                              className="rv-review-menu-trigger"
+                              aria-label={isKo ? '리뷰 메뉴' : 'Tùy chọn review'}
                               onClick={(event) => {
                                 event.stopPropagation();
-                                void onReport('review', review.id, review.user_id);
+                                setActiveSafetyReviewId((current) => current === review.id ? null : review.id);
                               }}
                             >
-                              {reviewUi.report}
+                              <MoreHorizontal size={16} />
                             </button>
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                void onBlockUser(review.user_id);
-                              }}
-                            >
-                              {reviewUi.block}
-                            </button>
+                            {isSafetyMenuOpen ? (
+                              <div className="rv-review-menu" onClick={(event) => event.stopPropagation()}>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setActiveSafetyReviewId(null);
+                                    void onReport('review', review.id, review.user_id);
+                                  }}
+                                >
+                                  {reviewUi.report}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="danger"
+                                  onClick={() => {
+                                    setActiveSafetyReviewId(null);
+                                    void onBlockUser(review.user_id);
+                                  }}
+                                >
+                                  {reviewUi.block}
+                                </button>
+                              </div>
+                            ) : null}
                           </div>
                         ) : null}
                       </div>
