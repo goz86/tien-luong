@@ -344,7 +344,7 @@ export function HomeScreen({
             <div className="modal-handle" />
             <div className="modal-header">
               <div>
-                <p style={{ fontSize: '13px', fontWeight: 700, color: '#2752ff', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{ui.shiftHistory}</p>
+                <p className="section-kicker">{ui.shiftHistory}</p>
                 <h3 style={{ fontSize: '24px', fontWeight: 900, color: 'var(--text-main)' }}>{selectedWorkplace}</h3>
               </div>
               <button onClick={() => setSelectedWorkplace(null)} style={{ border: 'none', background: '#f1f5f9', borderRadius: '16px', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

@@ -862,6 +862,8 @@ select {
   font-size: 12px;
   font-weight: 700;
   color: var(--text-faint);
+  text-transform: none;
+  letter-spacing: normal;
 }
 
 .section-head h3 {
