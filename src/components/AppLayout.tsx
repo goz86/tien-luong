@@ -141,6 +141,37 @@ export default function AppLayout() {
     changeTab('friends');
   }, [changeTab]);
 
+  const startDemoMode = useCallback(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const demoShifts = [
+      { id: 'demo-shift-1', date: `${y}-${m}-03`, label: 'Cafe Hongdae', startTime: '18:00', endTime: '22:30', hourlyWage: 11500, breakMinutes: 0, notes: 'Ca toi', nightShift: false, taxDeduction: false, holidayAllowance: 0 },
+      { id: 'demo-shift-2', date: `${y}-${m}-08`, label: 'Chicken House', startTime: '17:00', endTime: '23:30', hourlyWage: 12000, breakMinutes: 30, notes: 'Cuoi tuan', nightShift: true, taxDeduction: true, holidayAllowance: 0 },
+      { id: 'demo-shift-3', date: `${y}-${m}-14`, label: 'Convenience Store', startTime: '09:00', endTime: '15:00', hourlyWage: 11000, breakMinutes: 30, notes: 'Ca sang', nightShift: false, taxDeduction: false, holidayAllowance: 0 },
+      { id: 'demo-shift-4', date: `${y}-${m}-21`, label: 'Cafe Hongdae', startTime: '18:00', endTime: '23:00', hourlyWage: 11500, breakMinutes: 0, notes: 'Training', nightShift: true, taxDeduction: false, holidayAllowance: 0 },
+    ];
+    store.setProfile({
+      displayName: 'Demo Student',
+      school: 'Hongik University',
+      region: 'Seoul Mapo-gu',
+      note: 'Demo mode for store reviewers.',
+      tags: ['TOPIK', 'Budget', 'Cafe'],
+    });
+    store.setShifts(demoShifts as any);
+    store.setExpenses([
+      { id: 'demo-expense-1', category: 'rent', amount: 450000, date: `${y}-${m}-01`, note: 'Goshiwon' },
+      { id: 'demo-expense-2', category: 'food', amount: 180000, date: `${y}-${m}-12`, note: 'Food' },
+      { id: 'demo-expense-3', category: 'transport', amount: 62000, date: `${y}-${m}-16`, note: 'T-money' },
+    ] as any);
+    store.setIncomeTarget(1800000);
+    store.setCalendarMonth(`${y}-${m}-01`);
+    store.setTab('home');
+    store.recalc();
+    store.persist();
+    localStorage.setItem('duhoc-mate-demo-mode', 'true');
+  }, [store]);
+
   useEffect(() => {
     function handlePopstate(e: PopStateEvent) {
       if (suppressPopstate.current) {
@@ -648,6 +679,7 @@ export default function AppLayout() {
               earnedBadges={store.earnedBadges}
               isAdmin={store.isAdmin}
               onOpenAdmin={() => changeTab('admin')}
+              onStartDemo={startDemoMode}
             />
           )}
           {store.tab === 'admin' && (

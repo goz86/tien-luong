@@ -48,8 +48,8 @@ type DbNotification = {
   created_at: string | null;
 };
 
-const REQUIRED_QUERY_TIMEOUT_MS = 9000;
-const OPTIONAL_QUERY_TIMEOUT_MS = 4200;
+const REQUIRED_QUERY_TIMEOUT_MS = 22000;
+const OPTIONAL_QUERY_TIMEOUT_MS = 9000;
 
 async function withQueryTimeout<T>(query: PromiseLike<T>, timeoutMs: number, label: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -510,4 +510,47 @@ export async function createCommunityNotification(input: {
     body: input.body,
   });
   if (error) console.error('createCommunityNotification', error);
+}
+
+export async function loadBlockedUserIds(userId?: string): Promise<string[]> {
+  if (!canUseSupabase() || !userId) return [];
+  const { data, error } = await supabase!
+    .from('user_blocks')
+    .select('blocked_user_id')
+    .eq('blocker_id', userId);
+
+  if (error) {
+    console.warn('loadBlockedUserIds', error);
+    return [];
+  }
+
+  return ((data as Array<{ blocked_user_id: string }> | null) ?? [])
+    .map((row) => row.blocked_user_id)
+    .filter(Boolean);
+}
+
+export async function blockCommunityUser(blockedUserId: string): Promise<void> {
+  if (!canUseSupabase()) throw new Error('Supabase is not configured.');
+  const { error } = await supabase!.from('user_blocks').upsert({
+    blocked_user_id: blockedUserId,
+  }, { onConflict: 'blocker_id,blocked_user_id' });
+  if (error) throw error;
+}
+
+export async function reportCommunityContent(input: {
+  targetType: 'post' | 'comment' | 'review' | 'profile' | 'chat';
+  targetId?: string | null;
+  targetUserId?: string | null;
+  reason: string;
+  details?: string;
+}): Promise<void> {
+  if (!canUseSupabase()) throw new Error('Supabase is not configured.');
+  const { error } = await supabase!.from('content_reports').insert({
+    target_type: input.targetType,
+    target_id: input.targetId ?? null,
+    target_user_id: input.targetUserId ?? null,
+    reason: input.reason,
+    details: input.details ?? null,
+  });
+  if (error) throw error;
 }

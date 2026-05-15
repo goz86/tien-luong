@@ -19,8 +19,8 @@
     "path": "C:\\Users\\Hhung\\Desktop\\tien-luong\\android\\android.keystore",
     "alias": "android"
   },
-  "appVersionName": "1",
-  "appVersionCode": 1,
+  "appVersionName": "1.1.0",
+  "appVersionCode": 2,
   "shortcuts": [
     {
       "name": "Thêm ca làm",
@@ -61,5 +61,5 @@
   "fileHandlers": [],
   "launchHandlerClientMode": "",
   "displayOverride": [],
-  "appVersion": "1"
+  "appVersion": "1.1.0"
 }

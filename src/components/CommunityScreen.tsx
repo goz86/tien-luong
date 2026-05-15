@@ -49,8 +49,11 @@ import {
   createCommunityPost,
   deleteCommunityPost,
   incrementPostView,
+  blockCommunityUser,
   loadCommunityComments,
   loadCommunityState,
+  loadBlockedUserIds,
+  reportCommunityContent,
   toggleCommentLike as persistCommentLike,
   toggleCommunityBookmark,
   togglePostReaction,
@@ -65,7 +68,7 @@ type AppLang = 'vi' | 'ko';
 
 const LOCAL_COMMUNITY_KEY = 'duhoc-mate-community-local';
 const CHAT_READ_STATE_KEY = 'duhoc-mate-chat-read-state';
-const COMMUNITY_LOAD_TIMEOUT_MS = 9000;
+const COMMUNITY_LOAD_TIMEOUT_MS = 24000;
 const FLOATING_SEARCH_TIMEOUT_MS = 6500;
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
@@ -106,6 +109,7 @@ const boardTabs: Array<{ id: BoardMode; icon: any }> = [
 
 type ReviewCategory = 'all' | 'work' | 'housing' | 'food' | 'service' | 'other';
 type ReviewVoteType = 'up' | 'down';
+type ReviewSortMode = 'trusted' | 'newest' | 'rating';
 
 const REVIEW_CATS: Record<Exclude<ReviewCategory, 'all'>, { label: string; color: string; bg: string }> = {
   work: { label: 'Việc làm', color: '#2563eb', bg: '#dbeafe' },
@@ -1057,10 +1061,27 @@ export function CommunityScreen({
   const [friendActionId, setFriendActionId] = useState<string | null>(null);
   const [optimisticFriendIds, setOptimisticFriendIds] = useState<Set<string>>(new Set());
   const [recentChats, setRecentChats] = useState<any[]>([]);
+  const [blockedUserIds, setBlockedUserIds] = useState<Set<string>>(new Set());
   const commentInputRef = useRef<HTMLInputElement>(null);
 
   const currentUserId = session?.user.id ?? '';
   const displayName = session ? (profile?.displayName?.trim() || session.user.email?.split('@')[0] || 'Du học sinh') : 'Du học sinh';
+
+  useEffect(() => {
+    if (!currentUserId) {
+      setBlockedUserIds(new Set());
+      return;
+    }
+    let alive = true;
+    loadBlockedUserIds(currentUserId)
+      .then((ids) => {
+        if (alive) setBlockedUserIds(new Set(ids));
+      })
+      .catch((error) => console.warn('Unable to load blocked users:', error));
+    return () => {
+      alive = false;
+    };
+  }, [currentUserId]);
 
   const isFriend = useCallback((id: string) => {
     if (!currentUserId) return false;
@@ -1089,7 +1110,7 @@ export function CommunityScreen({
   }, [profile?.latitude, profile?.longitude]);
 
   const companionsWithDistance = useMemo(() => {
-    return companions.map((companion) => {
+    return companions.filter((companion) => !blockedUserIds.has(companion.id)).map((companion) => {
       const companionCoordsReady = validCoordinate(companion.latitude, companion.longitude);
       const computedDistance = currentCoords && companionCoordsReady
         ? distanceKm(currentCoords.lat, currentCoords.lng, companion.latitude!, companion.longitude!)
@@ -1101,7 +1122,7 @@ export function CommunityScreen({
         isOnline: isOnlineNow(companion.lastSeenAt, companion.isOnline),
       };
     });
-  }, [companions, currentCoords]);
+  }, [blockedUserIds, companions, currentCoords]);
 
   const nearbyCompanions = useMemo(() => {
     return companionsWithDistance
@@ -1122,11 +1143,7 @@ export function CommunityScreen({
     setNotifications([]);
     setRecentChats([]);
 
-    withTimeout(
-      loadCommunityState(currentUserId || undefined),
-      COMMUNITY_LOAD_TIMEOUT_MS,
-      'Community load timed out',
-    )
+    loadCommunityState(currentUserId || undefined)
       .then((state) => {
         if (!alive) return;
         const local = readLocalCommunity(currentUserId || null);
@@ -1432,6 +1449,43 @@ export function CommunityScreen({
     return true;
   }, [session]);
 
+  const reportTarget = useCallback(async (
+    targetType: 'post' | 'comment' | 'review' | 'profile' | 'chat',
+    targetId: string | null,
+    targetUserId?: string | null,
+  ) => {
+    if (!requireLogin()) return;
+    try {
+      await reportCommunityContent({
+        targetType,
+        targetId,
+        targetUserId,
+        reason: 'user_report',
+        details: 'Reported from in-app safety action.',
+      });
+      setSyncMessage(isKo ? 'Đã gửi báo cáo để admin kiểm tra.' : 'Đã gửi báo cáo để admin kiểm tra.');
+    } catch (error) {
+      console.error(error);
+      setSyncMessage(isKo ? 'Chưa gửi được báo cáo.' : 'Chưa gửi được báo cáo.');
+    }
+  }, [isKo, requireLogin]);
+
+  const blockTargetUser = useCallback(async (targetUserId?: string | null) => {
+    if (!targetUserId || targetUserId === currentUserId) return;
+    if (!requireLogin()) return;
+    try {
+      await blockCommunityUser(targetUserId);
+      setBlockedUserIds((current) => new Set(current).add(targetUserId));
+      setPosts((current) => current.filter((post) => post.user_id !== targetUserId));
+      setComments((current) => current.filter((comment) => comment.user_id !== targetUserId));
+      if (selectedPost?.user_id === targetUserId) goBack();
+      setSyncMessage(isKo ? 'Đã chặn người dùng này.' : 'Đã chặn người dùng này.');
+    } catch (error) {
+      console.error(error);
+      setSyncMessage(isKo ? 'Chưa chặn được người dùng.' : 'Chưa chặn được người dùng.');
+    }
+  }, [currentUserId, isKo, requireLogin, selectedPost]);
+
   const handleFriendAction = useCallback(async (id: string) => {
     if (!requireLogin() || friendActionId) return;
     const accepting = hasIncomingRequest(id);
@@ -1492,6 +1546,7 @@ export function CommunityScreen({
 
   const filteredPosts = useMemo(() => {
     return posts.filter((post) => {
+      if (post.user_id && blockedUserIds.has(post.user_id)) return false;
       if (activeCategory !== 'all' && post.category !== activeCategory) return false;
       if (feedFilter === 'mine' && post.user_id !== currentUserId) return false;
       if (feedFilter === 'saved' && !bookmarkedPosts.has(post.id)) return false;
@@ -1503,7 +1558,7 @@ export function CommunityScreen({
 
       return true;
     });
-  }, [activeCategory, bookmarkedPosts, currentUserId, feedFilter, posts, searchQuery]);
+  }, [activeCategory, blockedUserIds, bookmarkedPosts, currentUserId, feedFilter, posts, searchQuery]);
 
   const postCommentCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -1517,20 +1572,20 @@ export function CommunityScreen({
   }, [comments, posts]);
 
   const hotPosts = useMemo(
-    () => [...posts].sort((a, b) => {
+    () => [...posts].filter((post) => !post.user_id || !blockedUserIds.has(post.user_id)).sort((a, b) => {
       const aCount = postCommentCounts[a.id] || 0;
       const bCount = postCommentCounts[b.id] || 0;
       return (b.likes_count + bCount) - (a.likes_count + aCount);
     }).slice(0, 2),
-    [posts, postCommentCounts]
+    [blockedUserIds, posts, postCommentCounts]
   );
   const trendingPost = useMemo(
-    () => [...posts].sort((a, b) => {
+    () => [...posts].filter((post) => !post.user_id || !blockedUserIds.has(post.user_id)).sort((a, b) => {
       const aCount = postCommentCounts[a.id] || 0;
       const bCount = postCommentCounts[b.id] || 0;
       return (bCount + b.views_count) - (aCount + a.views_count);
     })[0],
-    [posts, postCommentCounts]
+    [blockedUserIds, posts, postCommentCounts]
   );
   const postComments = selectedPost ? comments.filter((comment) => comment.post_id === selectedPost.id) : [];
   const rootComments = postComments.filter((comment) => !comment.parent_id);
@@ -2110,6 +2165,9 @@ export function CommunityScreen({
           displayName={displayName}
           isWriting={isWritingReview}
           setIsWriting={setIsWritingReview}
+          blockedUserIds={blockedUserIds}
+          onReport={reportTarget}
+          onBlockUser={blockTargetUser}
           lang={lang}
         />
       );
@@ -2170,7 +2228,7 @@ export function CommunityScreen({
           {loading ? (
             <div className="cm-empty-state">
               <Loader2 size={26} className="cm-spin" />
-                <p>{ui.loadingPosts}</p>
+              <p>{ui.loadingPosts}</p>
             </div>
           ) : filteredPosts.length ? (
             filteredPosts.map((post) => (
@@ -2365,9 +2423,26 @@ export function CommunityScreen({
                 </button>
               </>
             ) : (
-              <button type="button" className="cm-icon-btn" aria-label="Tùy chọn">
-                <MoreHorizontal size={22} />
-              </button>
+              <>
+                <button
+                  type="button"
+                  className="cm-icon-btn"
+                  onClick={() => void reportTarget('post', selectedPost.id, selectedPost.user_id)}
+                  aria-label={isKo ? '신고' : 'Báo cáo'}
+                >
+                  <ShieldCheck size={19} />
+                </button>
+                {selectedPost.user_id ? (
+                  <button
+                    type="button"
+                    className="cm-icon-btn danger"
+                    onClick={() => void blockTargetUser(selectedPost.user_id)}
+                    aria-label={isKo ? '차단' : 'Chặn'}
+                  >
+                    <X size={21} />
+                  </button>
+                ) : null}
+              </>
             )}
           </div>
         </header>
@@ -2683,6 +2758,23 @@ export function CommunityScreen({
               )}
             </button>
           )}
+          <div className="cm-profile-safety-actions">
+            <button
+              type="button"
+              onClick={() => void reportTarget('profile', viewProfile.id, viewProfile.id)}
+            >
+              {isKo ? '신고' : 'Báo cáo'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void blockTargetUser(viewProfile.id);
+                setViewProfile(null);
+              }}
+            >
+              {isKo ? '차단' : 'Chặn'}
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -2735,12 +2827,18 @@ function ReviewBoard({
   displayName,
   isWriting,
   setIsWriting,
+  blockedUserIds,
+  onReport,
+  onBlockUser,
   lang = 'vi'
 }: {
   session: Session | null;
   displayName: string;
   isWriting: boolean;
   setIsWriting: (v: boolean) => void;
+  blockedUserIds: Set<string>;
+  onReport: (targetType: 'post' | 'comment' | 'review' | 'profile' | 'chat', targetId: string | null, targetUserId?: string | null) => void | Promise<void>;
+  onBlockUser: (targetUserId?: string | null) => void | Promise<void>;
   lang?: AppLang;
 }) {
   const isKo = lang === 'ko';
@@ -2766,11 +2864,16 @@ function ReviewBoard({
     deleteConfirm: '이 리뷰를 삭제할까요?',
     deleteSuccess: '리뷰를 삭제했습니다.',
     deleteError: '리뷰를 삭제하지 못했습니다. Supabase 권한 패치를 실행해주세요.',
+    report: '신고',
+    block: '차단',
+    sortTrusted: '신뢰순',
+    sortNewest: '최신순',
+    sortRating: '별점순',
   } : {
     categories: {
       work: 'Việc làm',
       housing: 'Nhà ở',
-      food: 'Ẩm thực',
+      food: 'Quán ăn',
       service: 'Dịch vụ',
       other: 'Khác',
     } as Record<Exclude<ReviewCategory, 'all'>, string>,
@@ -2788,12 +2891,18 @@ function ReviewBoard({
     deleteConfirm: 'Xoá review này nhé?',
     deleteSuccess: 'Đã xoá review.',
     deleteError: 'Chưa xoá được review. Hãy chạy patch quyền Supabase.',
+    report: 'Báo cáo',
+    block: 'Chặn',
+    sortTrusted: 'Uy tín cao',
+    sortNewest: 'Mới nhất',
+    sortRating: 'Điểm vote nhiều',
   };
   const [reviews, setReviews] = useState<PlaceReview[]>([]);
   const [reviewVotes, setReviewVotes] = useState<Record<string, ReviewVoteType>>({});
   const [reviewNotice, setReviewNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [catFilter, setCatFilter] = useState<ReviewCategory>('all');
+  const [sortMode, setSortMode] = useState<ReviewSortMode>('trusted');
   const openKakaoPostcode = useKakaoPostcodePopup(KAKAO_POSTCODE_SCRIPT_URL);
   const currentUserId = session?.user.id ?? null;
   const isReviewAdmin = REVIEW_ADMIN_EMAILS.has((session?.user.email ?? '').toLowerCase());
@@ -2913,7 +3022,7 @@ function ReviewBoard({
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
-    
+
     // Limit to 3 images
     const totalCount = selectedImages.length + files.length;
     if (totalCount > 3) {
@@ -2959,8 +3068,9 @@ function ReviewBoard({
 
     withTimeout(
       supabase.from('place_reviews')
-        .select('*')
-        .order('created_at', { ascending: false }) as unknown as Promise<{ data: PlaceReview[] | null; error: unknown }>,
+        .select('id,user_id,display_name,is_anonymous,place_name,place_address,place_lat,place_lng,category,title,content,rating,helpful_count,upvotes_count,downvotes_count,images,created_at')
+        .order('created_at', { ascending: false })
+        .limit(120) as unknown as Promise<{ data: PlaceReview[] | null; error: unknown }>,
       COMMUNITY_LOAD_TIMEOUT_MS,
       'Place reviews load timed out',
     )
@@ -3229,7 +3339,7 @@ function ReviewBoard({
   const handleSubmitReview = async () => {
     if (!supabase || !session || !selectedPlace || !writeTitle.trim() || !writeContent.trim() || writeRating === 0) return;
     setSubmitting(true);
-    
+
     const imageUrls: string[] = [];
 
     // 1. Upload images to Storage
@@ -3301,7 +3411,7 @@ function ReviewBoard({
 
 
   const filtered = useMemo(() => {
-    let result = reviews;
+    let result = reviews.filter((review) => !review.user_id || !blockedUserIds.has(review.user_id));
 
     // 1. Filter by category
     if (catFilter !== 'all') {
@@ -3316,8 +3426,17 @@ function ReviewBoard({
       });
     }
 
-    // 3. Smart Sort by popularity (Upvotes - Downvotes)
+    // 3. Smart sort by trust, recency, or rating.
     return [...result].sort((a, b) => {
+      if (sortMode === 'newest') {
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      }
+
+      if (sortMode === 'rating') {
+        const ratingDiff = (Number(b.rating) || 0) - (Number(a.rating) || 0);
+        if (ratingDiff !== 0) return ratingDiff;
+      }
+
       const scoreA = (a.upvotes_count || 0) - (a.downvotes_count || 0);
       const scoreB = (b.upvotes_count || 0) - (b.downvotes_count || 0);
       if (scoreA !== scoreB) return scoreB - scoreA;
@@ -3326,7 +3445,7 @@ function ReviewBoard({
       if (ratingA !== ratingB) return ratingB - ratingA;
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
-  }, [reviews, catFilter, mapBounds]);
+  }, [blockedUserIds, reviews, catFilter, mapBounds, sortMode]);
 
   const avgRating = reviews.length ? (reviews.reduce((s, r) => s + Number(r.rating), 0) / reviews.length).toFixed(1) : '0';
 
@@ -3554,8 +3673,8 @@ function ReviewBoard({
       content.removeEventListener('touchend', onTouchEnd);
       content.removeEventListener('touchcancel', onTouchEnd);
     };
-  // sheetY, sheetContentDragRef are stable refs — safe to omit from deps
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // sheetY, sheetContentDragRef are stable refs — safe to omit from deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Search logic for floating bar
@@ -3867,6 +3986,22 @@ function ReviewBoard({
                 </button>
               ))}
             </div>
+            <div className="rv-sort-chips" onClick={e => e.stopPropagation()}>
+              {([
+                ['trusted', reviewUi.sortTrusted],
+                ['newest', reviewUi.sortNewest],
+                ['rating', reviewUi.sortRating],
+              ] as Array<[ReviewSortMode, string]>).map(([mode, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  className={sortMode === mode ? 'active' : ''}
+                  onClick={() => setSortMode(mode)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div
@@ -3926,8 +4061,8 @@ function ReviewBoard({
                           ★ {Number(review.rating).toFixed(1)}
                         </div>
                         <div className="rv-item-votes">
-                          <button 
-                            type="button" 
+                          <button
+                            type="button"
                             className={`rv-vote-btn up ${userVote === 'up' ? 'active' : ''}`}
                             aria-pressed={userVote === 'up'}
                             onClick={(e) => { e.stopPropagation(); handleReviewReaction(review.id, 'up'); }}
@@ -3935,8 +4070,8 @@ function ReviewBoard({
                             <ChevronUp size={16} strokeWidth={2.8} />
                             <span>{review.upvotes_count || 0}</span>
                           </button>
-                          <button 
-                            type="button" 
+                          <button
+                            type="button"
                             className={`rv-vote-btn down ${userVote === 'down' ? 'active' : ''}`}
                             aria-pressed={userVote === 'down'}
                             onClick={(e) => { e.stopPropagation(); handleReviewReaction(review.id, 'down'); }}
@@ -3963,12 +4098,34 @@ function ReviewBoard({
                             )}
                           </button>
                         ) : null}
+                        {!canDeleteReview && review.user_id ? (
+                          <div className="rv-safety-actions">
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void onReport('review', review.id, review.user_id);
+                              }}
+                            >
+                              {reviewUi.report}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void onBlockUser(review.user_id);
+                              }}
+                            >
+                              {reviewUi.block}
+                            </button>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                     <div className="rv-item-body">
                       <h5 className="rv-item-title">{review.title}</h5>
                       <p className="rv-item-text">{shortText(review.content, 120)}</p>
-                      
+
                       {imageUrls.length > 0 && (
                         <div className="rv-review-images">
                           {imageUrls.map((url, i) => (

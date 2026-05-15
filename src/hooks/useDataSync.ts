@@ -119,16 +119,31 @@ export function useDataSync() {
 
     const channel = client
       .channel(`notifications-${uid}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'community_notifications' }, (payload) => {
-        if ((payload.new as any).recipient_id !== uid) return;
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'community_notifications' }, (payload) => {
+        const row = (((payload as any).new ?? (payload as any).old) || null) as any;
+        if (row?.recipient_id !== uid) return;
+
+        if ((payload as any).eventType === 'DELETE') {
+          setNotifications((prev: CommunityNotification[]) => prev.filter((item) => item.id !== row.id));
+          return;
+        }
+
         const n = {
-          ...payload.new,
-          is_read: false,
-          type: ((payload.new as any).type ?? 'system') as CommunityNotification['type'],
+          ...row,
+          is_read: row.is_read === true,
+          type: (row.type ?? 'system') as CommunityNotification['type'],
         } as CommunityNotification;
-        setNotifications((prev: CommunityNotification[]) => [n, ...prev]);
-        setToastNotification(n);
-        setTimeout(() => setToastNotification(null), 5000);
+
+        setNotifications((prev: CommunityNotification[]) => {
+          const exists = prev.some((item) => item.id === n.id);
+          const next = exists ? prev.map((item) => (item.id === n.id ? n : item)) : [n, ...prev];
+          return next.slice(0, 40);
+        });
+
+        if ((payload as any).eventType === 'INSERT') {
+          setToastNotification({ ...n, is_read: false });
+          setTimeout(() => setToastNotification(null), 5000);
+        }
       })
       .subscribe();
 

@@ -428,7 +428,7 @@ export function HomeScreen({
               // Cute names list
               const cuteNames = lang === 'ko'
                 ? ["성실한 랭커", "꾸준한 알바생", "행운의 유학생", "열정 가득 멤버", "친절한 친구", "노력형 멤버", "활기찬 랭커", "부지런한 메이트"]
-                : ["Gấu Trúc Chăm Chỉ 🐼", "Mèo Con Cần Mẫn 🐱", "Thỏ Ngọc May Mắn 🐰", "Sóc Nhỏ Năng Động 🐿️", "Cánh Cụt Đáng Yêu 🐧", "Hươu Sao Tốt Bụng 🦌", "Vịt Vàng Lon Ton 🐥", "Cún Con Tinh Nghịch 🐶"];
+                : ["Gấu Trúc", "Mèo Con", "Thỏ Ngọc", "Sóc Nhỏ", "Cánh Cụt", "Hươu Sao", "Vịt Vàng", "Cún Con"];
 
               const getCuteName = (uid: string) => {
                 const index = uid ? uid.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0) % cuteNames.length : 0;

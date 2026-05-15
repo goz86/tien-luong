@@ -70,6 +70,7 @@ export function ProfileScreen({
   earnedBadges,
   isAdmin = false,
   onOpenAdmin,
+  onStartDemo,
 }: {
   profile: ProfileDraft;
   setProfile: (draft: ProfileDraft) => void;
@@ -85,6 +86,7 @@ export function ProfileScreen({
   earnedBadges: string[];
   isAdmin?: boolean;
   onOpenAdmin?: () => void;
+  onStartDemo?: () => void;
 }) {
 
   const [authMode, setAuthMode] = useState<AuthMode>('login');
@@ -105,11 +107,13 @@ export function ProfileScreen({
   const [regRegionSuggestions, setRegRegionSuggestions] = useState<Region[]>([]);
   const [regSchoolSuggestions, setRegSchoolSuggestions] = useState<School[]>([]);
   const [stats, setStats] = useState({ posts: 0, comments: 0, bookmarks: 0, likes: 0 });
+  const [policyPanel, setPolicyPanel] = useState<'privacy' | 'terms' | 'support' | 'delete' | null>(null);
+  const [deleteReason, setDeleteReason] = useState('');
 
   // Badge progress data from store
-  const badgeShifts      = useAppStore(s => s.shifts);
-  const badgeExpenses    = useAppStore(s => s.expenses);
-  const badgeCompanions  = useAppStore(s => s.companions);
+  const badgeShifts = useAppStore(s => s.shifts);
+  const badgeExpenses = useAppStore(s => s.expenses);
+  const badgeCompanions = useAppStore(s => s.companions);
   const badgeData = {
     shifts: badgeShifts,
     expenses: badgeExpenses,
@@ -121,29 +125,29 @@ export function ProfileScreen({
 
   useEffect(() => {
     if (!session || !supabase) return;
-    
+
     const userId = session.user.id;
     let isMounted = true;
-    
+
     async function fetchStats() {
       const { count: postsCount } = await supabase!.from('community_posts')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', userId);
-        
+
       const { count: commentsCount } = await supabase!.from('community_comments')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', userId);
-        
+
       const { count: bookmarksCount } = await supabase!.from('community_bookmarks')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', userId);
-        
+
       const { data: postsData } = await supabase!.from('community_posts')
         .select('likes_count')
         .eq('user_id', userId);
-        
+
       const likesSum = postsData?.reduce((acc, curr) => acc + Number(curr.likes_count || 0), 0) || 0;
-      
+
       if (isMounted) {
         setStats({
           posts: postsCount || 0,
@@ -153,7 +157,7 @@ export function ProfileScreen({
         });
       }
     }
-    
+
     void fetchStats();
     return () => { isMounted = false; };
   }, [session]);
@@ -234,6 +238,24 @@ export function ProfileScreen({
     await supabase.auth.signOut();
   }
 
+  async function handleRequestAccountDeletion() {
+    if (!supabase || !session) return;
+    setLoading(true);
+    const { error } = await supabase.from('account_deletion_requests').insert({
+      user_id: session.user.id,
+      email: session.user.email,
+      reason: deleteReason || null,
+    });
+    setLoading(false);
+    if (error) {
+      setAuthMessage(isKo ? 'Chưa gửi được yêu cầu xoá tài khoản.' : 'Chưa gửi được yêu cầu xoá tài khoản.');
+      return;
+    }
+    setPolicyPanel(null);
+    setAuthMessage(isKo ? 'Đã gửi yêu cầu xoá tài khoản.' : 'Đã gửi yêu cầu xoá tài khoản.');
+    await supabase.auth.signOut();
+  }
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleAvatarClick = () => {
@@ -296,8 +318,8 @@ export function ProfileScreen({
   const handleSchoolChange = (val: string) => {
     setProfile({ ...profile, school: val });
     if (val.trim().length > 1) {
-      const filtered = schools.filter(s => 
-        s.ko.toLowerCase().includes(val.toLowerCase()) || 
+      const filtered = schools.filter(s =>
+        s.ko.toLowerCase().includes(val.toLowerCase()) ||
         s.en.toLowerCase().includes(val.toLowerCase())
       ).slice(0, 5); // Hiển thị tối đa 5 gợi ý
       setSchoolSuggestions(filtered);
@@ -314,8 +336,8 @@ export function ProfileScreen({
   const handleRegionChange = (val: string) => {
     setProfile({ ...profile, region: val });
     if (val.trim().length > 1) {
-      const filtered = koreanRegions.filter(r => 
-        r.ko.toLowerCase().includes(val.toLowerCase()) || 
+      const filtered = koreanRegions.filter(r =>
+        r.ko.toLowerCase().includes(val.toLowerCase()) ||
         r.en.toLowerCase().includes(val.toLowerCase())
       ).slice(0, 5);
       setRegionSuggestions(filtered);
@@ -332,8 +354,8 @@ export function ProfileScreen({
   const handleRegRegionChange = (val: string) => {
     setRegRegion(val);
     if (val.trim().length > 1) {
-      const filtered = koreanRegions.filter(r => 
-        r.ko.toLowerCase().includes(val.toLowerCase()) || 
+      const filtered = koreanRegions.filter(r =>
+        r.ko.toLowerCase().includes(val.toLowerCase()) ||
         r.en.toLowerCase().includes(val.toLowerCase())
       ).slice(0, 5);
       setRegRegionSuggestions(filtered);
@@ -350,8 +372,8 @@ export function ProfileScreen({
   const handleRegSchoolChange = (val: string) => {
     setRegSchool(val);
     if (val.trim().length > 1) {
-      const filtered = schools.filter(s => 
-        s.ko.toLowerCase().includes(val.toLowerCase()) || 
+      const filtered = schools.filter(s =>
+        s.ko.toLowerCase().includes(val.toLowerCase()) ||
         s.en.toLowerCase().includes(val.toLowerCase())
       ).slice(0, 5);
       setRegSchoolSuggestions(filtered);
@@ -372,22 +394,22 @@ export function ProfileScreen({
         <>
           <div className="pf-hero">
             <div className="pf-hero-bg" />
-            
+
             {/* Settings Trigger Button */}
-            <button 
-              type="button" 
-              className="pf-settings-trigger" 
+            <button
+              type="button"
+              className="pf-settings-trigger"
               onClick={() => setShowSettingsMenu(true)}
             >
               <Settings size={20} />
             </button>
-            
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              style={{ display: 'none' }} 
-              accept="image/*" 
-              onChange={handleFileChange} 
+
+            <input
+              type="file"
+              ref={fileInputRef}
+              style={{ display: 'none' }}
+              accept="image/*"
+              onChange={handleFileChange}
             />
 
             <div className="pf-avatar-container" onClick={handleAvatarClick}>
@@ -402,9 +424,9 @@ export function ProfileScreen({
                 <Camera size={14} color="white" />
               </div>
             </div>
-            
+
             <h2 className="pf-name">{displayName}</h2>
-            
+
             <div className="pf-subtitle-group">
               {profile.school && (
                 <div className="pf-subtitle">
@@ -419,7 +441,7 @@ export function ProfileScreen({
                 </div>
               )}
             </div>
-            
+
             {profile.note && <p className="pf-bio">{profile.note}</p>}
 
             {profile.tags && profile.tags.length > 0 && (
@@ -559,7 +581,18 @@ export function ProfileScreen({
             <h2>{isKo ? '환영합니다!' : 'Chào mừng bạn!'}</h2>
             <p>{isKo ? '로그인하고 계속하세요' : 'Đăng nhập để tiếp tục'}</p>
           </div>
-          
+
+          {onStartDemo ? (
+            <button
+              type="button"
+              className="pf-demo-btn"
+              onClick={onStartDemo}
+            >
+              <Info size={16} />
+              {isKo ? '데모로 둘러보기' : 'Dùng thử demo'}
+            </button>
+          ) : null}
+
           <form onSubmit={handleAuth} className="pf-auth-form">
             <div className="pf-field">
               <label>{isKo ? '이메일' : 'Email'}</label>
@@ -592,17 +625,17 @@ export function ProfileScreen({
                 </div>
                 <div className="pf-field" style={{ position: 'relative' }}>
                   <label>{isKo ? '학교 ' : 'Trường đang theo học'}</label>
-                  <input 
-                    className="pf-input" 
-                    value={regSchool} 
-                    onChange={(e) => handleRegSchoolChange(e.target.value)} 
-                    placeholder={isKo ? '학교 이름' : 'Tên trường...'} 
+                  <input
+                    className="pf-input"
+                    value={regSchool}
+                    onChange={(e) => handleRegSchoolChange(e.target.value)}
+                    placeholder={isKo ? '학교 이름' : 'Tên trường...'}
                   />
                   {regSchoolSuggestions.length > 0 && (
                     <div className="pf-autocomplete-list">
                       {regSchoolSuggestions.map((s, idx) => (
-                        <div 
-                          key={idx} 
+                        <div
+                          key={idx}
                           className="pf-autocomplete-item"
                           onClick={() => selectRegSchool(s)}
                         >
@@ -613,19 +646,19 @@ export function ProfileScreen({
                     </div>
                   )}
                 </div>
-                 <div className="pf-field" style={{ position: 'relative' }}>
+                <div className="pf-field" style={{ position: 'relative' }}>
                   <label>{isKo ? '지역' : 'Khu vực'}</label>
-                  <input 
-                    className="pf-input" 
-                    placeholder={isKo ? '서울 노원구' : 'Ví dụ: Seoul Nowon-gu'} 
-                    value={regRegion} 
-                    onChange={(e) => handleRegRegionChange(e.target.value)} 
+                  <input
+                    className="pf-input"
+                    placeholder={isKo ? '서울 노원구' : 'Ví dụ: Seoul Nowon-gu'}
+                    value={regRegion}
+                    onChange={(e) => handleRegRegionChange(e.target.value)}
                   />
                   {regRegionSuggestions.length > 0 && (
                     <div className="pf-autocomplete-list">
                       {regRegionSuggestions.map((r, idx) => (
-                        <div 
-                          key={idx} 
+                        <div
+                          key={idx}
                           className="pf-autocomplete-item"
                           onClick={() => selectRegRegion(r)}
                         >
@@ -751,17 +784,17 @@ export function ProfileScreen({
                   </div>
                   <div className="pf-pop-field" style={{ position: 'relative' }}>
                     <span>{isKo ? '학교' : 'Trường học'}</span>
-                    <input 
-                      className="pf-input" 
-                      placeholder={isKo ? '학교 이름' : 'Tên trường...'} 
-                      value={profile.school} 
-                      onChange={(e) => handleSchoolChange(e.target.value)} 
+                    <input
+                      className="pf-input"
+                      placeholder={isKo ? '학교 이름' : 'Tên trường...'}
+                      value={profile.school}
+                      onChange={(e) => handleSchoolChange(e.target.value)}
                     />
                     {schoolSuggestions.length > 0 && (
                       <div className="pf-autocomplete-list">
                         {schoolSuggestions.map((s, idx) => (
-                          <div 
-                            key={idx} 
+                          <div
+                            key={idx}
                             className="pf-autocomplete-item"
                             onClick={() => selectSchool(s)}
                           >
@@ -774,17 +807,17 @@ export function ProfileScreen({
                   </div>
                   <div className="pf-pop-field" style={{ position: 'relative' }}>
                     <span>{isKo ? '지역' : 'Khu vực'}</span>
-                    <input 
-                      className="pf-input" 
-                      placeholder={isKo ? '서울 노원구' : 'Ví dụ: Seoul Nowon-gu'} 
-                      value={profile.region} 
-                      onChange={(e) => handleRegionChange(e.target.value)} 
+                    <input
+                      className="pf-input"
+                      placeholder={isKo ? '서울 노원구' : 'Ví dụ: Seoul Nowon-gu'}
+                      value={profile.region}
+                      onChange={(e) => handleRegionChange(e.target.value)}
                     />
                     {regionSuggestions.length > 0 && (
                       <div className="pf-autocomplete-list">
                         {regionSuggestions.map((r, idx) => (
-                          <div 
-                            key={idx} 
+                          <div
+                            key={idx}
                             className="pf-autocomplete-item"
                             onClick={() => selectRegion(r)}
                           >
@@ -797,12 +830,12 @@ export function ProfileScreen({
                   </div>
                   <div className="pf-pop-field">
                     <span>{isKo ? '소개' : 'Giới thiệu bản thân'}</span>
-                    <textarea 
-                      className="pf-input pf-textarea" 
-                      placeholder={isKo ? '자신을 소개해주세요' : 'Viết vài dòng giới thiệu...'} 
+                    <textarea
+                      className="pf-input pf-textarea"
+                      placeholder={isKo ? '자신을 소개해주세요' : 'Viết vài dòng giới thiệu...'}
                       rows={2}
-                      value={profile.note || ''} 
-                      onChange={(e) => setProfile({ ...profile, note: e.target.value })} 
+                      value={profile.note || ''}
+                      onChange={(e) => setProfile({ ...profile, note: e.target.value })}
                     />
                   </div>
                   <div className="pf-pop-field">
@@ -878,10 +911,85 @@ export function ProfileScreen({
                   </div>
                 </div>
               </div>
+              <div className="pf-pop-section">
+                <label>{isKo ? '스토어 안전' : 'Store safety'}</label>
+                <button type="button" className="pf-setting-row mini" onClick={() => setPolicyPanel('privacy')}>
+                  <div className="pf-setting-icon"><Shield size={16} /></div>
+                  <span>{isKo ? '개인정보 처리방침' : 'Chính sách bảo mật'}</span>
+                  <ChevronRight size={16} style={{ marginLeft: 'auto' }} />
+                </button>
+                <button type="button" className="pf-setting-row mini" onClick={() => setPolicyPanel('terms')}>
+                  <div className="pf-setting-icon"><Info size={16} /></div>
+                  <span>{isKo ? '이용약관' : 'Điều khoản sử dụng'}</span>
+                  <ChevronRight size={16} style={{ marginLeft: 'auto' }} />
+                </button>
+                <button type="button" className="pf-setting-row mini" onClick={() => setPolicyPanel('support')}>
+                  <div className="pf-setting-icon"><MessageCircle size={16} /></div>
+                  <span>{isKo ? '지원 문의' : 'Liên hệ hỗ trợ'}</span>
+                  <ChevronRight size={16} style={{ marginLeft: 'auto' }} />
+                </button>
+                <button type="button" className="pf-setting-row mini pf-danger-row" onClick={() => setPolicyPanel('delete')}>
+                  <div className="pf-setting-icon"><LogOut size={16} /></div>
+                  <span>{isKo ? '계정 삭제 요청' : 'Yêu cầu xoá tài khoản'}</span>
+                  <ChevronRight size={16} style={{ marginLeft: 'auto' }} />
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
+      {policyPanel ? (
+        <div className="pf-policy-overlay" onClick={() => setPolicyPanel(null)}>
+          <div className="pf-policy-sheet" onClick={(event) => event.stopPropagation()}>
+            <div className="pf-popover-head">
+              <h3>
+                {policyPanel === 'privacy'
+                  ? (isKo ? '개인정보 처리방침' : 'Chính sách bảo mật')
+                  : policyPanel === 'terms'
+                    ? (isKo ? '이용약관' : 'Điều khoản sử dụng')
+                    : policyPanel === 'support'
+                      ? (isKo ? '지원 문의' : 'Liên hệ hỗ trợ')
+                      : (isKo ? '계정 삭제 요청' : 'Yêu cầu xoá tài khoản')}
+              </h3>
+              <button type="button" onClick={() => setPolicyPanel(null)}><X size={20} /></button>
+            </div>
+            {policyPanel === 'delete' ? (
+              <div className="pf-policy-body">
+                <p>Duhoc Mate sẽ gửi yêu cầu xoá tài khoản cho admin xử lý. Dữ liệu cá nhân, bài viết và lịch sử liên quan sẽ được kiểm tra theo chính sách vận hành.</p>
+                <textarea
+                  className="pf-input pf-textarea"
+                  rows={3}
+                  value={deleteReason}
+                  onChange={(event) => setDeleteReason(event.target.value)}
+                  placeholder="Lý do xoá tài khoản (tuỳ chọn)"
+                />
+                <button type="button" className="pf-delete-account-btn" disabled={loading} onClick={() => void handleRequestAccountDeletion()}>
+                  {loading ? '...' : 'Gửi yêu cầu xoá tài khoản'}
+                </button>
+              </div>
+            ) : (
+              <div className="pf-policy-body">
+                {policyPanel === 'privacy' ? (
+                  <>
+                    <p>Duhoc Mate lưu dữ liệu tài khoản, hồ sơ, ca làm, chi tiêu và nội dung cộng đồng để đồng bộ trải nghiệm giữa các thiết bị.</p>
+                    <p>Ứng dụng không bán dữ liệu cá nhân. Người dùng có thể yêu cầu xoá tài khoản trong phần cài đặt.</p>
+                  </>
+                ) : policyPanel === 'terms' ? (
+                  <>
+                    <p>Thông tin lương, thuế, phụ cấp và review trong app chỉ có tính tham khảo, không thay thế tư vấn pháp lý hoặc tài chính.</p>
+                    <p>Không đăng nội dung quấy rối, lừa đảo, thông tin riêng tư của người khác hoặc nội dung vi phạm pháp luật.</p>
+                  </>
+                ) : (
+                  <>
+                    <p>Email hỗ trợ: michintashop@gmail.com</p>
+                    <p>Khi báo cáo nội dung xấu, hãy dùng nút Báo cáo trong bài viết, profile hoặc review để admin có đủ ngữ cảnh xử lý.</p>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

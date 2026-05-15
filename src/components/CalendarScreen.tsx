@@ -233,7 +233,7 @@ export function CalendarScreen({
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent | TouchEvent) => {
       const target = event.target as HTMLElement;
-      if (activeSelect && !target.closest('.settings-select-wrap')) {
+      if (activeSelect && !target.closest('.settings-select-wrap') && !target.closest('.venue-color-list')) {
         setActiveSelect(null);
       }
     };
@@ -689,13 +689,13 @@ export function CalendarScreen({
                       textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px'
                     }}
                   >
-                    <h3 style={{ fontSize: '24px', fontWeight: 900, color: '#08162b', margin: 0 }}>
+                    <h3 style={{ fontSize: 'clamp(17px, 5.5vw, 24px)', fontWeight: 900, color: '#08162b', margin: 0, whiteSpace: 'nowrap' }}>
                       {isKo ? new Intl.DateTimeFormat(locale, { weekday: 'long', month: '2-digit', day: '2-digit' }).format(new Date(`${draft.date}T00:00:00`)) : formatSelectedDate(draft.date)}
                     </h3>
                     <ChevronDown size={20} color="#64748b" />
                   </button>
                 ) : (
-                  <h3 style={{ fontSize: '24px', fontWeight: 900, color: '#08162b', margin: 0 }}>
+                  <h3 style={{ fontSize: 'clamp(17px, 5.5vw, 24px)', fontWeight: 900, color: '#08162b', margin: 0, whiteSpace: 'nowrap' }}>
                     {isKo ? new Intl.DateTimeFormat(locale, { weekday: 'long', month: '2-digit', day: '2-digit' }).format(new Date(`${selectedDate}T00:00:00`)) : formatSelectedDate(selectedDate)}
                   </h3>
                 )}
