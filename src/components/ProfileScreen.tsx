@@ -596,7 +596,7 @@ export function ProfileScreen({
           <form onSubmit={handleAuth} className="pf-auth-form">
             <div className="pf-field">
               <label>{isKo ? '이메일' : 'Email'}</label>
-              <input className="pf-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="example@email.com" required />
+              <input className="pf-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="duhocmate@email.com" required />
             </div>
 
             {authMode !== 'forgot' && (
