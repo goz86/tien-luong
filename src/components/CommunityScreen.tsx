@@ -3461,6 +3461,30 @@ function ReviewBoard({
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const reviewRefs = useRef<Map<string, HTMLElement>>(new Map());
   const skipNextFloatingSearchRef = useRef(false);
+  const wasImagePreviewClosedViaBack = useRef(false);
+
+  // Handle physical back button for image preview
+  useEffect(() => {
+    if (!previewImage) {
+      wasImagePreviewClosedViaBack.current = false;
+      return;
+    }
+
+    const handlePopState = () => {
+      wasImagePreviewClosedViaBack.current = true;
+      setPreviewImage(null);
+    };
+
+    window.history.pushState({ type: 'previewImage' }, '');
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      if (!wasImagePreviewClosedViaBack.current && window.history.state?.type === 'previewImage') {
+        window.history.back();
+      }
+    };
+  }, [previewImage]);
   const sheetRef = useRef<HTMLDivElement | null>(null);
   const sheetContentRef = useRef<HTMLDivElement | null>(null);
   const sheetContentDragRef = useRef<{
