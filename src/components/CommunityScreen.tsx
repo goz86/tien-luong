@@ -4317,25 +4317,37 @@ function ReviewBoard({
               </div>
             </div>
 
-            {/* Images */}
+            {/* Images — KakaoTalk-style preview grid */}
             <div className="rv-write-section">
-              <label className="rv-write-label">{isKo ? '🖼️ 사진 (최대 3장)' : '🖼️ Hình ảnh (Tối đa 3)'}</label>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <label className="rv-write-label" style={{ margin: 0 }}>{isKo ? '🖼️ 사진 (최대 3장)' : '🖼️ Hình ảnh (Tối đa 3)'}</label>
+                <span style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>{imagePreviews.length}/3</span>
+              </div>
+              <div className="rv-image-upload-grid">
                 {imagePreviews.map((url, idx) => (
-                  <div key={idx} style={{ width: 80, height: 80, borderRadius: 12, overflow: 'hidden', position: 'relative', border: '1px solid #e2e8f0' }}>
-                    <img src={url} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <div key={idx} className="rv-img-thumb-wrap">
+                    <img src={url} alt={`Ảnh ${idx + 1}`} className="rv-img-thumb" />
                     <button
                       type="button"
-                      style={{ position: 'absolute', top: 4, right: 4, width: 20, height: 20, borderRadius: 10, background: 'rgba(0,0,0,0.5)', border: 'none', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                      className="rv-img-remove-btn"
                       onClick={() => removeImage(idx)}
+                      aria-label={isKo ? '삭제' : 'Xoá ảnh'}
                     >
-                      <X size={12} />
+                      <X size={13} />
                     </button>
+                    <span className="rv-img-order">{idx + 1}</span>
                   </div>
                 ))}
                 {imagePreviews.length < 3 && (
-                  <label style={{ width: 80, height: 80, borderRadius: 12, border: '2px dashed #e2e8f0', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#94a3b8' }}>
-                    {uploading ? <Loader2 size={20} className="cm-spin" /> : <Plus size={20} />}
+                  <label className="rv-img-add-btn">
+                    {uploading ? (
+                      <Loader2 size={24} className="cm-spin" style={{ color: '#2752ff' }} />
+                    ) : (
+                      <>
+                        <div className="rv-img-add-icon"><Plus size={24} strokeWidth={2} /></div>
+                        <span className="rv-img-add-text">{isKo ? '사진 추가' : 'Thêm ảnh'}</span>
+                      </>
+                    )}
                     <input type="file" accept="image/*" multiple onChange={handleImageSelect} style={{ display: 'none' }} />
                   </label>
                 )}
