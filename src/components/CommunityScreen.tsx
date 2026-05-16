@@ -2867,6 +2867,18 @@ export function CommunityScreen({
                     <X size={21} />
                   </button>
                 ) : null}
+                {/* Admin: xóa bài vi phạm — icon X nhỏ đỏ cạnh nút báo cáo */}
+                {isAdmin && selectedPost.user_id !== currentUserId && (
+                  <button
+                    type="button"
+                    className="cm-icon-btn cm-admin-delete-icon"
+                    onClick={() => setShowDeleteConfirm(selectedPost.id)}
+                    aria-label="Admin: Xóa bài vi phạm"
+                    title="Admin: Xóa bài vi phạm"
+                  >
+                    <X size={20} />
+                  </button>
+                )}
               </>
             )}
           </div>
@@ -2931,17 +2943,6 @@ export function CommunityScreen({
             >
               <Share2 size={16} /> {isKo ? '공유' : 'Chia sẻ'}
             </button>
-            {/* Nút xoá dành riêng cho admin – chỉ hiện khi bài của người khác */}
-            {isAdmin && selectedPost.user_id !== currentUserId && (
-              <button
-                type="button"
-                className="cm-action-btn cm-admin-delete-btn"
-                onClick={() => setShowDeleteConfirm(selectedPost.id)}
-                title="Admin: Xoá bài vi phạm"
-              >
-                <Trash2 size={16} /> Xoá
-              </button>
-            )}
           </div>
 
           <div className="cm-comments-section">
@@ -3219,7 +3220,6 @@ export function CommunityScreen({
               style={{ background: '#f59e0b', borderColor: '#f59e0b' }}
               onClick={() => void handleConfirmReport()}
             >
-              <ShieldCheck size={14} />
               {isKo ? '신고하기' : 'Báo cáo'}
             </button>
           </div>

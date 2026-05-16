@@ -5411,12 +5411,22 @@ button.ticker-inner {
   color: var(--text-soft);
 }
 
-/* Admin-only delete button */
+/* Admin-only delete button (action bar - legacy, kept for reference) */
 .cm-admin-delete-btn {
   color: #e11d48 !important;
   border-color: #e11d48 !important;
   background: rgba(225, 29, 72, 0.06) !important;
   margin-left: auto;
+}
+
+/* Admin delete icon in header (X button next to shield/block) */
+.cm-admin-delete-icon {
+  color: #e11d48 !important;
+  opacity: 0.85;
+}
+.cm-admin-delete-icon:hover {
+  opacity: 1;
+  background: rgba(225, 29, 72, 0.1);
 }
 
 /* Already-reported state for shield button */
