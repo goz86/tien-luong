@@ -45,7 +45,20 @@ export function useAuthSync() {
       }
 
       if (_event === 'SIGNED_OUT') {
-        setSession(null);
+        // Đợi 600ms rồi check lại — TOKEN_REFRESH_FAILURE đôi khi trigger SIGNED_OUT
+        // nhưng Supabase vẫn có thể tự retry và lấy lại session thành công.
+        // Nếu sau 600ms getSession() trả về session hợp lệ → người dùng vẫn còn đăng nhập.
+        setTimeout(() => {
+          if (!mounted) return;
+          client.auth.getSession().then(({ data }) => {
+            if (!mounted) return;
+            if (data.session) {
+              setSession(data.session);   // restore — was transient failure
+            } else {
+              setSession(null);           // truly signed out
+            }
+          });
+        }, 600);
       }
     });
 

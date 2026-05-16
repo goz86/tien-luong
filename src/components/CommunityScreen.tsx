@@ -477,12 +477,12 @@ async function searchNaverAddressResults(query: string) {
   // 2. Fallback to Nominatim OSM if we have fewer than 3 results (finds place names)
   if (results.length < 3) {
     try {
-      // Use fetch directly without AbortSignal for better compatibility
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 4000);
 
+      // addressdetails=1 → trả về object address có thể format KakaoMap style
       const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&countrycodes=vn,kr`,
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&countrycodes=vn,kr&addressdetails=1`,
         { signal: controller.signal }
       );
       clearTimeout(timeoutId);
@@ -492,11 +492,21 @@ async function searchNaverAddressResults(query: string) {
         const osmResults = nominatimResults
           .slice(0, 5)
           .map((item: any) => {
-            const title = item.name || (typeof item.display_name === 'string' ? item.display_name.split(',')[0] : item.display_name);
+            // Format kiểu KakaoMap: "서울 성동구 왕십리로 222"
+            const { title: fmtTitle, formattedAddress: fmtAddr } = formatOsmKoreanAddress(item);
+            const placeName = item.name || fmtTitle;
+            // Tên địa điểm + địa chỉ rút gọn (bỏ dấu phẩy, bỏ quốc gia)
+            const compactAddr = compactKoreanAddress(
+              fmtAddr
+                .replace(/,\s*/g, ' ')           // bỏ dấu phẩy
+                .replace(/대한민국.*$/, '')         // bỏ "대한민국" trở đi
+                .replace(/\s+/g, ' ')
+                .trim()
+            );
             return {
               source: 'nominatim',
-              title,
-              formattedAddress: item.display_name || title,
+              title: placeName,
+              formattedAddress: compactAddr || placeName,
               display_name: item.display_name,
               lat: String(item.lat),
               lon: String(item.lon),
@@ -3756,22 +3766,26 @@ function ReviewBoard({
     const guestSessionId = isGuest ? getGuestSessionId() : undefined;
     const expiresAt = isGuest ? guestExpiresAt(6) : undefined; // 6h cho review
 
-    const { data, error } = await supabase.from('place_reviews').insert({
-      user_id: isGuest ? null : session!.user.id,
-      guest_session_id: guestSessionId ?? null,
-      expires_at: expiresAt ?? null,
+    // Chỉ include guest_session_id / expires_at khi thực sự có giá trị
+    // → tránh lỗi "column does not exist" khi migration chưa được chạy
+    const insertPayload: Record<string, unknown> = {
+      user_id:      isGuest ? null : session!.user.id,
       display_name: isGuest ? 'Khách' : (isAnon ? 'Ẩn danh' : displayName),
       is_anonymous: isGuest ? true : isAnon,
-      place_name: selectedPlace.name,
+      place_name:   selectedPlace.name,
       place_address: selectedPlace.address,
-      place_lat: selectedPlace.lat,
-      place_lng: selectedPlace.lng,
-      category: writeCat,
-      title: writeTitle.trim(),
-      content: writeContent.trim(),
-      rating: writeRating,
-      images: imageUrls,
-    }).select().single();
+      place_lat:    selectedPlace.lat,
+      place_lng:    selectedPlace.lng,
+      category:     writeCat,
+      title:        writeTitle.trim(),
+      content:      writeContent.trim(),
+      rating:       writeRating,
+      images:       imageUrls,
+    };
+    if (guestSessionId) insertPayload.guest_session_id = guestSessionId;
+    if (expiresAt)      insertPayload.expires_at = expiresAt;
+
+    const { data, error } = await supabase.from('place_reviews').insert(insertPayload).select().single();
 
     setSubmitting(false);
     if (!error && data) {
@@ -3789,8 +3803,12 @@ function ReviewBoard({
       }
       closeWriter();
     } else if (error) {
-      console.error('Submit error:', error);
-      showReviewNotice(reviewUi.submitError);
+      console.error('Submit review error:', error);
+      // Hiện lý do lỗi cụ thể để người dùng biết
+      const hint = (error as { message?: string }).message
+        ? `(${(error as { message: string }).message.slice(0, 80)})`
+        : '';
+      showReviewNotice(`${reviewUi.submitError} ${hint}`.trim());
     }
   };
 
