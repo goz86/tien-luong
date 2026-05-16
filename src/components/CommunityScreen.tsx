@@ -1897,8 +1897,8 @@ export function CommunityScreen({
           actorId: currentUserId,
           postId,
           type: 'like',
-          title: 'Co luot thich moi',
-          body: `${isAnonymous ? 'An danh' : displayName} da thich "${previousPost.title}".`,
+          title: 'Có lượt thích mới',
+          body: `${isAnonymous ? 'Ẩn danh' : displayName} đã thích bài "${previousPost.title}".`,
         });
       }
       setSyncMessage('Đang trực tuyến');
@@ -1960,6 +1960,22 @@ export function CommunityScreen({
 
     try {
       await persistCommentLike(currentUserId, commentId);
+
+      // Gửi thông báo cho chủ bình luận khi bị like (không phải unlike)
+      if (!hadLiked) {
+        const targetComment = postComments.find((c) => c.id === commentId);
+        if (targetComment?.user_id && targetComment.user_id !== currentUserId) {
+          await createCommunityNotification({
+            recipientId: targetComment.user_id,
+            actorId: currentUserId,
+            postId: targetComment.post_id,
+            commentId,
+            type: 'like',
+            title: 'Có lượt thích mới',
+            body: `${isAnonymous ? 'Ẩn danh' : displayName} đã thích bình luận của bạn.`,
+          });
+        }
+      }
     } catch (error) {
       console.error(error);
       setSyncMessage('Đang trực tuyến');
@@ -1994,6 +2010,10 @@ export function CommunityScreen({
 
     if (canPersist) {
       try {
+        // Nếu là reply: notify chủ comment gốc; nếu là comment mới: notify chủ post
+        const parentComment = replyTo ? postComments.find((c) => c.id === replyTo) : null;
+        const notifyRecipient = parentComment?.user_id ?? selectedPost.user_id;
+
         savedComment = await createCommunityComment({
           postId: selectedPost.id,
           parentId: replyTo,
@@ -2002,7 +2022,7 @@ export function CommunityScreen({
           isAnonymous,
           displayName: commentDisplayName,
           isAuthor: selectedPost.user_id === currentUserId,
-          recipientId: selectedPost.user_id,
+          recipientId: notifyRecipient,
           postTitle: selectedPost.title,
         });
         setSyncMessage('Đang trực tuyến');
