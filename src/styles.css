@@ -5589,10 +5589,86 @@ button.ticker-inner {
   font-size: 14px;
 }
 
-.cm-comment-thread {
-  margin-bottom: 0;
+/* ══════════════════════════════════════════════
+   Comment Thread – Rounded L-shape elbow
+   ══════════════════════════════════════════════ */
+
+/* Branch: bọc root comment + toàn bộ replies */
+.cm-comment-branch {
+  border-bottom: 1px solid var(--line);
 }
 
+/* Root comment bên trong branch: bỏ border dưới */
+.cm-comment-branch > .cm-comment {
+  border-bottom: none;
+  padding-bottom: 6px;
+}
+
+/* ── Reply thread container ── */
+.cm-reply-thread-list {
+  padding-left: 20px;  /* chỗ trống cho elbow */
+  margin-left: 12px;   /* thụt vào dưới root */
+  padding-bottom: 4px;
+}
+
+/* ── Từng reply item ── */
+.cm-reply-thread-item {
+  position: relative;
+}
+
+/* ── Góc chữ L bo mềm (::before) ──────────────────
+   Dùng border-left + border-bottom + border-radius
+   thay vì background thẳng → tạo góc cong tự nhiên
+   ─────────────────────────────────────────────── */
+.cm-reply-thread-item::before {
+  content: "";
+  position: absolute;
+  left: -20px;
+  top: 0;
+  width: 14px;           /* chiều dài đường ngang */
+  height: 22px;          /* chiều cao = vị trí tên reply */
+  border-left: 2px solid #c8cdd5;
+  border-bottom: 2px solid #c8cdd5;
+  border-bottom-left-radius: 10px;  /* ← góc bo mềm */
+  background: transparent;
+}
+
+/* ── Đường dọc kéo xuống (::after) ─────────────────
+   Chỉ áp dụng cho item KHÔNG phải cuối,
+   nối liền với item kế tiếp bên dưới
+   ─────────────────────────────────────────────── */
+.cm-reply-thread-item:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: -20px;
+  top: 16px;   /* overlap nhẹ với ::before tránh hở */
+  bottom: 0;
+  width: 2px;
+  background: #c8cdd5;
+}
+
+/* Item cuối: không kéo thêm đường dọc → không tràn */
+.cm-reply-thread-item:last-child::after {
+  display: none;
+}
+
+/* Dark mode */
+.dark .cm-reply-thread-item::before {
+  border-left-color: rgba(255, 255, 255, 0.2);
+  border-bottom-color: rgba(255, 255, 255, 0.2);
+}
+.dark .cm-reply-thread-item:not(:last-child)::after {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Comment bên trong reply: bỏ border, spacing gọn */
+.cm-reply-thread-item .cm-comment {
+  border-bottom: none;
+  padding-top: 10px;
+  padding-bottom: 6px;
+}
+
+/* cm-comment dùng chung */
 .cm-comment {
   padding: 16px 0;
   border-bottom: 1px solid var(--line);
@@ -5698,25 +5774,7 @@ button.ticker-inner {
   color: var(--blue-700);
 }
 
-/* Replies (nested) */
-.cm-reply {
-  display: flex;
-  gap: 8px;
-  padding-left: 20px;
-  background: rgba(0, 0, 0, 0.015);
-}
-
-.cm-reply-indicator {
-  color: var(--text-faint);
-  font-size: 16px;
-  flex-shrink: 0;
-  padding-top: 16px;
-}
-
-.cm-reply-body {
-  flex: 1;
-  min-width: 0;
-}
+/* .cm-reply / .cm-reply-indicator / .cm-reply-body – deprecated, replaced by cm-reply-thread-list */
 
 /* Removed duplicate definition to fix PC alignment */
 

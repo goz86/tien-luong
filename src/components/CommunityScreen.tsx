@@ -2734,7 +2734,8 @@ export function CommunityScreen({
               rootComments.map((comment) => {
                 const replies = getReplies(comment.id);
                 return (
-                  <div key={comment.id} className="cm-comment-thread">
+                  <div key={comment.id} className="cm-comment-branch">
+                    {/* Root comment */}
                     <CommentItem
                       comment={{ ...comment, display_name: getDisplayName(comment) }}
                       liked={likedComments.has(comment.id)}
@@ -2745,22 +2746,24 @@ export function CommunityScreen({
                       }}
                     />
 
-                    {replies.map((reply) => (
-                      <div key={reply.id} className="cm-comment cm-reply">
-                        <div className="cm-reply-indicator">↳</div>
-                        <div className="cm-reply-body">
-                          <CommentItem
-                            comment={{ ...reply, display_name: getDisplayName(reply) }}
-                            liked={likedComments.has(reply.id)}
-                            onLike={() => void handleCommentLike(reply.id)}
-                            onReply={() => {
-                              setReplyTo(comment.id);
-                              commentInputRef.current?.focus();
-                            }}
-                          />
-                        </div>
+                    {/* Reply thread – vertical track + L-shape elbows */}
+                    {replies.length > 0 && (
+                      <div className="cm-reply-thread-list">
+                        {replies.map((reply) => (
+                          <div key={reply.id} className="cm-reply-thread-item">
+                            <CommentItem
+                              comment={{ ...reply, display_name: getDisplayName(reply) }}
+                              liked={likedComments.has(reply.id)}
+                              onLike={() => void handleCommentLike(reply.id)}
+                              onReply={() => {
+                                setReplyTo(comment.id);
+                                commentInputRef.current?.focus();
+                              }}
+                            />
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    )}
                   </div>
                 );
               })
