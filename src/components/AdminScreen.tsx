@@ -555,7 +555,17 @@ export function AdminScreen({
     const moderationMap = new Map<string, UserModeration>();
     (moderationsRes.data as UserModeration[] | null)?.forEach((row) => moderationMap.set(row.user_id, row));
 
-    setUsers(((profilesRes.data as AdminUser[] | null) || []).map((user) => ({
+    // Nếu profiles query bị RLS chặn → thử qua RPC admin_get_users
+    let profileRows = (profilesRes.data as AdminUser[] | null) || [];
+    if (profilesRes.error || profileRows.length === 0) {
+      console.warn('[Admin] profiles direct select failed, trying admin_get_users RPC:', profilesRes.error);
+      const rpcFallback = await supabase.rpc('admin_get_users', { limit_count: 24 });
+      if (!rpcFallback.error && Array.isArray(rpcFallback.data) && rpcFallback.data.length > 0) {
+        profileRows = rpcFallback.data as AdminUser[];
+      }
+    }
+
+    setUsers(profileRows.map((user) => ({
       ...user,
       moderation: moderationMap.get(user.id) || null,
     })));
