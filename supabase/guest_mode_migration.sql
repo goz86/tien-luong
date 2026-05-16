@@ -100,14 +100,12 @@ $$;
 -- 7. pg_cron: tự động chạy cleanup mỗi 30 phút
 --    (Cần bật extension pg_cron trong Supabase: Database > Extensions)
 -- ================================================================
--- Chạy lệnh này SAU KHI bật pg_cron:
-/*
-SELECT cron.schedule(
-  'cleanup-expired-guest-content',
-  '*/30 * * * *',
-  'SELECT cleanup_expired_guest_content()'
-);
-*/
+-- Chạy lệnh này SAU KHI bật pg_cron (Database > Extensions > pg_cron):
+-- SELECT cron.schedule(
+--   'cleanup-expired-guest-content',
+--   '*/30 * * * *',
+--   'SELECT cleanup_expired_guest_content()'
+-- );
 
 -- ================================================================
 -- 8. Kiểm tra: gọi thủ công để test cleanup
