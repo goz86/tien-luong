@@ -232,6 +232,7 @@ export function useCompanionsQuery(userId: string | undefined) {
         region: row.region || 'Chưa cập nhật',
         focus: row.note || '',
         availability: 'Đang hoạt động',
+        avatarUrl: row.avatar_url || null,
         tags: Array.isArray(row.tags) ? row.tags : [],
         latitude: row.latitude ? Number(row.latitude) : null,
         longitude: row.longitude ? Number(row.longitude) : null,

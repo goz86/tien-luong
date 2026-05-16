@@ -35,6 +35,7 @@ function companionFromRow(row: any): CompanionProfile {
     region: row.region || 'Chưa cập nhật',
     focus: row.note || '',
     availability: lastSeenAt ? `Hoạt động gần đây` : 'Chưa cập nhật online',
+    avatarUrl: row.avatar_url || null,
     tags: Array.isArray(row.tags) ? row.tags : [],
     latitude: row.latitude ? Number(row.latitude) : null,
     longitude: row.longitude ? Number(row.longitude) : null,

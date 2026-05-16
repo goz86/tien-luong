@@ -1601,6 +1601,7 @@ export function CommunityScreen({
                 school: row.school || '',
                 region: row.region || '',
                 focus: row.note || '',
+                avatarUrl: row.avatar_url || null,
                 tags: Array.isArray(row.tags) ? row.tags : [],
                 lastSeenAt: row.last_seen_at || null,
               });
@@ -1733,6 +1734,7 @@ export function CommunityScreen({
       school: data.school || '',
       region: data.region || '',
       focus: data.note || '',
+      avatarUrl: data.avatar_url || null,
       tags: Array.isArray(data.tags) ? data.tags : [],
       lastSeenAt: data.last_seen_at || null,
     };
@@ -2536,9 +2538,11 @@ export function CommunityScreen({
                       event.stopPropagation();
                       setViewProfile(friend);
                     }}
-                    style={{ cursor: 'pointer' }}
+                    style={{ cursor: 'pointer', overflow: 'hidden', padding: 0 }}
                   >
-                    {avatarLetter}
+                    {friend.avatarUrl ? (
+                      <img src={friend.avatarUrl} alt={friend.displayName} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+                    ) : avatarLetter}
                   </div>
                   <div className="community-friend-main">
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -3128,6 +3132,7 @@ export function CommunityScreen({
         {isWritingPost ? renderComposer() : null}
         {showDeleteConfirm ? renderDeleteConfirm() : null}
         {showReportConfirm ? renderReportConfirm() : null}
+        {viewProfile ? renderProfileModal() : null}
         {showLoginPrompt ? renderLoginPrompt() : null}
         {activeChatPartner && session && (
           <ChatView
@@ -3327,15 +3332,23 @@ export function CommunityScreen({
     const avatarLetter = (nameParts[nameParts.length - 1] || 'U').slice(0, 1).toUpperCase();
 
     return (
-      <div className="custom-confirm-overlay" onClick={() => setViewProfile(null)}>
+      <div className="custom-confirm-overlay" style={{ zIndex: 9000 }} onClick={() => setViewProfile(null)}>
         <div className="custom-confirm-card" onClick={e => e.stopPropagation()} style={{ width: '90%', maxWidth: '400px', padding: '24px', textAlign: 'center', position: 'relative' }}>
           <button type="button" onClick={() => setViewProfile(null)} style={{ position: 'absolute', top: 16, right: 16, background: 'none', border: 'none', cursor: 'pointer' }}>
             <X size={20} color="#64748b" />
           </button>
 
-          <div style={{ width: 80, height: 80, borderRadius: 40, background: 'linear-gradient(135deg, #2752ff, #2146d9)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, fontWeight: 700, margin: '0 auto 16px' }}>
-            {avatarLetter}
-          </div>
+          {viewProfile.avatarUrl ? (
+            <img
+              src={viewProfile.avatarUrl}
+              alt={viewProfile.displayName}
+              style={{ width: 80, height: 80, borderRadius: 40, objectFit: 'cover', margin: '0 auto 16px', display: 'block', border: '3px solid rgba(39,82,255,0.15)' }}
+            />
+          ) : (
+            <div style={{ width: 80, height: 80, borderRadius: 40, background: 'linear-gradient(135deg, #2752ff, #2146d9)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, fontWeight: 700, margin: '0 auto 16px' }}>
+              {avatarLetter}
+            </div>
+          )}
 
           <h2 style={{ margin: '0 0 8px', color: '#0f172a', fontSize: 22 }}>
             {viewProfile.displayName}
