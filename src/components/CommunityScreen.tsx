@@ -1101,6 +1101,7 @@ export function CommunityScreen({
   const [newContent, setNewContent] = useState('');
   const [newCategory, setNewCategory] = useState<CommunityCategory>('free');
   const [newImages, setNewImages] = useState<File[]>([]);
+  const [existingImageUrls, setExistingImageUrls] = useState<string[]>([]);
   const [isUploadingImages, setIsUploadingImages] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [feedFilter, setFeedFilter] = useState<FeedFilter>('all');
@@ -1961,17 +1962,17 @@ export function CommunityScreen({
   async function handleSharePost(post: CommunityPost) {
     // URL deep-link trực tiếp vào bài viết
     const shareUrl = `${window.location.origin}?post=${post.id}`;
-    const shareText = `${post.title}\n\n${post.content.slice(0, 150)}${post.content.length > 150 ? '...' : ''}`;
     if (navigator.share) {
       try {
-        await navigator.share({ title: post.title, text: shareText, url: shareUrl });
+        await navigator.share({ title: post.title, url: shareUrl });
       } catch {
         // người dùng huỷ — không làm gì
       }
     } else {
       try {
         await navigator.clipboard.writeText(shareUrl);
-        setSyncMessage('Đang trực tuyến');
+        setSyncMessage('✅ Đã sao chép link bài viết!');
+        setTimeout(() => setSyncMessage('Đang trực tuyến'), 3000);
       } catch {
         // ignore
       }
@@ -2119,7 +2120,7 @@ export function CommunityScreen({
             postId,
             type: 'like',
             title: 'Có lượt thích mới',
-            body: `${isAnonymous ? 'Ẩn danh' : displayName} đã thích bài "${previousPost.title}".`,
+            body: `${displayName} đã thích bài "${previousPost.title}".`,
           });
         } else if (!previousPost?.user_id && previousPost?.guest_session_id) {
           // Tác giả là khách
@@ -2129,7 +2130,7 @@ export function CommunityScreen({
             postId,
             type: 'like',
             title: 'Có lượt thích mới',
-            body: `${isAnonymous ? 'Ẩn danh' : displayName} đã thích bài "${previousPost.title}".`,
+            body: `${displayName} đã thích bài "${previousPost.title}".`,
           });
         }
       }
@@ -2333,12 +2334,13 @@ export function CommunityScreen({
     const expiresAt = isGuest ? guestExpiresAt() : undefined;
     const postDisplayName = isAnonymous ? 'Ẩn danh' : (isGuest ? 'Khách' : displayName);
 
-    // Upload ảnh trước nếu có
-    let imageUrls: string[] = [];
+    // Upload ảnh trước nếu có; khi đang sửa bài thì giữ lại URL cũ nếu không chọn ảnh mới
+    let imageUrls: string[] = editingPostId ? [...existingImageUrls] : [];
     if (newImages.length > 0) {
       setIsUploadingImages(true);
-      imageUrls = await uploadPostImages(newImages);
+      const uploaded = await uploadPostImages(newImages);
       setIsUploadingImages(false);
+      imageUrls = [...imageUrls, ...uploaded];
     }
 
     const draft = {
@@ -2411,6 +2413,7 @@ export function CommunityScreen({
     setIsWritingReview(false);
     setEditingPostId(null);
     setNewImages([]);
+    setExistingImageUrls([]);
   }
 
   function makeLocalPost(draft: Omit<Parameters<typeof createCommunityPost>[0], 'userId'>): CommunityPost {
@@ -2437,6 +2440,8 @@ export function CommunityScreen({
     setNewContent(post.content);
     setNewCategory(post.category);
     setIsAnonymous(post.is_anonymous);
+    setExistingImageUrls(post.image_urls || []);
+    setNewImages([]);
     openComposer();
   }
 
@@ -4525,6 +4530,14 @@ function ReviewBoard({
     setAddressSuggestions([]);
     setShowSuggestions(false);
     setIsAnon(false);
+    // Revoke blob URLs để tránh memory leak, rồi xoá ảnh khỏi state
+    setImagePreviews((prev) => {
+      prev.forEach((url) => URL.revokeObjectURL(url));
+      return [];
+    });
+    setSelectedImages([]);
+    setUploading(false);
+    setSubmitting(false);
   };
 
   return (
