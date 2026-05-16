@@ -130,9 +130,17 @@
 }
 
 .dark .tab-item.active .tab-icon-wrap {
-  background: rgba(79, 115, 255, 0.28);
+  background: rgba(79, 115, 255, 0.35);
   color: #ffffff;
   box-shadow: none;
+}
+
+.dark .tab-item.active .tab-icon-wrap svg {
+  color: #a5b8ff;
+}
+
+.dark .tab-item.active .tab-label {
+  color: #a5b8ff;
 }
 
 /* Appbar */
@@ -7223,6 +7231,20 @@ button.ticker-inner {
   background: white;
   color: var(--blue-600);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.dark .pf-lang-toggle.mini {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.dark .pf-lang-toggle.mini button {
+  color: #94a3b8;
+}
+
+.dark .pf-lang-toggle.mini button.active {
+  background: #2752ff;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(39, 82, 255, 0.4);
 }
 
 .pf-pop-info-row {
