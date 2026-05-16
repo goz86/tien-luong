@@ -188,7 +188,7 @@ export async function loadCommunityState(userId?: string): Promise<CommunityStat
   const { data: postRows, error: postsError } = await withQueryTimeout(
     client
       .from('community_posts')
-      .select('id,user_id,guest_session_id,category,title,content,is_anonymous,display_name,likes_count,dislikes_count,comments_count,views_count,created_at')
+      .select('id,user_id,guest_session_id,category,title,content,is_anonymous,display_name,likes_count,dislikes_count,comments_count,views_count,image_urls,created_at')
       .order('created_at', { ascending: false })
       .limit(50),
     REQUIRED_QUERY_TIMEOUT_MS,

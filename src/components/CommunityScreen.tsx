@@ -1722,15 +1722,17 @@ export function CommunityScreen({
         const compressed = await compressPostImage(file);
         const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
         const path = `posts/${folder}/${filename}`;
-        const { error } = await supabase.storage
+        const { error: uploadError } = await supabase.storage
           .from('community-images')
           .upload(path, compressed, { contentType: 'image/jpeg', cacheControl: '3600', upsert: false });
-        if (!error) {
+        if (uploadError) {
+          console.error('[uploadPostImages] Storage upload error:', uploadError.message);
+        } else {
           const { data } = supabase.storage.from('community-images').getPublicUrl(path);
           urls.push(data.publicUrl);
         }
-      } catch {
-        // bỏ qua ảnh lỗi, đăng bài không có ảnh đó
+      } catch (err) {
+        console.error('[uploadPostImages] Unexpected error:', err);
       }
     }
     return urls;
