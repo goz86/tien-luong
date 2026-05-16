@@ -461,8 +461,24 @@ export function CalendarScreen({
       const blob = await res.blob();
       const blobUrl = URL.createObjectURL(blob);
 
+      // Tên file: {ten-noi-lam}-YYYY.MM.png  (slug hoá tiếng Việt)
+      const slugifyVi = (text: string) =>
+        text
+          .replace(/[đĐ]/g, (c) => (c === 'đ' ? 'd' : 'D'))
+          .normalize('NFD')
+          .replace(/[̀-ͯ]/g, '')
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '');
+
+      const venueSlug = effectiveVenue !== 'all' && effectiveVenue
+        ? slugifyVi(effectiveVenue)
+        : 'lich-lam-viec';
+      const monthTitle = formatCalendarMonthTitle(month); // "2026.05"
+      const filename = `${venueSlug}-${monthTitle}.png`;
+
       const link = document.createElement('a');
-      link.download = `lich-lam-viec-${formatCalendarMonthTitle(month)}.png`;
+      link.download = filename;
       link.href = blobUrl;
       document.body.appendChild(link);
       link.click();
