@@ -109,6 +109,7 @@ export function ProfileScreen({
   const [stats, setStats] = useState({ posts: 0, comments: 0, bookmarks: 0, likes: 0 });
   const [policyPanel, setPolicyPanel] = useState<'privacy' | 'terms' | 'support' | 'delete' | null>(null);
   const [deleteReason, setDeleteReason] = useState('');
+  const [deleteConfirmed, setDeleteConfirmed] = useState(false);
 
   // Badge progress data from store
   const badgeShifts = useAppStore(s => s.shifts);
@@ -238,22 +239,22 @@ export function ProfileScreen({
     await supabase.auth.signOut();
   }
 
-  async function handleRequestAccountDeletion() {
-    if (!supabase || !session) return;
+  async function handleDeleteAccount() {
+    if (!supabase || !session || !deleteConfirmed) return;
     setLoading(true);
-    const { error } = await supabase.from('account_deletion_requests').insert({
-      user_id: session.user.id,
-      email: session.user.email,
-      reason: deleteReason || null,
-    });
-    setLoading(false);
-    if (error) {
-      setAuthMessage(isKo ? 'Chưa gửi được yêu cầu xoá tài khoản.' : 'Chưa gửi được yêu cầu xoá tài khoản.');
-      return;
+    try {
+      const { error } = await supabase.rpc('delete_own_account');
+      if (error) {
+        setAuthMessage('Xoá tài khoản thất bại: ' + error.message);
+        setLoading(false);
+        return;
+      }
+      // Đăng xuất sau khi xoá thành công
+      await supabase.auth.signOut();
+    } catch (err) {
+      setAuthMessage('Có lỗi xảy ra, vui lòng thử lại.');
+      setLoading(false);
     }
-    setPolicyPanel(null);
-    setAuthMessage(isKo ? 'Đã gửi yêu cầu xoá tài khoản.' : 'Đã gửi yêu cầu xoá tài khoản.');
-    await supabase.auth.signOut();
   }
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -956,10 +957,14 @@ export function ProfileScreen({
             {policyPanel === 'delete' ? (
               <div className="pf-policy-body">
                 <div className="pf-policy-warn-box">
-                  <p>⚠️ <strong>Lưu ý quan trọng</strong></p>
-                  <p>Sau khi tài khoản bị xoá, toàn bộ dữ liệu cá nhân, lịch làm việc, bài viết cộng đồng và lịch sử chi tiêu sẽ bị xoá vĩnh viễn và <strong>không thể khôi phục</strong>.</p>
+                  <p>⚠️ <strong>Cảnh báo – Hành động không thể hoàn tác</strong></p>
+                  <p>Tài khoản và toàn bộ dữ liệu sẽ bị <strong>xoá vĩnh viễn ngay lập tức</strong>, bao gồm: lịch làm việc, chi tiêu, bài viết, bình luận và hồ sơ cá nhân.</p>
                 </div>
-                <p style={{ fontSize: 13, color: 'var(--text-faint)', margin: '12px 0 6px' }}>Yêu cầu sẽ được xử lý trong vòng <strong>7 ngày làm việc</strong>. Trong thời gian chờ, tài khoản vẫn hoạt động bình thường.</p>
+
+                <p style={{ fontSize: 13, color: 'var(--text-faint)', margin: '4px 0 12px' }}>
+                  Tài khoản đang đăng nhập: <strong>{session?.user.email}</strong>
+                </p>
+
                 <textarea
                   className="pf-input pf-textarea"
                   rows={3}
@@ -967,8 +972,23 @@ export function ProfileScreen({
                   onChange={(event) => setDeleteReason(event.target.value)}
                   placeholder="Lý do xoá tài khoản (tuỳ chọn)"
                 />
-                <button type="button" className="pf-delete-account-btn" disabled={loading} onClick={() => void handleRequestAccountDeletion()}>
-                  {loading ? 'Đang gửi...' : 'Gửi yêu cầu xoá tài khoản'}
+
+                <label className="pf-delete-confirm-label">
+                  <input
+                    type="checkbox"
+                    checked={deleteConfirmed}
+                    onChange={(e) => setDeleteConfirmed(e.target.checked)}
+                  />
+                  <span>Tôi hiểu rằng dữ liệu sẽ bị xoá vĩnh viễn và không thể khôi phục</span>
+                </label>
+
+                <button
+                  type="button"
+                  className="pf-delete-account-btn"
+                  disabled={loading || !deleteConfirmed}
+                  onClick={() => void handleDeleteAccount()}
+                >
+                  {loading ? 'Đang xoá tài khoản...' : 'Xoá tài khoản ngay'}
                 </button>
               </div>
             ) : (

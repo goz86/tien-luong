@@ -6859,17 +6859,22 @@ button.ticker-inner {
   display: flex;
   align-items: flex-end;
   justify-content: center;
+  /* đẩy sheet lên trên nav bar (~80px) */
+  padding-bottom: calc(80px + env(safe-area-inset-bottom));
+  padding-left: 12px;
+  padding-right: 12px;
 }
 
 .pf-policy-sheet {
   width: 100%;
   max-width: 430px;
-  max-height: 78vh;
+  max-height: 76vh;
   overflow-y: auto;
   background: #fff;
-  border-radius: 26px 26px 0 0;
-  padding: 18px 20px calc(24px + env(safe-area-inset-bottom));
-  box-shadow: 0 -20px 50px rgba(15, 23, 42, 0.18);
+  /* bo tròn 4 góc vì sheet nổi trên nav bar */
+  border-radius: 20px;
+  padding: 20px 20px 24px;
+  box-shadow: 0 8px 40px rgba(15, 23, 42, 0.22);
 }
 
 .pf-policy-body {
@@ -6980,6 +6985,27 @@ button.ticker-inner {
   margin: 0 !important;
 }
 
+/* Delete account confirm checkbox */
+.pf-delete-confirm-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-main);
+  margin: 12px 0 16px;
+  cursor: pointer;
+  line-height: 1.5;
+}
+
+.pf-delete-confirm-label input[type="checkbox"] {
+  margin-top: 2px;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  accent-color: #e11d48;
+  cursor: pointer;
+}
+
 .pf-delete-account-btn {
   width: 100%;
   border: none;
@@ -6989,7 +7015,13 @@ button.ticker-inner {
   padding: 13px 16px;
   font-weight: 900;
   cursor: pointer;
-  margin-top: 12px;
+  margin-top: 0;
+  transition: opacity 0.2s;
+}
+
+.pf-delete-account-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .pf-setting-row.mini span {
