@@ -6701,8 +6701,10 @@ button.ticker-inner {
   align-items: center;
   gap: 12px;
   background: var(--card-bg, #fff);
-  border-bottom: 1px solid var(--border-light, #f1f5f9);
+  border: 1px solid var(--border-light, #f1f5f9);
+  border-radius: 16px;
   padding: 14px 20px;
+  margin: 12px 16px 4px;
   cursor: pointer;
 }
 .pf-guest-banner-text {
@@ -6753,9 +6755,10 @@ button.ticker-inner {
 }
 .pf-settings-card {
   background: var(--card-bg, #fff);
-  border-top: 1px solid var(--border-light, #f1f5f9);
-  border-bottom: 1px solid var(--border-light, #f1f5f9);
+  border-radius: 16px;
+  border: 1px solid var(--border-light, #f1f5f9);
   overflow: hidden;
+  margin: 0 16px;
 }
 .pf-setting-divider {
   height: 1px;
@@ -10818,7 +10821,7 @@ button.ticker-inner {
 /* Dark mode: new inline settings page */
 .dark .pf-guest-banner {
   background: #111a2d;
-  border-bottom-color: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.07);
 }
 .dark .pf-guest-banner-title {
   color: #94a3b8;
@@ -10836,7 +10839,8 @@ button.ticker-inner {
 }
 .dark .pf-settings-card {
   background: #111a2d;
-  border-color: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
 }
 .dark .pf-setting-divider {
   background: rgba(255, 255, 255, 0.07);
