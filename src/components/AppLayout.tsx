@@ -117,7 +117,8 @@ export default function AppLayout() {
   useEffect(() => {
     if (!activeBanner) return;
     const timer = window.setTimeout(() => {
-      sessionStorage.setItem(ANNOUNCEMENT_SESSION_DISMISS_KEY, activeBanner.id);
+      // Auto-dismiss sau 12s → lưu localStorage 24h để không hiện lại khi đăng nhập lại
+      localStorage.setItem(ANNOUNCEMENT_HIDE_TODAY_KEY, `${activeBanner.id}:${Date.now()}`);
       setActiveBanner((current) => (current?.id === activeBanner.id ? null : current));
     }, ANNOUNCEMENT_AUTO_DISMISS_MS);
 
@@ -551,7 +552,8 @@ export default function AppLayout() {
                     type="button"
                     className="admin-entry-announcement-close"
                     onClick={() => {
-                      sessionStorage.setItem(ANNOUNCEMENT_SESSION_DISMISS_KEY, activeBanner.id);
+                      // Đóng → lưu localStorage 24h, không hiện lại khi đăng nhập lại
+                      localStorage.setItem(ANNOUNCEMENT_HIDE_TODAY_KEY, `${activeBanner.id}:${Date.now()}`);
                       setActiveBanner(null);
                     }}
                   >
