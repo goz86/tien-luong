@@ -12,6 +12,7 @@ import { ProfileScreen, WALLPAPERS } from './ProfileScreen';
 import { timeAgo } from '../data/communityData';
 import { shiftMonth } from '../utils/helpers';
 import type { Tab } from '../lib/types';
+import { recordAppVisit } from '../lib/appVisits';
 
 /* ── i18n labels for bottom tabs ── */
 const tabLabels: Record<string, Record<Tab, string>> = {
@@ -42,6 +43,11 @@ export default function AppLayout() {
   const suppressPopstate = useRef(false);
   const [activeBanner, setActiveBanner] = useState<{ id: string; title: string; body: string; severity: string } | null>(null);
   const [communityTargetPostId, setCommunityTargetPostId] = useState<string | null>(null);
+
+  // Ping visitor tracking — ghi nhận lượt truy cập (guest + registered)
+  useEffect(() => {
+    void recordAppVisit(store.session?.user.id ?? null);
+  }, [store.session]);
 
   // Fetch latest admin announcement and show it as an entry popup for signed-in users.
   useEffect(() => {

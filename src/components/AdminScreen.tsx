@@ -137,6 +137,25 @@ type CommunityReport = {
 
 type ReportFilter = 'pending' | 'resolved' | 'dismissed' | 'all';
 
+type VisitStats = {
+  total_sessions_ever: number;
+  total_guests_ever: number;
+  total_users_ever: number;
+  sessions_today: number;
+  guests_today: number;
+  sessions_week: number;
+  guests_week: number;
+  sessions_month: number;
+  guests_month: number;
+};
+
+type DailyVisit = {
+  day: string;
+  total_sessions: number;
+  guest_sessions: number;
+  user_sessions: number;
+};
+
 type DashboardStats = {
   users: number;
   newUsersWeek: number;
@@ -421,6 +440,8 @@ export function AdminScreen({
   const [notifications, setNotifications] = useState<AdminNotification[]>([]);
   const [reports, setReports] = useState<CommunityReport[]>([]);
   const [reportFilter, setReportFilter] = useState<ReportFilter>('pending');
+  const [visitStats, setVisitStats] = useState<VisitStats | null>(null);
+  const [dailyVisits, setDailyVisits] = useState<DailyVisit[]>([]);
   // Styled confirm/prompt modal
   type ConfirmState = { message: string; resolve: (ok: boolean, reason: string) => void };
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
@@ -552,6 +573,31 @@ export function AdminScreen({
     setStats(nextStats);
     setReports((reportsRes.data as CommunityReport[] | null) || []);
 
+    // Visitor stats (non-critical — bỏ qua lỗi nếu bảng chưa tạo)
+    const [visitStatsRes, dailyVisitsRes] = await Promise.all([
+      supabase.rpc('admin_get_visit_stats'),
+      supabase.rpc('admin_get_daily_visits', { days_back: 14 }),
+    ]);
+    if (!visitStatsRes.error && visitStatsRes.data) {
+      const row = Array.isArray(visitStatsRes.data) ? visitStatsRes.data[0] : visitStatsRes.data;
+      if (row) {
+        setVisitStats({
+          total_sessions_ever: Number(row.total_sessions_ever || 0),
+          total_guests_ever:   Number(row.total_guests_ever   || 0),
+          total_users_ever:    Number(row.total_users_ever    || 0),
+          sessions_today:      Number(row.sessions_today      || 0),
+          guests_today:        Number(row.guests_today        || 0),
+          sessions_week:       Number(row.sessions_week       || 0),
+          guests_week:         Number(row.guests_week         || 0),
+          sessions_month:      Number(row.sessions_month      || 0),
+          guests_month:        Number(row.guests_month        || 0),
+        });
+      }
+    }
+    if (!dailyVisitsRes.error && Array.isArray(dailyVisitsRes.data)) {
+      setDailyVisits((dailyVisitsRes.data as DailyVisit[]).slice(0, 14).reverse());
+    }
+
     const moderationMap = new Map<string, UserModeration>();
     (moderationsRes.data as UserModeration[] | null)?.forEach((row) => moderationMap.set(row.user_id, row));
 
@@ -630,6 +676,7 @@ export function AdminScreen({
       .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_action_logs' }, queueReload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_announcements' }, queueReload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'community_reports' }, queueReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'app_visits' }, queueReload)
       .subscribe();
 
     return () => {
@@ -1099,6 +1146,106 @@ export function AdminScreen({
               </span>
             </button>
           </section>
+
+          {/* Visitor stats panel */}
+          {visitStats ? (
+            <section className="admin-visit-panel" aria-label={isKo ? '방문자 통계' : 'Lượt truy cập'}>
+              <h2 className="admin-visit-title">
+                <TrendingUp size={16} />
+                {isKo ? '방문자 통계' : 'Lượt ghé thăm app'}
+              </h2>
+
+              {/* 3 time-range cards */}
+              <div className="admin-visit-grid">
+                {([
+                  {
+                    label: isKo ? '오늘' : 'Hôm nay',
+                    total: visitStats.sessions_today,
+                    guests: visitStats.guests_today,
+                    users: visitStats.sessions_today - visitStats.guests_today,
+                  },
+                  {
+                    label: isKo ? '7일' : '7 ngày',
+                    total: visitStats.sessions_week,
+                    guests: visitStats.guests_week,
+                    users: visitStats.sessions_week - visitStats.guests_week,
+                  },
+                  {
+                    label: isKo ? '30일' : '30 ngày',
+                    total: visitStats.sessions_month,
+                    guests: visitStats.guests_month,
+                    users: visitStats.sessions_month - visitStats.guests_month,
+                  },
+                ]).map(({ label, total, guests, users }) => (
+                  <div key={label} className="admin-visit-card">
+                    <span className="admin-visit-period">{label}</span>
+                    <strong className="admin-visit-total">{total.toLocaleString()}</strong>
+                    <div className="admin-visit-breakdown">
+                      <span className="admin-visit-guest">
+                        {isKo ? '비회원' : 'Khách'} {guests}
+                      </span>
+                      <span className="admin-visit-member">
+                        {isKo ? '회원' : 'Thành viên'} {users}
+                      </span>
+                    </div>
+                    {/* Guest ratio bar */}
+                    {total > 0 ? (
+                      <div className="admin-visit-bar">
+                        <div
+                          className="admin-visit-bar-guest"
+                          style={{ width: `${Math.round((guests / total) * 100)}%` }}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+
+              {/* All-time summary */}
+              <div className="admin-visit-alltime">
+                <span>{isKo ? '누적 방문자' : 'Tổng lượt ghé thăm'}</span>
+                <strong>{visitStats.total_sessions_ever.toLocaleString()}</strong>
+                <span className="admin-visit-alltime-split">
+                  ({isKo ? '비회원' : 'Khách'} {visitStats.total_guests_ever.toLocaleString()}
+                  {' · '}
+                  {isKo ? '회원' : 'TV'} {visitStats.total_users_ever.toLocaleString()})
+                </span>
+              </div>
+
+              {/* Mini bar chart — 14 ngày gần nhất */}
+              {dailyVisits.length > 0 ? (
+                <div className="admin-visit-chart" aria-label={isKo ? '14일 방문 추이' : 'Biểu đồ 14 ngày'}>
+                  {(() => {
+                    const maxVal = Math.max(...dailyVisits.map(d => d.total_sessions), 1);
+                    return dailyVisits.map((d) => {
+                      const heightPct = Math.round((d.total_sessions / maxVal) * 100);
+                      const guestPct  = d.total_sessions > 0
+                        ? Math.round((d.guest_sessions / d.total_sessions) * 100)
+                        : 0;
+                      const dayLabel  = new Date(d.day).toLocaleDateString(
+                        lang === 'ko' ? 'ko-KR' : 'vi-VN',
+                        { month: 'numeric', day: 'numeric' }
+                      );
+                      return (
+                        <div key={d.day} className="admin-visit-bar-col" title={`${dayLabel}: ${d.total_sessions} (${isKo ? '비회원' : 'Khách'} ${d.guest_sessions})`}>
+                          <div className="admin-visit-bar-col-inner" style={{ height: `${heightPct}%` }}>
+                            <div className="admin-visit-bar-col-guest" style={{ height: `${guestPct}%` }} />
+                          </div>
+                          <span className="admin-visit-bar-label">{dayLabel.split('/')[1] ?? dayLabel}</span>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              ) : null}
+
+              <p className="admin-visit-hint">
+                {isKo
+                  ? '* 1시간마다 1회 기록 (기기 기준)'
+                  : '* Ghi nhận tối đa 1 lần/giờ/thiết bị'}
+              </p>
+            </section>
+          ) : null}
         </div>
       ) : null}
 

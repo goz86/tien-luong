@@ -13090,3 +13090,215 @@ button.admin-stat-card {
   background: linear-gradient(135deg, rgba(239, 68, 68, 0.12), rgba(239, 68, 68, 0.05)) !important;
 }
 
+
+/* ══════════════════════════════════════════════════════════
+   ADMIN — Visitor stats panel
+   ══════════════════════════════════════════════════════════ */
+
+.admin-visit-panel {
+  background: #fff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 18px 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.admin-visit-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 900;
+  color: #0f172a;
+  margin: 0;
+}
+
+.admin-visit-title svg {
+  color: #2752ff;
+}
+
+/* 3-card grid */
+.admin-visit-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.admin-visit-card {
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 12px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+  text-align: center;
+}
+
+.admin-visit-period {
+  font-size: 11px;
+  font-weight: 800;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.admin-visit-total {
+  font-size: 26px;
+  font-weight: 950;
+  color: #0f172a;
+  line-height: 1;
+}
+
+.admin-visit-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+}
+
+.admin-visit-guest {
+  font-size: 11px;
+  font-weight: 700;
+  color: #f59e0b;
+}
+
+.admin-visit-member {
+  font-size: 11px;
+  font-weight: 700;
+  color: #2752ff;
+}
+
+/* Ratio bar */
+.admin-visit-bar {
+  height: 5px;
+  background: #dbeafe;
+  border-radius: 99px;
+  overflow: hidden;
+  width: 100%;
+  margin-top: 2px;
+}
+
+.admin-visit-bar-guest {
+  height: 100%;
+  background: #f59e0b;
+  border-radius: 99px;
+  transition: width 0.4s ease;
+}
+
+/* All-time row */
+.admin-visit-alltime {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, rgba(39, 82, 255, 0.06), rgba(39, 82, 255, 0.02));
+  border: 1.5px solid rgba(39, 82, 255, 0.15);
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 750;
+  color: #475569;
+  flex-wrap: wrap;
+}
+
+.admin-visit-alltime strong {
+  font-size: 18px;
+  font-weight: 950;
+  color: #2752ff;
+}
+
+.admin-visit-alltime-split {
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: 700;
+}
+
+/* Mini bar chart */
+.admin-visit-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 60px;
+  padding: 0 2px;
+}
+
+.admin-visit-bar-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  gap: 3px;
+}
+
+.admin-visit-bar-col-inner {
+  width: 100%;
+  background: #bfdbfe;
+  border-radius: 4px 4px 0 0;
+  position: relative;
+  min-height: 3px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.admin-visit-bar-col-guest {
+  width: 100%;
+  background: #f59e0b;
+  border-radius: 4px 4px 0 0;
+  min-height: 2px;
+}
+
+.admin-visit-bar-label {
+  font-size: 9px;
+  font-weight: 750;
+  color: #94a3b8;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* Hint text */
+.admin-visit-hint {
+  margin: 0;
+  font-size: 11px;
+  color: #cbd5e1;
+  font-weight: 650;
+  text-align: center;
+}
+
+/* Dark mode */
+.dark .admin-visit-panel {
+  background: #111a2d;
+  border-color: rgba(148, 163, 184, 0.14);
+}
+
+.dark .admin-visit-title {
+  color: #f8fafc;
+}
+
+.dark .admin-visit-card {
+  background: #0f172a;
+  border-color: rgba(148, 163, 184, 0.14);
+}
+
+.dark .admin-visit-total {
+  color: #f8fafc;
+}
+
+.dark .admin-visit-bar {
+  background: rgba(39, 82, 255, 0.15);
+}
+
+.dark .admin-visit-alltime {
+  background: rgba(39, 82, 255, 0.08);
+  border-color: rgba(39, 82, 255, 0.2);
+  color: #94a3b8;
+}
+
+.dark .admin-visit-bar-col-inner {
+  background: rgba(191, 219, 254, 0.15);
+}
