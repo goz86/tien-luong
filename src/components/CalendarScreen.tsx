@@ -1,7 +1,7 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { toPng } from 'html-to-image';
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Download, Settings2, Plus, Clock } from 'lucide-react';
-import { calculateShiftPay, shiftHours, formatKrw } from '../lib/salary';
+import { calculateShiftPay, shiftHours, formatKrw, MINIMUM_WAGE_2026 } from '../lib/salary';
 import { Shift, ShiftDraft, VenueColors } from '../lib/types';
 import {
   buildCalendar,
@@ -108,6 +108,8 @@ export function CalendarScreen({
     nightHint: '보통 22:00 이후 적용',
     holiday: '휴일/주휴수당',
     holidayPlaceholder: '수당 금액 입력 (있는 경우)',
+    juhyuSuggestLabel: (amt: string) => `최저 기준: ${amt}원 ↓`,
+    juhyuSuggestHint: (h: number) => `이번 주 ${h.toFixed(1)}h 기준`,
     saveChanges: '변경 저장',
     saveShift: '이 날짜에 근무 저장',
     deleteTitle: '확인',
@@ -158,6 +160,8 @@ export function CalendarScreen({
     nightHint: 'Thường áp dụng sau 22:00',
     holiday: 'Phụ cấp nghỉ / Cuối tuần (주휴수당)',
     holidayPlaceholder: 'Nhập số tiền phụ cấp (nếu có)',
+    juhyuSuggestLabel: (amt: string) => `Mức tối thiểu: ${amt}원 ↓`,
+    juhyuSuggestHint: (h: number) => `Tuần này ${h.toFixed(1)}h`,
     saveChanges: 'Lưu thay đổi',
     saveShift: 'Lưu',
     deleteTitle: 'Xác nhận',
@@ -200,6 +204,44 @@ export function CalendarScreen({
   const calendarYear = new Date(`${month}T00:00:00`).getFullYear();
   const yearOptions = Array.from({ length: 9 }, (_, index) => calendarYear - 4 + index);
   const monthOptions = Array.from({ length: 12 }, (_, index) => index + 1);
+
+  // ── 주휴수당 auto-suggestion ──────────────────────────────────────────────
+  // Tính từ thứ 2 đến ngày ca hiện tại, gộp cả ca đang nhập.
+  // Yêu cầu tối thiểu 15h/tuần mới được hưởng 주휴수당.
+  const weekJuhyuSuggestion = useMemo(() => {
+    if (!draft.date || !draft.startTime || !draft.endTime) return null;
+
+    // Tìm thứ 2 của tuần chứa draft.date
+    const draftDate = new Date(`${draft.date}T00:00:00`);
+    const dow = draftDate.getDay(); // 0=CN, 1=T2,...6=T7
+    const daysBack = dow === 0 ? 6 : dow - 1;
+    const monday = new Date(draftDate);
+    monday.setDate(draftDate.getDate() - daysBack);
+    const mondayStr = monday.toLocaleDateString('sv-SE');
+
+    // Các ca đã lưu trong tuần (T2 → ngày ca hiện tại), bỏ qua ca đang sửa
+    const weekSavedShifts = shifts.filter(
+      (s) => s.date >= mondayStr && s.date <= draft.date && s.id !== editingShiftId
+    );
+    const savedHours = weekSavedShifts.reduce((sum, s) => sum + shiftHours(s), 0);
+
+    // Giờ của ca hiện đang nhập
+    const [sh, sm] = draft.startTime.split(':').map(Number);
+    const [eh, em] = draft.endTime.split(':').map(Number);
+    let startMins = sh * 60 + sm;
+    let endMins   = eh * 60 + em;
+    if (endMins <= startMins) endMins += 24 * 60;
+    const draftHrs = Math.max(0, (endMins - startMins - draft.breakMinutes) / 60);
+
+    const totalHours = savedHours + draftHrs;
+    if (totalHours < 15) return null; // 주휴수당 chỉ áp dụng khi >= 15h/tuần
+
+    // Công thức: (giờ làm / 40) × 8 × lương giờ (tối thiểu)
+    const clampedHours = Math.min(totalHours, 40);
+    const minJuhyu = Math.round((clampedHours / 40) * 8 * MINIMUM_WAGE_2026);
+    return { min: minJuhyu, totalHours };
+  }, [draft.date, draft.startTime, draft.endTime, draft.breakMinutes, shifts, editingShiftId]);
+  // ─────────────────────────────────────────────────────────────────────────
 
   const quickPreview = calculateShiftPay({
     id: 'quick-preview',
@@ -887,7 +929,30 @@ export function CalendarScreen({
                   </label>
 
                   <label className="korean-law-row" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <strong style={{ fontSize: '14px', color: '#08162b' }}>{ui.holiday}</strong>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+                      <strong style={{ fontSize: '14px', color: '#08162b' }}>{ui.holiday}</strong>
+                      {weekJuhyuSuggestion && (
+                        <button
+                          type="button"
+                          onClick={() => setDraft({ ...draft, holidayAllowance: weekJuhyuSuggestion.min })}
+                          title={ui.juhyuSuggestHint(weekJuhyuSuggestion.totalHours)}
+                          style={{
+                            background: 'linear-gradient(135deg, #eef3ff 0%, #dce8ff 100%)',
+                            border: '1.5px solid #b8d0ff',
+                            borderRadius: '20px',
+                            padding: '4px 11px',
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            color: '#2752ff',
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                            lineHeight: 1.4,
+                          }}
+                        >
+                          {ui.juhyuSuggestLabel(weekJuhyuSuggestion.min.toLocaleString('ko-KR'))}
+                        </button>
+                      )}
+                    </div>
                     <div className="settings-select-wrap">
                       <input
                         type="text"
