@@ -5022,26 +5022,25 @@ function ReviewBoard({
                       </div>
                     </div>
                     <div className="rv-item-body">
-                      <h5 className="rv-item-title">{review.title}</h5>
-                      <p className="rv-item-text">{shortText(review.content, 120)}</p>
-
-                      {imageUrls.length > 0 && (
-                        <div className="rv-review-images">
-                          {imageUrls.map((url, i) => (
-                            <button
-                              key={`${review.id}-image-${i}`}
-                              type="button"
-                              className="rv-review-image"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setPreviewImage(url);
-                              }}
-                            >
-                              <img src={url} alt={review.title} loading="lazy" />
-                            </button>
-                          ))}
+                      <div className={`rv-item-body-inner${imageUrls.length > 0 ? ' has-thumb' : ''}`}>
+                        <div className="rv-item-body-text">
+                          <h5 className="rv-item-title">{review.title}</h5>
+                          <p className="rv-item-text">{shortText(review.content, imageUrls.length > 0 ? 72 : 120)}</p>
                         </div>
-                      )}
+                        {imageUrls.length > 0 && (
+                          <button
+                            type="button"
+                            className="rv-item-thumb"
+                            onClick={(event) => { event.stopPropagation(); setPreviewImage(imageUrls[0]); }}
+                            aria-label="Xem ảnh"
+                          >
+                            <img src={imageUrls[0]} alt={review.title} loading="lazy" />
+                            {imageUrls.length > 1 && (
+                              <span className="rv-item-thumb-count">+{imageUrls.length - 1}</span>
+                            )}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </article>
                 );

@@ -9893,6 +9893,58 @@ button.ticker-inner {
 
 .rv-item-body {
   position: relative;
+  margin-top: 4px;
+}
+
+.rv-item-body-inner {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.rv-item-body-text {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Thumbnail thumbnail bên phải khi có ảnh */
+.rv-item-thumb {
+  flex: 0 0 62px;
+  width: 62px;
+  height: 62px;
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+  border: none;
+  padding: 0;
+  cursor: zoom-in;
+  background: #f1f5f9;
+  display: block;
+  flex-shrink: 0;
+}
+
+.rv-item-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.rv-item-thumb-count {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.48);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+}
+
+.dark .rv-item-thumb {
+  background: #1e293b;
 }
 
 .rv-item-text {
