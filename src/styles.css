@@ -6875,11 +6875,109 @@ button.ticker-inner {
 .pf-policy-body {
   color: #334155;
   font-size: 14px;
-  line-height: 1.65;
+  line-height: 1.7;
+}
+
+.dark .pf-policy-body {
+  color: #cbd5e1;
 }
 
 .pf-policy-body p {
-  margin: 0 0 12px;
+  margin: 0 0 10px;
+}
+
+/* Section heading */
+.pf-policy-h {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 18px 0 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.dark .pf-policy-h {
+  color: #f1f5f9;
+}
+
+/* Last updated badge */
+.pf-policy-updated {
+  display: inline-block;
+  font-size: 11px;
+  color: var(--text-faint);
+  background: var(--bg-shell);
+  border-radius: 6px;
+  padding: 2px 8px;
+  margin-bottom: 14px !important;
+}
+
+/* Bulleted list */
+.pf-policy-list {
+  margin: 0 0 10px 0;
+  padding-left: 18px;
+  list-style: disc;
+}
+
+.pf-policy-list li {
+  margin-bottom: 5px;
+  line-height: 1.55;
+}
+
+/* Warning box for delete account */
+.pf-policy-warn-box {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+
+.pf-policy-warn-box p {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: #92400e;
+}
+
+.pf-policy-warn-box p:last-child {
+  margin-bottom: 0;
+}
+
+.dark .pf-policy-warn-box {
+  background: rgba(251, 146, 60, 0.1);
+  border-color: rgba(251, 146, 60, 0.3);
+}
+
+.dark .pf-policy-warn-box p {
+  color: #fbbf24;
+}
+
+/* Support contact cards */
+.pf-support-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg-shell);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+
+.pf-support-icon {
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+.pf-support-label {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin: 0 0 2px !important;
+}
+
+.pf-support-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin: 0 !important;
 }
 
 .pf-delete-account-btn {

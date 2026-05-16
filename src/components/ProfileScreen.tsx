@@ -955,7 +955,11 @@ export function ProfileScreen({
             </div>
             {policyPanel === 'delete' ? (
               <div className="pf-policy-body">
-                <p>Duhoc Mate sẽ gửi yêu cầu xoá tài khoản cho admin xử lý. Dữ liệu cá nhân, bài viết và lịch sử liên quan sẽ được kiểm tra theo chính sách vận hành.</p>
+                <div className="pf-policy-warn-box">
+                  <p>⚠️ <strong>Lưu ý quan trọng</strong></p>
+                  <p>Sau khi tài khoản bị xoá, toàn bộ dữ liệu cá nhân, lịch làm việc, bài viết cộng đồng và lịch sử chi tiêu sẽ bị xoá vĩnh viễn và <strong>không thể khôi phục</strong>.</p>
+                </div>
+                <p style={{ fontSize: 13, color: 'var(--text-faint)', margin: '12px 0 6px' }}>Yêu cầu sẽ được xử lý trong vòng <strong>7 ngày làm việc</strong>. Trong thời gian chờ, tài khoản vẫn hoạt động bình thường.</p>
                 <textarea
                   className="pf-input pf-textarea"
                   rows={3}
@@ -964,25 +968,115 @@ export function ProfileScreen({
                   placeholder="Lý do xoá tài khoản (tuỳ chọn)"
                 />
                 <button type="button" className="pf-delete-account-btn" disabled={loading} onClick={() => void handleRequestAccountDeletion()}>
-                  {loading ? '...' : 'Gửi yêu cầu xoá tài khoản'}
+                  {loading ? 'Đang gửi...' : 'Gửi yêu cầu xoá tài khoản'}
                 </button>
               </div>
             ) : (
               <div className="pf-policy-body">
                 {policyPanel === 'privacy' ? (
                   <>
-                    <p>Duhoc Mate lưu dữ liệu tài khoản, hồ sơ, ca làm, chi tiêu và nội dung cộng đồng để đồng bộ trải nghiệm giữa các thiết bị.</p>
-                    <p>Ứng dụng không bán dữ liệu cá nhân. Người dùng có thể yêu cầu xoá tài khoản trong phần cài đặt.</p>
+                    <p className="pf-policy-updated">Cập nhật lần cuối: 01/05/2025</p>
+
+                    <h4 className="pf-policy-h">1. Thông tin chúng tôi thu thập</h4>
+                    <p>DuhocMate thu thập các thông tin sau khi bạn đăng ký và sử dụng ứng dụng:</p>
+                    <ul className="pf-policy-list">
+                      <li>Thông tin tài khoản: tên hiển thị, địa chỉ email, ảnh đại diện</li>
+                      <li>Thông tin công việc: tên nơi làm, ca làm việc, mức lương, chi tiêu</li>
+                      <li>Nội dung cộng đồng: bài viết, bình luận, đánh giá địa điểm</li>
+                      <li>Dữ liệu sử dụng: thời gian truy cập, thiết bị, phiên bản ứng dụng</li>
+                    </ul>
+
+                    <h4 className="pf-policy-h">2. Mục đích sử dụng</h4>
+                    <ul className="pf-policy-list">
+                      <li>Đồng bộ dữ liệu giữa các thiết bị của bạn</li>
+                      <li>Cung cấp tính năng cộng đồng và kết nối người dùng</li>
+                      <li>Cải thiện chất lượng dịch vụ và trải nghiệm người dùng</li>
+                      <li>Gửi thông báo quan trọng liên quan đến tài khoản</li>
+                    </ul>
+
+                    <h4 className="pf-policy-h">3. Chia sẻ dữ liệu</h4>
+                    <p>DuhocMate <strong>không bán, không cho thuê</strong> dữ liệu cá nhân của bạn cho bên thứ ba. Dữ liệu chỉ được chia sẻ trong các trường hợp:</p>
+                    <ul className="pf-policy-list">
+                      <li>Yêu cầu hợp pháp từ cơ quan nhà nước có thẩm quyền</li>
+                      <li>Các nhà cung cấp dịch vụ kỹ thuật (Supabase) phục vụ vận hành ứng dụng</li>
+                    </ul>
+
+                    <h4 className="pf-policy-h">4. Bảo mật dữ liệu</h4>
+                    <p>Dữ liệu được mã hoá trong quá trình truyền (HTTPS/TLS) và lưu trữ trên hạ tầng đám mây bảo mật. Chúng tôi áp dụng các biện pháp kỹ thuật phù hợp để ngăn chặn truy cập trái phép.</p>
+
+                    <h4 className="pf-policy-h">5. Quyền của bạn</h4>
+                    <ul className="pf-policy-list">
+                      <li>Yêu cầu xem, chỉnh sửa hoặc xoá dữ liệu cá nhân</li>
+                      <li>Rút lại sự đồng ý bất kỳ lúc nào</li>
+                      <li>Yêu cầu xoá tài khoản hoàn toàn trong mục Cài đặt</li>
+                    </ul>
+                    <p>Liên hệ: <strong>michintashop@gmail.com</strong></p>
                   </>
                 ) : policyPanel === 'terms' ? (
                   <>
-                    <p>Thông tin lương, thuế, phụ cấp và review trong app chỉ có tính tham khảo, không thay thế tư vấn pháp lý hoặc tài chính.</p>
-                    <p>Không đăng nội dung quấy rối, lừa đảo, thông tin riêng tư của người khác hoặc nội dung vi phạm pháp luật.</p>
+                    <p className="pf-policy-updated">Cập nhật lần cuối: 01/05/2025</p>
+
+                    <h4 className="pf-policy-h">1. Chấp nhận điều khoản</h4>
+                    <p>Khi sử dụng DuhocMate, bạn đồng ý tuân thủ các điều khoản này. Nếu không đồng ý, vui lòng ngừng sử dụng ứng dụng.</p>
+
+                    <h4 className="pf-policy-h">2. Mô tả dịch vụ</h4>
+                    <p>DuhocMate là ứng dụng hỗ trợ du học sinh, thực tập sinh tại Hàn Quốc quản lý lịch làm việc, thu nhập, chi tiêu và kết nối cộng đồng. Thông tin về lương, thuế, phụ cấp chỉ mang tính <strong>tham khảo</strong>, không thay thế tư vấn pháp lý hoặc tài chính chuyên nghiệp.</p>
+
+                    <h4 className="pf-policy-h">3. Nghĩa vụ người dùng</h4>
+                    <ul className="pf-policy-list">
+                      <li>Cung cấp thông tin chính xác khi đăng ký</li>
+                      <li>Bảo mật thông tin đăng nhập, không chia sẻ tài khoản</li>
+                      <li>Chịu trách nhiệm về mọi hoạt động dưới tài khoản của mình</li>
+                    </ul>
+
+                    <h4 className="pf-policy-h">4. Nội dung bị cấm</h4>
+                    <ul className="pf-policy-list">
+                      <li>Nội dung quấy rối, phân biệt đối xử, thù địch</li>
+                      <li>Thông tin cá nhân của người khác khi chưa được phép</li>
+                      <li>Lừa đảo, spam, quảng cáo không được phép</li>
+                      <li>Nội dung vi phạm pháp luật Hàn Quốc hoặc Việt Nam</li>
+                      <li>Thông tin sai lệch gây hoang mang cộng đồng</li>
+                    </ul>
+
+                    <h4 className="pf-policy-h">5. Xử lý vi phạm</h4>
+                    <p>DuhocMate có quyền xoá nội dung vi phạm, tạm khoá hoặc xoá vĩnh viễn tài khoản mà không cần báo trước trong trường hợp vi phạm nghiêm trọng.</p>
+
+                    <h4 className="pf-policy-h">6. Giới hạn trách nhiệm</h4>
+                    <p>DuhocMate không chịu trách nhiệm về thiệt hại phát sinh từ việc sử dụng thông tin trong ứng dụng cho các quyết định tài chính, pháp lý hoặc nghề nghiệp.</p>
+
+                    <h4 className="pf-policy-h">7. Thay đổi điều khoản</h4>
+                    <p>Điều khoản có thể được cập nhật. Thay đổi quan trọng sẽ được thông báo qua ứng dụng. Tiếp tục sử dụng đồng nghĩa với việc chấp nhận điều khoản mới.</p>
                   </>
                 ) : (
                   <>
-                    <p>Email hỗ trợ: michintashop@gmail.com</p>
-                    <p>Khi báo cáo nội dung xấu, hãy dùng nút Báo cáo trong bài viết, profile hoặc review để admin có đủ ngữ cảnh xử lý.</p>
+                    <h4 className="pf-policy-h">Liên hệ chúng tôi</h4>
+                    <div className="pf-support-card">
+                      <span className="pf-support-icon">✉️</span>
+                      <div>
+                        <p className="pf-support-label">Email hỗ trợ</p>
+                        <p className="pf-support-value">michintashop@gmail.com</p>
+                      </div>
+                    </div>
+                    <div className="pf-support-card">
+                      <span className="pf-support-icon">⏱️</span>
+                      <div>
+                        <p className="pf-support-label">Thời gian phản hồi</p>
+                        <p className="pf-support-value">Trong vòng 24–48 giờ (ngày làm việc)</p>
+                      </div>
+                    </div>
+
+                    <h4 className="pf-policy-h" style={{ marginTop: 20 }}>Báo cáo nội dung vi phạm</h4>
+                    <p>Nếu bạn gặp bài viết, bình luận hoặc tài khoản vi phạm, hãy nhấn nút <strong>Báo cáo</strong> ngay trong ứng dụng để admin có đủ ngữ cảnh xử lý nhanh nhất.</p>
+
+                    <h4 className="pf-policy-h">Các vấn đề thường gặp</h4>
+                    <ul className="pf-policy-list">
+                      <li>Không đăng nhập được → kiểm tra email & mật khẩu, thử "Quên mật khẩu"</li>
+                      <li>Dữ liệu không đồng bộ → kiểm tra kết nối mạng, tải lại trang</li>
+                      <li>Quên mật khẩu → nhấn "Quên mật khẩu" tại màn hình đăng nhập</li>
+                      <li>Muốn đổi email → liên hệ qua email hỗ trợ bên trên</li>
+                    </ul>
+
+                    <p style={{ fontSize: 12, color: 'var(--text-faint)', marginTop: 16 }}>Khi gửi email, hãy cung cấp: tên tài khoản, mô tả vấn đề và ảnh chụp màn hình (nếu có) để được hỗ trợ nhanh hơn.</p>
                   </>
                 )}
               </div>
