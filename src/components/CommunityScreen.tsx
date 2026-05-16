@@ -10,6 +10,7 @@ import {
   ChevronUp,
   Eye,
   Flame,
+  ImagePlus,
   Loader2,
   MapPin,
   MessageCircle,
@@ -18,6 +19,7 @@ import {
   Plus,
   Search,
   Send,
+  Share2,
   ShieldCheck,
   Star,
   ThumbsDown,
@@ -1053,6 +1055,9 @@ export function CommunityScreen({
   const [newTitle, setNewTitle] = useState('');
   const [newContent, setNewContent] = useState('');
   const [newCategory, setNewCategory] = useState<CommunityCategory>('free');
+  const [newImages, setNewImages] = useState<File[]>([]);
+  const [isUploadingImages, setIsUploadingImages] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [feedFilter, setFeedFilter] = useState<FeedFilter>('all');
   const [newComment, setNewComment] = useState('');
   const [replyTo, setReplyTo] = useState<string | null>(null);
@@ -1649,12 +1654,110 @@ export function CommunityScreen({
     setNewContent('');
     setNewCategory('free');
     setIsAnonymous(true);
+    setNewImages([]);
   }
 
   function openComposer() {
     // Guest được phép mở composer — nội dung sẽ tự xoá sau 3h
     setIsWritingPost(true);
     setEditingPostId(null);
+  }
+
+  /** Xử lý chọn ảnh từ thư viện, tối đa 2 ảnh */
+  function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    setNewImages((prev) => [...prev, ...files].slice(0, 2));
+    e.target.value = '';
+  }
+
+  function removeImage(index: number) {
+    setNewImages((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  /**
+   * Nén ảnh bằng Canvas trước khi upload:
+   * - Resize cạnh dài xuống tối đa 1280px (giữ tỷ lệ)
+   * - Xuất JPEG chất lượng 80%
+   * - Kết quả thường < 300KB cho ảnh điện thoại thông thường
+   */
+  function compressPostImage(file: File): Promise<Blob> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        let { width, height } = img;
+        const MAX = 1280;
+        if (width > MAX || height > MAX) {
+          if (width >= height) {
+            height = Math.round((height * MAX) / width);
+            width = MAX;
+          } else {
+            width = Math.round((width * MAX) / height);
+            height = MAX;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { reject(new Error('No 2d context')); return; }
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob(
+          (blob) => (blob ? resolve(blob) : reject(new Error('toBlob failed'))),
+          'image/jpeg',
+          0.80,
+        );
+      };
+      img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error('Image load failed')); };
+      img.src = objectUrl;
+    });
+  }
+
+  /** Upload ảnh lên Supabase Storage (sau khi nén), trả về mảng public URL */
+  async function uploadPostImages(files: File[]): Promise<string[]> {
+    if (!supabase || files.length === 0) return [];
+    const urls: string[] = [];
+    const folder = crypto.randomUUID();
+    for (const file of files.slice(0, 2)) {
+      try {
+        const compressed = await compressPostImage(file);
+        const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
+        const path = `posts/${folder}/${filename}`;
+        const { error } = await supabase.storage
+          .from('community-images')
+          .upload(path, compressed, { contentType: 'image/jpeg', cacheControl: '3600', upsert: false });
+        if (!error) {
+          const { data } = supabase.storage.from('community-images').getPublicUrl(path);
+          urls.push(data.publicUrl);
+        }
+      } catch {
+        // bỏ qua ảnh lỗi, đăng bài không có ảnh đó
+      }
+    }
+    return urls;
+  }
+
+  /** Chia sẻ bài viết qua Web Share API hoặc clipboard */
+  async function handleSharePost(post: CommunityPost) {
+    const shareText = `${post.title}\n\n${post.content.slice(0, 150)}${post.content.length > 150 ? '...' : ''}`;
+    const shareUrl = 'https://www.duhocmate.com';
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: post.title, text: shareText, url: shareUrl });
+      } catch {
+        // người dùng huỷ — không làm gì
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(`${shareText}\n\n${shareUrl}`);
+        setSyncMessage(isKo ? '클립보드에 복사되었습니다 ✓' : 'Đã sao chép vào clipboard ✓');
+        setTimeout(() => setSyncMessage('Đang trực tuyến'), 2500);
+      } catch {
+        // ignore
+      }
+    }
   }
 
 
@@ -1877,6 +1980,8 @@ export function CommunityScreen({
       post_id: selectedPost.id,
       parent_id: replyTo,
       user_id: currentUserId || 'guest',
+      guest_session_id: guestSessionId ?? null,
+      expires_at: expiresAt ?? null,
       content: newComment.trim(),
       is_anonymous: isAnonymous,
       display_name: commentDisplayName,
@@ -1944,12 +2049,22 @@ export function CommunityScreen({
     const guestSessionId = isGuest ? getGuestSessionId() : undefined;
     const expiresAt = isGuest ? guestExpiresAt() : undefined;
     const postDisplayName = isAnonymous ? 'Ẩn danh' : (isGuest ? 'Khách' : displayName);
+
+    // Upload ảnh trước nếu có
+    let imageUrls: string[] = [];
+    if (newImages.length > 0) {
+      setIsUploadingImages(true);
+      imageUrls = await uploadPostImages(newImages);
+      setIsUploadingImages(false);
+    }
+
     const draft = {
       category: newCategory,
       title: newTitle.trim(),
       content: newContent.trim(),
       isAnonymous: isGuest ? true : isAnonymous,
       displayName: postDisplayName,
+      imageUrls,
     };
 
     if (editingPostId) {
@@ -1960,6 +2075,7 @@ export function CommunityScreen({
         content: draft.content,
         is_anonymous: draft.isAnonymous,
         display_name: draft.displayName,
+        image_urls: imageUrls,
       });
 
       if (currentUserId && isUuid(editingPostId)) {
@@ -2011,6 +2127,7 @@ export function CommunityScreen({
     setIsWritingPost(false);
     setIsWritingReview(false);
     setEditingPostId(null);
+    setNewImages([]);
   }
 
   function makeLocalPost(draft: Omit<Parameters<typeof createCommunityPost>[0], 'userId'>): CommunityPost {
@@ -2313,8 +2430,20 @@ export function CommunityScreen({
                 >
                   {ui.categories[post.category]}
                 </span>
-                <h3 className="cm-post-title">{post.title}</h3>
-                <p className="cm-post-preview">{shortText(post.content, 90)}</p>
+                <div className={`cm-post-card-inner ${post.image_urls && post.image_urls.length > 0 ? 'has-thumb' : ''}`}>
+                  <div className="cm-post-card-text">
+                    <h3 className="cm-post-title">{post.title}</h3>
+                    <p className="cm-post-preview">{shortText(post.content, post.image_urls && post.image_urls.length > 0 ? 60 : 90)}</p>
+                  </div>
+                  {post.image_urls && post.image_urls.length > 0 && (
+                    <div className="cm-post-card-thumb">
+                      <img src={post.image_urls[0]} alt="" />
+                      {post.image_urls.length > 1 && (
+                        <span className="cm-post-card-thumb-count">+{post.image_urls.length - 1}</span>
+                      )}
+                    </div>
+                  )}
+                </div>
                 <div className="cm-post-footer">
                   <span className="cm-time">
                     <strong>{post.display_name}</strong> · {timeAgo(post.created_at)}
@@ -2551,6 +2680,17 @@ export function CommunityScreen({
             ))}
           </div>
 
+          {/* Ảnh đính kèm bài viết */}
+          {selectedPost.image_urls && selectedPost.image_urls.length > 0 && (
+            <div className={`cm-detail-imgs cm-detail-imgs--${selectedPost.image_urls.length}`}>
+              {selectedPost.image_urls.map((url, i) => (
+                <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="cm-detail-img-link">
+                  <img src={url} alt={`Ảnh ${i + 1}`} className="cm-detail-img" />
+                </a>
+              ))}
+            </div>
+          )}
+
           <div className="cm-action-bar">
             <button
               type="button"
@@ -2574,6 +2714,13 @@ export function CommunityScreen({
               onClick={() => void handleBookmark(selectedPost.id)}
             >
               <Bookmark size={16} /> {isKo ? '저장' : 'Lưu'}
+            </button>
+            <button
+              type="button"
+              className="cm-action-btn share"
+              onClick={() => void handleSharePost(selectedPost)}
+            >
+              <Share2 size={16} /> {isKo ? '공유' : 'Chia sẻ'}
             </button>
           </div>
 
@@ -2694,9 +2841,9 @@ export function CommunityScreen({
             type="button"
             className="cm-write-fs-submit"
             onClick={() => void addPost()}
-            disabled={!newTitle.trim() || !newContent.trim()}
+            disabled={!newTitle.trim() || !newContent.trim() || isUploadingImages}
           >
-            {isKo ? '등록' : 'Đăng'}
+            {isUploadingImages ? <Loader2 size={16} className="cm-spin" /> : (isKo ? '등록' : 'Đăng')}
           </button>
         </header>
 
@@ -2733,20 +2880,64 @@ export function CommunityScreen({
             maxLength={2000}
           />
 
+          {/* Image preview strip */}
+          {newImages.length > 0 && (
+            <div className="cm-write-fs-img-strip">
+              {newImages.map((file, i) => {
+                const url = URL.createObjectURL(file);
+                return (
+                  <div key={i} className="cm-write-fs-img-thumb">
+                    <img src={url} alt="" />
+                    <button
+                      type="button"
+                      className="cm-write-fs-img-remove"
+                      onClick={() => removeImage(i)}
+                      aria-label="Xóa ảnh"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           <div className="cm-write-fs-footer">
-            <button
-              type="button"
-              className={`cm-write-fs-anon-toggle ${isAnonymous ? 'active' : ''}`}
-              onClick={() => setIsAnonymous((value) => !value)}
-            >
-              <span className="cm-write-fs-switch" />
-              <span className="cm-write-fs-anon-label">
-                <span className="cm-write-fs-anon-title">
-                  {isAnonymous ? <><ShieldCheck size={14} /> {isKo ? '익명으로 등록' : 'Đăng ẩn danh'}</> : <><User size={14} /> {displayName}</>}
+            <div className="cm-write-fs-footer-left">
+              {/* Nút chọn ảnh — ẩn nếu đã đủ 2 ảnh */}
+              {newImages.length < 2 && (
+                <button
+                  type="button"
+                  className="cm-write-fs-img-btn"
+                  onClick={() => fileInputRef.current?.click()}
+                  title={isKo ? '사진 첨부' : 'Đính kèm ảnh'}
+                >
+                  <ImagePlus size={18} />
+                  <span>{newImages.length === 0 ? (isKo ? '사진' : 'Ảnh') : `1/2`}</span>
+                </button>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                style={{ display: 'none' }}
+                onChange={handleImageChange}
+              />
+
+              <button
+                type="button"
+                className={`cm-write-fs-anon-toggle ${isAnonymous ? 'active' : ''}`}
+                onClick={() => setIsAnonymous((value) => !value)}
+              >
+                <span className="cm-write-fs-switch" />
+                <span className="cm-write-fs-anon-label">
+                  <span className="cm-write-fs-anon-title">
+                    {isAnonymous ? <><ShieldCheck size={14} /> {isKo ? '익명' : 'Ẩn danh'}</> : <><User size={14} /> {displayName}</>}
+                  </span>
                 </span>
-                {isAnonymous ? <span className="cm-write-fs-anon-subtitle">{isKo ? '내 정보가 공개되지 않습니다' : 'Danh tính của bạn được giữ kín'}</span> : null}
-              </span>
-            </button>
+              </button>
+            </div>
             <span className="cm-write-fs-count">{newContent.length}/2000</span>
           </div>
         </div>
@@ -4517,6 +4708,15 @@ function ReviewBoard({
   );
 }
 
+function fmtCountdownHMS(ms: number): string {
+  if (ms <= 0) return '0:00:00';
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
 function CommentItem({
   comment,
   liked,
@@ -4528,6 +4728,30 @@ function CommentItem({
   onLike: () => void;
   onReply: () => void;
 }) {
+  // Countdown timer cho guest comment có expires_at
+  const [remainingMs, setRemainingMs] = useState<number | null>(() => {
+    if (!comment.expires_at) return null;
+    return new Date(comment.expires_at).getTime() - Date.now();
+  });
+
+  useEffect(() => {
+    if (!comment.expires_at) return;
+    const tick = () => {
+      setRemainingMs(new Date(comment.expires_at!).getTime() - Date.now());
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [comment.expires_at]);
+
+  const showCountdown = remainingMs !== null && remainingMs > 0;
+  const totalMs = comment.expires_at && comment.created_at
+    ? new Date(comment.expires_at).getTime() - new Date(comment.created_at).getTime()
+    : 10_800_000; // 3h fallback
+  const progressPct = showCountdown
+    ? Math.max(0, Math.min(100, (remainingMs! / totalMs) * 100))
+    : 0;
+
   return (
     <div className="cm-comment">
       <div className="cm-comment-head">
@@ -4541,6 +4765,17 @@ function CommentItem({
           <ThumbsUp size={13} /> {comment.likes_count}
         </button>
       </div>
+      {showCountdown && (
+        <div className="cm-comment-guest-countdown">
+          <div className="cm-comment-guest-bar-track">
+            <div
+              className="cm-comment-guest-bar-fill"
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
+          <span className="cm-comment-guest-label">⏱ xóa sau {fmtCountdownHMS(remainingMs!)}</span>
+        </div>
+      )}
     </div>
   );
 }

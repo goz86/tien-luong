@@ -35,11 +35,7 @@ const REFRESH_RATE_URL = 'https://open.er-api.com/v6/latest/KRW';
 const ANNOUNCEMENT_HIDE_TODAY_KEY = 'duhocmate-announcement-hide-today';
 const ANNOUNCEMENT_SESSION_DISMISS_KEY = 'duhocmate-announcement-session-dismissed';
 const ANNOUNCEMENT_AUTO_DISMISS_MS = 12000;
-
-function localDateKey() {
-  const date = new Date();
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
+const ANNOUNCEMENT_HIDE_DURATION_MS = 24 * 60 * 60 * 1000; // 24 giờ thực
 
 export default function AppLayout() {
   const store = useAppStore();
@@ -56,9 +52,21 @@ export default function AppLayout() {
     const client = supabaseClient;
 
     const shouldShow = (item: { id: string }) => {
-      const todayDismissed = localStorage.getItem(ANNOUNCEMENT_HIDE_TODAY_KEY);
       const sessionDismissed = sessionStorage.getItem(ANNOUNCEMENT_SESSION_DISMISS_KEY);
-      return todayDismissed !== `${item.id}:${localDateKey()}` && sessionDismissed !== item.id;
+      if (sessionDismissed === item.id) return false;
+
+      const stored = localStorage.getItem(ANNOUNCEMENT_HIDE_TODAY_KEY);
+      if (stored) {
+        const colonIdx = stored.lastIndexOf(':');
+        if (colonIdx !== -1) {
+          const storedId = stored.slice(0, colonIdx);
+          const storedTs = Number(stored.slice(colonIdx + 1));
+          if (storedId === item.id && !Number.isNaN(storedTs) && Date.now() - storedTs < ANNOUNCEMENT_HIDE_DURATION_MS) {
+            return false;
+          }
+        }
+      }
+      return true;
     };
 
     const showIfNeeded = (item: { id: string; title: string; body: string; severity: string } | null) => {
@@ -519,7 +527,7 @@ export default function AppLayout() {
                     type="button"
                     className="admin-entry-announcement-muted"
                     onClick={() => {
-                      localStorage.setItem(ANNOUNCEMENT_HIDE_TODAY_KEY, `${activeBanner.id}:${localDateKey()}`);
+                      localStorage.setItem(ANNOUNCEMENT_HIDE_TODAY_KEY, `${activeBanner.id}:${Date.now()}`);
                       setActiveBanner(null);
                     }}
                   >

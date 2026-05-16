@@ -21,6 +21,7 @@ type DbPost = {
   dislikes_count: number | null;
   comments_count: number | null;
   views_count: number | null;
+  image_urls: string[] | null;
   created_at: string | null;
 };
 
@@ -95,6 +96,7 @@ export type PostDraft = {
   content: string;
   isAnonymous: boolean;
   displayName: string;
+  imageUrls?: string[];           // URLs đã upload lên Storage
 };
 
 export type CommentDraft = {
@@ -129,6 +131,7 @@ function normalizePost(row: DbPost): CommunityPost {
     dislikes_count: Number(row.dislikes_count ?? 0),
     comments_count: Number(row.comments_count ?? 0),
     views_count: Number(row.views_count ?? 0),
+    image_urls: row.image_urls ?? [],
     created_at: row.created_at ?? new Date().toISOString(),
   };
 }
@@ -140,6 +143,7 @@ function normalizeComment(row: DbComment): CommunityComment {
     parent_id: row.parent_id,
     user_id: row.user_id ?? '',
     guest_session_id: row.guest_session_id ?? null,
+    expires_at: row.expires_at ?? null,
     content: row.content ?? '',
     is_anonymous: row.is_anonymous ?? true,
     display_name: row.display_name ?? 'Ẩn danh',
@@ -308,6 +312,7 @@ export async function createCommunityPost(draft: PostDraft): Promise<CommunityPo
       content: draft.content,
       is_anonymous: draft.isAnonymous,
       display_name: draft.displayName,
+      image_urls: draft.imageUrls && draft.imageUrls.length > 0 ? draft.imageUrls : [],
     })
     .select('*')
     .single();
@@ -326,6 +331,7 @@ export async function updateCommunityPost(postId: string, draft: Omit<PostDraft,
       content: draft.content,
       is_anonymous: draft.isAnonymous,
       display_name: draft.displayName,
+      image_urls: draft.imageUrls && draft.imageUrls.length > 0 ? draft.imageUrls : [],
     })
     .eq('id', postId)
     .select('*')

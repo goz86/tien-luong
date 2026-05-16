@@ -15,6 +15,7 @@ export interface CommunityPost {
   dislikes_count: number;
   comments_count: number;
   views_count: number;
+  image_urls?: string[];             // tối đa 2 ảnh đính kèm
   created_at: string;
 }
 
@@ -24,6 +25,7 @@ export interface CommunityComment {
   parent_id: string | null;
   user_id: string;
   guest_session_id?: string | null;  // để phân biệt từng guest khác nhau
+  expires_at?: string | null;        // chỉ có với guest comment (3h)
   content: string;
   is_anonymous: boolean;
   display_name: string;
