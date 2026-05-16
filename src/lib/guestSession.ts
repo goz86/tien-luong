@@ -126,7 +126,7 @@ export function clearGuestPending(): void {
   localStorage.removeItem(GUEST_PENDING_KEY);
 }
 
-/** Tính expires_at cho bài/cmt mới: now + 3 tiếng */
-export function guestExpiresAt(): string {
-  return new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString();
+/** Tính expires_at cho nội dung guest: now + N tiếng (mặc định 3h) */
+export function guestExpiresAt(hours = 3): string {
+  return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
 }

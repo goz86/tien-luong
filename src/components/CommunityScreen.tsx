@@ -2216,6 +2216,7 @@ export function CommunityScreen({
           blockedUserIds={blockedUserIds}
           onReport={reportTarget}
           onBlockUser={blockTargetUser}
+          onLoginClick={() => setShowLoginPrompt(true)}
           lang={lang}
         />
       );
@@ -2408,7 +2409,7 @@ export function CommunityScreen({
           <button
             type="button"
             className="cm-write-bar-btn"
-            onClick={boardMode === 'reviews' ? () => { if (requireLogin()) setIsWritingReview(true); } : openComposer}
+            onClick={boardMode === 'reviews' ? () => setIsWritingReview(true) : openComposer}
           >
             <Plus size={18} />
             {boardMode === 'reviews' ? ui.writeReview : ui.writePost}
@@ -2886,6 +2887,7 @@ function ReviewBoard({
   blockedUserIds,
   onReport,
   onBlockUser,
+  onLoginClick,
   lang = 'vi'
 }: {
   session: Session | null;
@@ -2895,6 +2897,7 @@ function ReviewBoard({
   blockedUserIds: Set<string>;
   onReport: (targetType: 'post' | 'comment' | 'review' | 'profile' | 'chat', targetId: string | null, targetUserId?: string | null) => void | Promise<void>;
   onBlockUser: (targetUserId?: string | null) => void | Promise<void>;
+  onLoginClick?: () => void;
   lang?: AppLang;
 }) {
   const isKo = lang === 'ko';
@@ -3394,39 +3397,56 @@ function ReviewBoard({
   };
 
   const handleSubmitReview = async () => {
-    if (!supabase || !session || !selectedPlace || !writeTitle.trim() || !writeContent.trim() || writeRating === 0) return;
-    setSubmitting(true);
+    if (!supabase || !selectedPlace || !writeTitle.trim() || !writeContent.trim() || writeRating === 0) return;
 
+    const isGuest = !session;
+
+    // Guest: không upload ảnh được (cần auth cho Storage), show notice
+    if (isGuest && selectedImages.length > 0) {
+      showReviewNotice(isKo
+        ? '로그인 없이는 이미지를 업로드할 수 없습니다.'
+        : 'Khách chưa đăng nhập không thể tải ảnh lên. Đăng nhập để thêm ảnh!');
+      return;
+    }
+
+    setSubmitting(true);
     const imageUrls: string[] = [];
 
-    // 1. Upload images to Storage
-    for (const file of selectedImages) {
-      const safeName = file.name.replace(/[^\w.-]+/g, '-').toLowerCase();
-      const fileName = `${session.user.id}/${crypto.randomUUID()}-${safeName || 'review.jpg'}`;
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('review-images')
-        .upload(fileName, file);
-
-      if (uploadError) {
-        console.error('Review image upload failed:', uploadError);
-        setSubmitting(false);
-        showReviewNotice(reviewUi.imageUploadError);
-        return;
-      }
-
-      if (!uploadError && uploadData) {
-        const { data: { publicUrl } } = supabase.storage
+    // 1. Upload images to Storage (chỉ khi đã đăng nhập)
+    if (!isGuest) {
+      for (const file of selectedImages) {
+        const safeName = file.name.replace(/[^\w.-]+/g, '-').toLowerCase();
+        const fileName = `${session!.user.id}/${crypto.randomUUID()}-${safeName || 'review.jpg'}`;
+        const { data: uploadData, error: uploadError } = await supabase.storage
           .from('review-images')
-          .getPublicUrl(fileName);
-        imageUrls.push(publicUrl);
+          .upload(fileName, file);
+
+        if (uploadError) {
+          console.error('Review image upload failed:', uploadError);
+          setSubmitting(false);
+          showReviewNotice(reviewUi.imageUploadError);
+          return;
+        }
+
+        if (!uploadError && uploadData) {
+          const { data: { publicUrl } } = supabase.storage
+            .from('review-images')
+            .getPublicUrl(fileName);
+          imageUrls.push(publicUrl);
+        }
       }
     }
 
     // 2. Insert to DB
+    const guestSessionId = isGuest ? getGuestSessionId() : undefined;
+    const expiresAt = isGuest ? guestExpiresAt(6) : undefined; // 6h cho review
+
     const { data, error } = await supabase.from('place_reviews').insert({
-      user_id: session.user.id,
-      display_name: isAnon ? 'Ẩn danh' : displayName,
-      is_anonymous: isAnon,
+      user_id: isGuest ? null : session!.user.id,
+      guest_session_id: guestSessionId ?? null,
+      expires_at: expiresAt ?? null,
+      display_name: isGuest ? 'Khách' : (isAnon ? 'Ẩn danh' : displayName),
+      is_anonymous: isGuest ? true : isAnon,
       place_name: selectedPlace.name,
       place_address: selectedPlace.address,
       place_lat: selectedPlace.lat,
@@ -3446,6 +3466,12 @@ function ReviewBoard({
         ...savedReview,
         images: savedImages.length > 0 ? savedReview.images : imageUrls,
       }, ...prev]);
+      if (isGuest && expiresAt) {
+        addGuestContent({ id: savedReview.id, type: 'post', expiresAt });
+        showReviewNotice(isKo
+          ? '리뷰가 등록되었습니다. 6시간 후 자동 삭제됩니다.'
+          : 'Review đã đăng! Sẽ tự xoá sau 6 giờ — đăng nhập để lưu mãi mãi.');
+      }
       closeWriter();
     } else if (error) {
       console.error('Submit error:', error);
@@ -3913,6 +3939,11 @@ function ReviewBoard({
             </motion.div>
           ) : null}
         </AnimatePresence>
+        {/* Guest expiry ticker cho review */}
+        {!session && (
+          <GuestExpiryTicker lang={lang} onLoginClick={onLoginClick} />
+        )}
+
         {/* Floating Search Bar */}
         <div className="rv-floating-search">
           <div className="rv-search-inner">
