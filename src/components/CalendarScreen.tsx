@@ -461,18 +461,25 @@ export function CalendarScreen({
       const blob = await res.blob();
       const blobUrl = URL.createObjectURL(blob);
 
-      // Tên file: {ten-noi-lam}-YYYY.MM.png  (slug hoá tiếng Việt)
-      const slugifyVi = (text: string) =>
-        text
+      // Tên file: {ten-noi-lam}-YYYY.MM.png
+      // Tiếng Việt/Anh → slug ASCII | Tiếng Hàn/CJK → giữ nguyên ký tự
+      const slugifyFilename = (text: string): string => {
+        const latinized = text
           .replace(/[đĐ]/g, (c) => (c === 'đ' ? 'd' : 'D'))
           .normalize('NFD')
-          .replace(/[̀-ͯ]/g, '')
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, '-')
-          .replace(/^-+|-+$/g, '');
+          .replace(/[̀-ͯ]/g, '');
+        const latinChars = (latinized.match(/[a-zA-Z0-9]/g) ?? []).length;
+        const totalNonSpace = text.replace(/\s/g, '').length;
+        if (totalNonSpace > 0 && latinChars / totalNonSpace >= 0.5) {
+          // Latin/Việt → slug hoá đầy đủ
+          return latinized.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+        }
+        // Hàn/CJK → giữ ký tự, chỉ xử lý space + ký tự invalid
+        return text.trim().replace(/\s+/g, '-').replace(/[/\\:*?"<>|]/g, '');
+      };
 
       const venueSlug = effectiveVenue !== 'all' && effectiveVenue
-        ? slugifyVi(effectiveVenue)
+        ? slugifyFilename(effectiveVenue)
         : 'lich-lam-viec';
       const monthTitle = formatCalendarMonthTitle(month); // "2026.05"
       const filename = `${venueSlug}-${monthTitle}.png`;
