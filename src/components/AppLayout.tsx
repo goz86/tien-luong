@@ -215,6 +215,20 @@ export default function AppLayout() {
     }
   }, []);
 
+  /* ── Deep link: ?post={id} → mở đúng bài viết trong cộng đồng ── */
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const postId = params.get('post');
+    if (postId) {
+      // Xoá query param khỏi URL ngay (tránh reload lại)
+      const clean = window.location.pathname + window.location.hash;
+      history.replaceState({}, '', clean);
+      // Chuyển sang tab Cộng đồng và báo hiệu mở bài
+      useAppStore.getState().setTab('friends');
+      setCommunityTargetPostId(postId);
+    }
+  }, []);
+
   /* ── refresh exchange rate ── */
   const refreshRate = useCallback(() => {
     fetch(REFRESH_RATE_URL)

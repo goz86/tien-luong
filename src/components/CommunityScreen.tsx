@@ -1741,8 +1741,9 @@ export function CommunityScreen({
 
   /** Chia sẻ bài viết qua Web Share API hoặc clipboard */
   async function handleSharePost(post: CommunityPost) {
+    // URL deep-link trực tiếp vào bài viết
+    const shareUrl = `${window.location.origin}?post=${post.id}`;
     const shareText = `${post.title}\n\n${post.content.slice(0, 150)}${post.content.length > 150 ? '...' : ''}`;
-    const shareUrl = 'https://www.duhocmate.com';
     if (navigator.share) {
       try {
         await navigator.share({ title: post.title, text: shareText, url: shareUrl });
@@ -1751,8 +1752,8 @@ export function CommunityScreen({
       }
     } else {
       try {
-        await navigator.clipboard.writeText(`${shareText}\n\n${shareUrl}`);
-        setSyncMessage(isKo ? '클립보드에 복사되었습니다 ✓' : 'Đã sao chép vào clipboard ✓');
+        await navigator.clipboard.writeText(shareUrl);
+        setSyncMessage(isKo ? '링크 복사됨 ✓' : 'Đã sao chép link ✓');
         setTimeout(() => setSyncMessage('Đang trực tuyến'), 2500);
       } catch {
         // ignore
