@@ -172,7 +172,7 @@ interface PlaceReviewVote {
 }
 
 const SEOUL_CENTER: [number, number] = [37.5665, 126.978];
-const REVIEW_ADMIN_EMAILS = new Set(['michintashop@gmail.com']);
+const REVIEW_ADMIN_EMAILS = new Set(['duhocmate@gmail.com']);
 const NAVER_MAP_CLIENT_ID = import.meta.env.VITE_NAVER_MAP_CLIENT_ID as string | undefined;
 const KAKAO_POSTCODE_SCRIPT_URL = 'https://t1.kakaocdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js';
 const REVIEW_SHEET_EXPANDED_Y = 86;

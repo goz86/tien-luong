@@ -1030,7 +1030,7 @@ export function ProfileScreen({
                       <li>Rút lại sự đồng ý bất kỳ lúc nào</li>
                       <li>Yêu cầu xoá tài khoản hoàn toàn trong mục Cài đặt</li>
                     </ul>
-                    <p>Liên hệ: <strong>michintashop@gmail.com</strong></p>
+                    <p>Liên hệ: <strong>duhocmate@gmail.com</strong></p>
                   </>
                 ) : policyPanel === 'terms' ? (
                   <>
@@ -1074,7 +1074,7 @@ export function ProfileScreen({
                       <span className="pf-support-icon">✉️</span>
                       <div>
                         <p className="pf-support-label">Email hỗ trợ</p>
-                        <p className="pf-support-value">michintashop@gmail.com</p>
+                        <p className="pf-support-value">duhocmate@gmail.com</p>
                       </div>
                     </div>
                     <div className="pf-support-card">
