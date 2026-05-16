@@ -6655,6 +6655,85 @@ button.ticker-inner {
   margin-top: 4px;
 }
 
+/* ── Guest banner ── */
+.pf-guest-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--card-bg, #fff);
+  border-bottom: 1px solid var(--border-light, #f1f5f9);
+  padding: 14px 20px;
+  cursor: pointer;
+}
+.pf-guest-banner-text {
+  flex: 1;
+  min-width: 0;
+}
+.pf-guest-banner-title {
+  display: block;
+  font-size: 13px;
+  color: var(--text-secondary, #64748b);
+  line-height: 1.4;
+}
+.pf-guest-login-btn {
+  flex-shrink: 0;
+  padding: 7px 18px;
+  border-radius: 8px;
+  border: 1.5px solid #2752ff;
+  background: transparent;
+  color: #2752ff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+.pf-guest-login-btn:hover {
+  background: #2752ff;
+  color: #fff;
+}
+
+/* ── Settings page (inline, accessible to all) ── */
+.pf-settings-page {
+  padding: 16px 0 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.pf-settings-group {
+  margin-bottom: 8px;
+}
+.pf-settings-group-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text-faint, #94a3b8);
+  padding: 8px 20px 6px;
+  text-transform: uppercase;
+}
+.pf-settings-card {
+  background: var(--card-bg, #fff);
+  border-top: 1px solid var(--border-light, #f1f5f9);
+  border-bottom: 1px solid var(--border-light, #f1f5f9);
+}
+.pf-setting-divider {
+  height: 1px;
+  background: var(--border-light, #f1f5f9);
+  margin: 0 16px;
+}
+.pf-account-info-row {
+  cursor: default !important;
+}
+.pf-account-email {
+  font-size: 13px;
+  color: var(--text-secondary, #64748b);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
 /* Profile Settings Menu */
 .pf-settings-trigger {
   position: absolute;
