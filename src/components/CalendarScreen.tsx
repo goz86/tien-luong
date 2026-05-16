@@ -456,10 +456,18 @@ export function CalendarScreen({
         }
       });
 
+      // Chuyển data URL → Blob URL để tránh hiện chuỗi base64 trên mobile
+      const res = await fetch(dataUrl);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+
       const link = document.createElement('a');
       link.download = `lich-lam-viec-${formatCalendarMonthTitle(month)}.png`;
-      link.href = dataUrl;
+      link.href = blobUrl;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
     } catch (error) {
       console.error('Lỗi khi tải ảnh:', error);
     }

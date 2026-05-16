@@ -284,7 +284,7 @@ export async function loadCommunityComments(postId: string): Promise<CommunityCo
   if (!canUseSupabase()) return [];
   const { data, error } = await supabase!
     .from('community_comments')
-    .select('id,post_id,parent_id,user_id,guest_session_id,content,is_anonymous,display_name,is_author,likes_count,created_at')
+    .select('id,post_id,parent_id,user_id,guest_session_id,expires_at,content,is_anonymous,display_name,is_author,likes_count,created_at')
     .eq('post_id', postId)
     .order('created_at', { ascending: true });
 

@@ -5377,6 +5377,7 @@ button.ticker-inner {
   font-weight: 600;
   color: var(--text-soft);
   cursor: pointer;
+  white-space: nowrap;
   transition: all 0.15s;
 }
 
