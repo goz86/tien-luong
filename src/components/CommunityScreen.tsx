@@ -1135,10 +1135,14 @@ export function CommunityScreen({
   const [friendActionId, setFriendActionId] = useState<string | null>(null);
   const [optimisticFriendIds, setOptimisticFriendIds] = useState<Set<string>>(new Set());
   const [recentChats, setRecentChats] = useState<any[]>([]);
+  // Profiles của các đối tác chat — dùng khi companions chưa load hoặc không có trong store
+  const [chatPartnerProfiles, setChatPartnerProfiles] = useState<Map<string, CompanionProfile>>(new Map());
   const [blockedUserIds, setBlockedUserIds] = useState<Set<string>>(new Set());
   const commentInputRef = useRef<HTMLInputElement>(null);
   // Cache profile theo user_id để tránh fetch nhiều lần
   const profileCacheRef = useRef<Map<string, CompanionProfile>>(new Map());
+  // Theo dõi những partnerId chat đã fetch profile — tránh loop
+  const fetchedChatPartnerIds = useRef<Set<string>>(new Set());
 
   const currentUserId = session?.user.id ?? '';
   const displayName = session ? (profile?.displayName?.trim() || session.user.email?.split('@')[0] || 'Du học sinh') : 'Du học sinh';
@@ -1577,6 +1581,34 @@ export function CommunityScreen({
         }
       });
       setRecentChats(Array.from(chatsMap.values()));
+
+      // Fetch profiles for chat partners not yet fetched (use ref to avoid dep loop)
+      const partnerIds = Array.from(chatsMap.keys());
+      const missingIds = partnerIds.filter(id => !fetchedChatPartnerIds.current.has(id));
+      if (missingIds.length > 0) {
+        missingIds.forEach(id => fetchedChatPartnerIds.current.add(id));
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, display_name, school, region, note, tags, avatar_url, last_seen_at')
+          .in('id', missingIds);
+        if (profiles && profiles.length > 0) {
+          setChatPartnerProfiles(prev => {
+            const next = new Map(prev);
+            profiles.forEach((row: any) => {
+              next.set(row.id, {
+                id: row.id,
+                displayName: row.display_name || 'Người dùng',
+                school: row.school || '',
+                region: row.region || '',
+                focus: row.note || '',
+                tags: Array.isArray(row.tags) ? row.tags : [],
+                lastSeenAt: row.last_seen_at || null,
+              });
+            });
+            return next;
+          });
+        }
+      }
     }
   }, [currentUserId]);
 
@@ -2417,10 +2449,12 @@ export function CommunityScreen({
         : recentChats
           .filter(c => friendFilter === 'chats' || (friendFilter === 'unread' && c.unreadCount > 0))
           .map(c => {
-            const profile = companionsWithDistance.find(p => p.id === c.partnerId);
-            return profile ? { ...profile, lastMessage: c.lastMessage, unreadCount: c.unreadCount, isMe: c.isMe } : null;
-          })
-          .filter(Boolean) as (CompanionProfile & { lastMessage: string, unreadCount: number, isMe: boolean })[];
+            // Ưu tiên companions đã load từ store, fallback sang chatPartnerProfiles đã fetch riêng
+            const profile = companionsWithDistance.find(p => p.id === c.partnerId)
+              ?? chatPartnerProfiles.get(c.partnerId)
+              ?? { id: c.partnerId, displayName: 'Người dùng', school: '', region: '', focus: '', tags: [], availability: '', lastSeenAt: null };
+            return { ...profile, lastMessage: c.lastMessage, unreadCount: c.unreadCount, isMe: c.isMe };
+          }) as (CompanionProfile & { lastMessage: string, unreadCount: number, isMe: boolean })[];
       const emptyMessage = friendFilter === 'unread'
         ? ui.noUnread
         : friendFilter === 'discovery'

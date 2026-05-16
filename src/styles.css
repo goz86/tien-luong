@@ -6611,6 +6611,17 @@ button.ticker-inner {
   color: var(--blue-500);
 }
 
+.cm-notif-icon-circle.friend_request,
+.cm-notif-icon-circle.friend_accept {
+  background: rgba(22, 163, 74, 0.1);
+  color: #16a34a;
+}
+
+.cm-notif-icon-circle.message {
+  background: rgba(124, 58, 237, 0.1);
+  color: #7c3aed;
+}
+
 .cm-notif-item-content p {
   font-size: 12px;
   line-height: 1.4;

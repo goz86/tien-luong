@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { CalendarDays, House, MessageCircleMore, UserRound, WalletCards, Bell, ThumbsUp, MessageCircle, X, Megaphone } from 'lucide-react';
+import { CalendarDays, House, MessageCircleMore, UserRound, WalletCards, Bell, ThumbsUp, MessageCircle, X, Megaphone, Users, MessageSquare } from 'lucide-react';
 import { hasSupabaseConfig, supabase as supabaseClient } from '../lib/supabase';
 import { useAppStore } from '../store/appStore';
 import { HomeScreen } from './HomeScreen';
@@ -771,7 +771,10 @@ export default function AppLayout() {
               onClick={handleOpenNotifications}
             >
               <div className={`cm-notif-icon-circle ${store.toastNotification.type}`}>
-                {store.toastNotification.type === 'like' ? <ThumbsUp size={14} /> : <MessageCircle size={14} />}
+                {store.toastNotification.type === 'like' ? <ThumbsUp size={14} />
+                  : store.toastNotification.type === 'friend_request' || store.toastNotification.type === 'friend_accept' ? <Users size={14} />
+                  : store.toastNotification.type === 'message' ? <MessageSquare size={14} />
+                  : <MessageCircle size={14} />}
               </div>
               <div className="cm-push-toast-content">
                 <strong>{store.toastNotification.title}</strong>
@@ -818,7 +821,10 @@ export default function AppLayout() {
                     store.notifications.map((n) => (
                       <div key={`notif-${n.id}`} className={`cm-notif-item ${!n.is_read ? 'unread' : ''}`} style={{ cursor: 'pointer' }}>
                         <div className={`cm-notif-icon-circle ${n.type}`}>
-                          {n.type === 'like' ? <ThumbsUp size={12} /> : <MessageCircle size={12} />}
+                          {n.type === 'like' ? <ThumbsUp size={12} />
+                            : n.type === 'friend_request' || n.type === 'friend_accept' ? <Users size={12} />
+                            : n.type === 'message' ? <MessageSquare size={12} />
+                            : <MessageCircle size={12} />}
                         </div>
                         <div className="cm-notif-item-content">
                           <p>{n.body}</p>
