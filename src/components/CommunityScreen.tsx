@@ -6,6 +6,7 @@ import {
   BookmarkCheck,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   ChevronUp,
   Eye,
@@ -1130,7 +1131,8 @@ export function CommunityScreen({
   const [syncMessage, setSyncMessage] = useState('Đang làm mới');
   const [isLocalMode, setIsLocalMode] = useState(true);
   const [viewProfile, setViewProfile] = useState<CompanionProfile | null>(null);
-  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [lightbox, setLightbox] = useState<{ urls: string[]; index: number } | null>(null);
+  const lightboxTouchStartX = useRef<number | null>(null);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [activeChatPartner, setActiveChatPartner] = useState<CompanionProfile | null>(null);
   const [friendFilter, setFriendFilter] = useState<'discovery' | 'chats' | 'unread'>('discovery');
@@ -1164,6 +1166,18 @@ export function CommunityScreen({
       alive = false;
     };
   }, [currentUserId]);
+
+  // Keyboard nav cho lightbox
+  useEffect(() => {
+    if (!lightbox) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight') setLightbox((lb) => lb && lb.index < lb.urls.length - 1 ? { ...lb, index: lb.index + 1 } : lb);
+      if (e.key === 'ArrowLeft')  setLightbox((lb) => lb && lb.index > 0 ? { ...lb, index: lb.index - 1 } : lb);
+      if (e.key === 'Escape')     setLightbox(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [lightbox]);
 
   const isFriend = useCallback((id: string) => {
     if (!currentUserId) return false;
@@ -3002,7 +3016,7 @@ export function CommunityScreen({
                   key={i}
                   type="button"
                   className="cm-detail-img-link"
-                  onClick={() => setLightboxUrl(url)}
+                  onClick={() => setLightbox({ urls: selectedPost.image_urls!, index: i })}
                   aria-label={`Xem ảnh ${i + 1}`}
                 >
                   <img src={url} alt={`Ảnh ${i + 1}`} className="cm-detail-img" />
@@ -3146,7 +3160,7 @@ export function CommunityScreen({
         {showReportConfirm ? renderReportConfirm() : null}
         {viewProfile ? renderProfileModal() : null}
         {showLoginPrompt ? renderLoginPrompt() : null}
-        {lightboxUrl ? renderLightbox() : null}
+        {lightbox ? renderLightbox() : null}
         {activeChatPartner && session && (
           <ChatView
             session={session}
@@ -3282,7 +3296,19 @@ export function CommunityScreen({
   }
 
   function renderLightbox() {
-    if (!lightboxUrl) return null;
+    if (!lightbox) return null;
+    const { urls, index } = lightbox;
+    const hasPrev = index > 0;
+    const hasNext = index < urls.length - 1;
+    const navBtnStyle: React.CSSProperties = {
+      position: 'absolute', top: '50%', transform: 'translateY(-50%)',
+      background: 'rgba(255,255,255,0.15)', border: 'none',
+      borderRadius: '50%', width: 44, height: 44,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      color: '#fff', cursor: 'pointer', zIndex: 1,
+      backdropFilter: 'blur(4px)',
+      transition: 'background 0.15s',
+    };
     return (
       <div
         style={{
@@ -3291,32 +3317,77 @@ export function CommunityScreen({
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           cursor: 'zoom-out',
         }}
-        onClick={() => setLightboxUrl(null)}
+        onClick={() => setLightbox(null)}
+        onTouchStart={(e) => { lightboxTouchStartX.current = e.touches[0].clientX; }}
+        onTouchEnd={(e) => {
+          if (lightboxTouchStartX.current === null) return;
+          const dx = e.changedTouches[0].clientX - lightboxTouchStartX.current;
+          lightboxTouchStartX.current = null;
+          if (dx < -50 && hasNext) setLightbox({ urls, index: index + 1 });
+          if (dx >  50 && hasPrev) setLightbox({ urls, index: index - 1 });
+        }}
       >
+        {/* Nút đóng */}
         <button
           type="button"
           aria-label="Đóng"
-          style={{
-            position: 'absolute', top: 16, right: 16,
-            background: 'rgba(255,255,255,0.12)', border: 'none',
-            borderRadius: '50%', width: 40, height: 40,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: '#fff', cursor: 'pointer',
-          }}
-          onClick={() => setLightboxUrl(null)}
+          style={{ position: 'absolute', top: 16, right: 16, background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: '50%', width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', cursor: 'pointer' }}
+          onClick={() => setLightbox(null)}
         >
           <X size={20} />
         </button>
+
+        {/* Mũi tên trái (chỉ hiện khi > 1 ảnh) */}
+        {urls.length > 1 && (
+          <button
+            type="button"
+            aria-label="Ảnh trước"
+            style={{ ...navBtnStyle, left: 12, opacity: hasPrev ? 1 : 0.25, pointerEvents: hasPrev ? 'auto' : 'none' }}
+            onClick={(e) => { e.stopPropagation(); setLightbox({ urls, index: index - 1 }); }}
+          >
+            <ChevronLeft size={24} />
+          </button>
+        )}
+
+        {/* Ảnh hiện tại */}
         <img
-          src={lightboxUrl}
-          alt="Ảnh bài viết"
-          style={{
-            maxWidth: '90vw', maxHeight: '90vh',
-            objectFit: 'contain', borderRadius: 8,
-            boxShadow: '0 8px 48px rgba(0,0,0,0.6)',
-          }}
+          key={urls[index]}
+          src={urls[index]}
+          alt={`Ảnh ${index + 1}`}
+          style={{ maxWidth: '90vw', maxHeight: '85vh', objectFit: 'contain', borderRadius: 8, boxShadow: '0 8px 48px rgba(0,0,0,0.6)', userSelect: 'none' }}
           onClick={(e) => e.stopPropagation()}
+          draggable={false}
         />
+
+        {/* Mũi tên phải */}
+        {urls.length > 1 && (
+          <button
+            type="button"
+            aria-label="Ảnh tiếp"
+            style={{ ...navBtnStyle, right: 12, opacity: hasNext ? 1 : 0.25, pointerEvents: hasNext ? 'auto' : 'none' }}
+            onClick={(e) => { e.stopPropagation(); setLightbox({ urls, index: index + 1 }); }}
+          >
+            <ChevronRight size={24} />
+          </button>
+        )}
+
+        {/* Dots chỉ số ảnh */}
+        {urls.length > 1 && (
+          <div
+            style={{ position: 'absolute', bottom: 20, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 8 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {urls.map((_, i) => (
+              <button
+                key={i}
+                type="button"
+                aria-label={`Ảnh ${i + 1}`}
+                onClick={(e) => { e.stopPropagation(); setLightbox({ urls, index: i }); }}
+                style={{ width: i === index ? 20 : 8, height: 8, borderRadius: 4, border: 'none', background: i === index ? '#fff' : 'rgba(255,255,255,0.4)', padding: 0, cursor: 'pointer', transition: 'all 0.2s' }}
+              />
+            ))}
+          </div>
+        )}
       </div>
     );
   }
