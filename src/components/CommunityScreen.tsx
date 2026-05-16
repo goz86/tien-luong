@@ -1137,6 +1137,8 @@ export function CommunityScreen({
   const [recentChats, setRecentChats] = useState<any[]>([]);
   const [blockedUserIds, setBlockedUserIds] = useState<Set<string>>(new Set());
   const commentInputRef = useRef<HTMLInputElement>(null);
+  // Cache profile theo user_id để tránh fetch nhiều lần
+  const profileCacheRef = useRef<Map<string, CompanionProfile>>(new Map());
 
   const currentUserId = session?.user.id ?? '';
   const displayName = session ? (profile?.displayName?.trim() || session.user.email?.split('@')[0] || 'Du học sinh') : 'Du học sinh';
@@ -1665,6 +1667,46 @@ export function CommunityScreen({
       setSyncMessage('Đang trực tuyến');
     }
   }, [currentUserId, isKo, requireLogin, selectedPost]);
+
+  // Mở profile của user theo userId — tìm trong cache → companions → fetch DB
+  const openUserProfile = useCallback(async (userId: string) => {
+    if (!userId || !isUuid(userId) || userId === currentUserId) return;
+
+    // 1. Có trong cache rồi → hiện ngay
+    if (profileCacheRef.current.has(userId)) {
+      setViewProfile(profileCacheRef.current.get(userId)!);
+      return;
+    }
+
+    // 2. Có trong danh sách companions đã load
+    const cached = companionsWithDistance.find((p) => p.id === userId);
+    if (cached) {
+      profileCacheRef.current.set(userId, cached);
+      setViewProfile(cached);
+      return;
+    }
+
+    // 3. Fetch từ Supabase
+    if (!supabase) return;
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, display_name, school, region, note, tags, avatar_url, last_seen_at')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (!data) return;
+    const prof: CompanionProfile = {
+      id: data.id,
+      displayName: data.display_name || 'Người dùng',
+      school: data.school || '',
+      region: data.region || '',
+      focus: data.note || '',
+      tags: Array.isArray(data.tags) ? data.tags : [],
+      lastSeenAt: data.last_seen_at || null,
+    };
+    profileCacheRef.current.set(userId, prof);
+    setViewProfile(prof);
+  }, [currentUserId, companionsWithDistance]);
 
   const handleFriendAction = useCallback(async (id: string) => {
     if (!requireLogin() || friendActionId) return;
@@ -2886,7 +2928,14 @@ export function CommunityScreen({
 
         <div className="cm-detail-body">
           <div className="cm-detail-meta">
-            <strong>
+            <strong
+              className={selectedPost.user_id && !selectedPost.is_anonymous ? 'cm-clickable-author' : ''}
+              onClick={() => {
+                if (selectedPost.user_id && !selectedPost.is_anonymous) {
+                  void openUserProfile(selectedPost.user_id);
+                }
+              }}
+            >
               <User size={14} /> {selectedPost.display_name}
             </strong>
             <span>{new Date(selectedPost.created_at).toLocaleDateString('vi-VN')}</span>
@@ -2966,6 +3015,11 @@ export function CommunityScreen({
                         setReplyTo(comment.id);
                         commentInputRef.current?.focus();
                       }}
+                      onViewProfile={
+                        (!comment.is_anonymous && comment.user_id && isUuid(comment.user_id))
+                          ? () => void openUserProfile(comment.user_id)
+                          : undefined
+                      }
                     />
 
                     {/* Reply thread – vertical track + L-shape elbows */}
@@ -2981,6 +3035,11 @@ export function CommunityScreen({
                                 setReplyTo(comment.id);
                                 commentInputRef.current?.focus();
                               }}
+                              onViewProfile={
+                                (!reply.is_anonymous && reply.user_id && isUuid(reply.user_id))
+                                  ? () => void openUserProfile(reply.user_id)
+                                  : undefined
+                              }
                             />
                           </div>
                         ))}
@@ -5003,11 +5062,13 @@ function CommentItem({
   liked,
   onLike,
   onReply,
+  onViewProfile,
 }: {
   comment: CommunityComment;
   liked: boolean;
   onLike: () => void;
   onReply: () => void;
+  onViewProfile?: () => void;
 }) {
   // Countdown timer cho guest comment có expires_at
   const [remainingMs, setRemainingMs] = useState<number | null>(() => {
@@ -5036,7 +5097,16 @@ function CommentItem({
   return (
     <div className="cm-comment">
       <div className="cm-comment-head">
-        <strong className={comment.is_author ? 'cm-comment-author' : ''}>{comment.display_name}</strong>
+        <strong
+          className={[
+            comment.is_author ? 'cm-comment-author' : '',
+            onViewProfile ? 'cm-clickable-author' : '',
+          ].filter(Boolean).join(' ')}
+          onClick={onViewProfile}
+          style={onViewProfile ? { cursor: 'pointer' } : undefined}
+        >
+          {comment.display_name}
+        </strong>
         <span className="cm-comment-time">{timeAgo(comment.created_at)}</span>
       </div>
       <p className="cm-comment-body">{comment.content}</p>

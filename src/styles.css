@@ -5716,6 +5716,15 @@ button.ticker-inner {
   color: var(--blue-700) !important;
 }
 
+/* Tên người dùng có thể bấm để xem profile */
+.cm-clickable-author {
+  cursor: pointer;
+}
+.cm-clickable-author:hover {
+  text-decoration: underline;
+  opacity: 0.8;
+}
+
 .cm-comment-time {
   font-size: 12px;
   color: var(--text-faint);
@@ -8467,6 +8476,10 @@ button.ticker-inner {
   align-items: center;
   gap: 4px;
   color: var(--text-main);
+}
+
+.cm-detail-meta strong.cm-clickable-author:hover {
+  color: var(--blue-600, #2752ff);
 }
 
 .cm-comment-topline {
