@@ -971,6 +971,7 @@ export function CommunityScreen({
   targetPostId,
   onTargetPostConsumed,
   lang = 'vi',
+  isAdmin = false,
 }: {
   companions: CompanionProfile[];
   requested: string[];
@@ -984,6 +985,7 @@ export function CommunityScreen({
   targetPostId?: string | null;
   onTargetPostConsumed?: () => void;
   lang?: AppLang;
+  isAdmin?: boolean;
 }) {
   const isKo = lang === 'ko';
   const ui = isKo ? {
@@ -2741,6 +2743,17 @@ export function CommunityScreen({
             >
               <Share2 size={16} /> {isKo ? '공유' : 'Chia sẻ'}
             </button>
+            {/* Nút xoá dành riêng cho admin – chỉ hiện khi bài của người khác */}
+            {isAdmin && selectedPost.user_id !== currentUserId && (
+              <button
+                type="button"
+                className="cm-action-btn cm-admin-delete-btn"
+                onClick={() => setShowDeleteConfirm(selectedPost.id)}
+                title="Admin: Xoá bài vi phạm"
+              >
+                <Trash2 size={16} /> Xoá
+              </button>
+            )}
           </div>
 
           <div className="cm-comments-section">

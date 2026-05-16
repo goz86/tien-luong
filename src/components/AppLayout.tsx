@@ -685,6 +685,7 @@ export default function AppLayout() {
               targetPostId={communityTargetPostId}
               onTargetPostConsumed={() => setCommunityTargetPostId(null)}
               lang={store.lang}
+              isAdmin={store.isAdmin}
             />
           )}
           {store.tab === 'profile' && (

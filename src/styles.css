@@ -5411,6 +5411,14 @@ button.ticker-inner {
   color: var(--text-soft);
 }
 
+/* Admin-only delete button */
+.cm-admin-delete-btn {
+  color: #e11d48 !important;
+  border-color: #e11d48 !important;
+  background: rgba(225, 29, 72, 0.06) !important;
+  margin-left: auto;
+}
+
 /* ── Post card thumbnail (feed) ── */
 .cm-post-card-inner {
   display: block;
