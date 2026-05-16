@@ -419,6 +419,22 @@ export async function incrementPostView(postId: string): Promise<void> {
   await bumpPostCounter(postId, 'views_count', 1);
 }
 
+/**
+ * Guest like/dislike: bump likes_count / dislikes_count thẳng vào DB
+ * (không cần user_id — không ghi vào community_likes)
+ */
+export async function guestBumpPostReaction(
+  postId: string,
+  likeDelta: number,
+  dislikeDelta: number,
+): Promise<void> {
+  if (!canUseSupabase() || !supabase) return;
+  const ops: Promise<void>[] = [];
+  if (likeDelta !== 0)    ops.push(bumpPostCounter(postId, 'likes_count', likeDelta));
+  if (dislikeDelta !== 0) ops.push(bumpPostCounter(postId, 'dislikes_count', dislikeDelta));
+  await Promise.all(ops);
+}
+
 export async function togglePostReaction(
   userId: string,
   postId: string,

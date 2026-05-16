@@ -50,6 +50,7 @@ import {
   createCommunityNotification,
   createCommunityPost,
   deleteCommunityPost,
+  guestBumpPostReaction,
   incrementPostView,
   blockCommunityUser,
   loadCommunityComments,
@@ -1880,13 +1881,13 @@ export function CommunityScreen({
     }));
 
     if (!currentUserId || !isUuid(postId)) {
-      // Guest: lưu thẳng vào localStorage và cập nhật state
+      // Guest: cập nhật localStorage + bump counter thật trong Supabase
       const { liked: savedLiked, disliked: savedDisliked } = toggleGuestReaction(postId, reaction);
       setLikedPosts(savedLiked);
       setDislikedPosts(savedDisliked);
-      // Cũng lưu vào pending để sync khi đăng nhập
       upsertGuestPendingLike(postId, savedLiked.has(postId) ? 'like' : savedDisliked.has(postId) ? 'dislike' : null);
-      setSyncMessage('Đã lưu tương tác trên máy. Đăng nhập để đồng bộ.');
+      // Bump likes_count / dislikes_count thật trong DB (không cần user_id)
+      void guestBumpPostReaction(postId, likeDelta, dislikeDelta);
       setPostReactionBusy((current) => { const s = new Set(current); s.delete(postId); return s; });
       return;
     }
