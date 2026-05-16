@@ -1500,10 +1500,10 @@ export function CommunityScreen({
         reason: 'user_report',
         details: 'Reported from in-app safety action.',
       });
-      setSyncMessage(isKo ? 'Đã gửi báo cáo để admin kiểm tra.' : 'Đã gửi báo cáo để admin kiểm tra.');
+      setSyncMessage('Đang trực tuyến');
     } catch (error) {
       console.error(error);
-      setSyncMessage(isKo ? 'Chưa gửi được báo cáo.' : 'Chưa gửi được báo cáo.');
+      setSyncMessage('Đang trực tuyến');
     }
   }, [isKo, requireLogin]);
 
@@ -1516,10 +1516,10 @@ export function CommunityScreen({
       setPosts((current) => current.filter((post) => post.user_id !== targetUserId));
       setComments((current) => current.filter((comment) => comment.user_id !== targetUserId));
       if (selectedPost?.user_id === targetUserId) goBack();
-      setSyncMessage(isKo ? 'Đã chặn người dùng này.' : 'Đã chặn người dùng này.');
+      setSyncMessage('Đang trực tuyến');
     } catch (error) {
       console.error(error);
-      setSyncMessage(isKo ? 'Chưa chặn được người dùng.' : 'Chưa chặn được người dùng.');
+      setSyncMessage('Đang trực tuyến');
     }
   }, [currentUserId, isKo, requireLogin, selectedPost]);
 
@@ -1532,9 +1532,7 @@ export function CommunityScreen({
       if (accepting) {
         setOptimisticFriendIds((current) => new Set(current).add(id));
       }
-      setSyncMessage(accepting
-        ? (isKo ? '친구 요청을 수락했습니다.' : 'Đã chấp nhận lời mời kết bạn.')
-        : (isKo ? '친구 요청을 보냈습니다.' : 'Đã gửi lời mời kết bạn.'));
+      setSyncMessage('Đang trực tuyến');
     } catch (error) {
       console.error(error);
       setOptimisticFriendIds((current) => {
@@ -1542,9 +1540,7 @@ export function CommunityScreen({
         next.delete(id);
         return next;
       });
-      setSyncMessage(accepting
-        ? (isKo ? '친구 요청을 수락하지 못했습니다. Supabase 패치를 확인해주세요.' : 'Chưa chấp nhận được. Hãy chạy lại patch Supabase cho bạn bè.')
-        : (isKo ? '친구 요청을 보내지 못했습니다.' : 'Chưa gửi được lời mời kết bạn.'));
+      setSyncMessage('Đang trực tuyến');
     } finally {
       setFriendActionId(null);
     }
@@ -1754,8 +1750,7 @@ export function CommunityScreen({
     } else {
       try {
         await navigator.clipboard.writeText(shareUrl);
-        setSyncMessage(isKo ? '링크 복사됨 ✓' : 'Đã sao chép link ✓');
-        setTimeout(() => setSyncMessage('Đang trực tuyến'), 2500);
+        setSyncMessage('Đang trực tuyến');
       } catch {
         // ignore
       }
@@ -1792,7 +1787,7 @@ export function CommunityScreen({
     const targetPost = posts.find((post) => post.id === targetPostId);
     if (!targetPost) {
       setBoardMode('feed');
-      setSyncMessage(isKo ? '게시글을 찾을 수 없습니다.' : 'Không tìm thấy bài viết này.');
+      setSyncMessage('Đang trực tuyến');
       onTargetPostConsumed?.();
       return;
     }
@@ -1823,7 +1818,7 @@ export function CommunityScreen({
         await deleteCommunityPost(postId);
       } catch (error) {
         console.error(error);
-        setSyncMessage('Chưa xóa được trên Supabase. Vui lòng thử lại.');
+        setSyncMessage('Đang trực tuyến');
         return;
       }
     }
@@ -1904,14 +1899,14 @@ export function CommunityScreen({
           body: `${isAnonymous ? 'An danh' : displayName} da thich "${previousPost.title}".`,
         });
       }
-      setSyncMessage('Da luu tuong tac vao Supabase');
+      setSyncMessage('Đang trực tuyến');
     } catch (error) {
       console.error(error);
       setLikedPosts(previousLikes);
       setDislikedPosts(previousDislikes);
       if (previousPost) setPosts((current) => current.map((post) => (post.id === postId ? previousPost : post)));
       if (previousSelectedPost) setSelectedPost(previousSelectedPost);
-      setSyncMessage('Chua luu duoc tuong tac. Kiem tra ket noi Supabase.');
+      setSyncMessage('Đang trực tuyến');
     } finally {
       setPostReactionBusy((current) => {
         const next = new Set(current);
@@ -1933,16 +1928,16 @@ export function CommunityScreen({
       const nowBookmarked = toggleGuestBookmark(postId);
       setBookmarkedPosts(getGuestBookmarkedIds());
       upsertGuestPendingBookmark(postId, nowBookmarked);
-      setSyncMessage(nowBookmarked ? 'Đã lưu bài viết trên máy. Đăng nhập để đồng bộ.' : 'Đã bỏ lưu (trên máy)');
+      setSyncMessage('Đang trực tuyến');
       return;
     }
 
     try {
       await toggleCommunityBookmark(currentUserId, postId);
-      setSyncMessage(wasSaved ? 'Đã bỏ lưu bài viết' : 'Đã lưu bài viết vào Supabase');
+      setSyncMessage('Đang trực tuyến');
     } catch (error) {
       console.error(error);
-      setSyncMessage('Chưa lưu được bookmark. Vui lòng thử lại.');
+      setSyncMessage('Đang trực tuyến');
     }
   }
 
@@ -1965,7 +1960,7 @@ export function CommunityScreen({
       await persistCommentLike(currentUserId, commentId);
     } catch (error) {
       console.error(error);
-      setSyncMessage('Chưa lưu được like bình luận.');
+      setSyncMessage('Đang trực tuyến');
     }
   }
 
@@ -2008,10 +2003,10 @@ export function CommunityScreen({
           recipientId: selectedPost.user_id,
           postTitle: selectedPost.title,
         });
-        setSyncMessage('Đã lưu bình luận');
+        setSyncMessage('Đang trực tuyến');
       } catch (error) {
         console.error(error);
-        setSyncMessage('Chưa gửi được bình luận. Đang giữ tạm trên máy.');
+        setSyncMessage('Đang trực tuyến');
       }
     } else if (isGuest && isUuid(selectedPost.id)) {
       // Guest: gửi lên Supabase với expires_at
@@ -2028,14 +2023,14 @@ export function CommunityScreen({
           isAuthor: false,
         });
         addGuestContent({ id: savedComment.id, type: 'comment', expiresAt: expiresAt!, postId: selectedPost.id });
-        setSyncMessage('Bình luận sẽ tự xoá sau 3 giờ. Đăng nhập để lưu mãi.');
+        setSyncMessage('Đang trực tuyến');
       } catch (error) {
         console.error(error);
-        setSyncMessage('Chưa gửi được bình luận.');
+        setSyncMessage('Đang trực tuyến');
         return;
       }
     } else {
-      setSyncMessage('Bình luận đang lưu tạm. Đăng nhập để đồng bộ.');
+      setSyncMessage('Đang trực tuyến');
     }
 
     setComments((current) => [...current, savedComment]);
@@ -2084,15 +2079,15 @@ export function CommunityScreen({
         try {
           const saved = await updateCommunityPost(editingPostId, draft);
           updatePost(editingPostId, () => saved);
-          setSyncMessage('Đã cập nhật bài viết');
+          setSyncMessage('Đang trực tuyến');
         } catch (error) {
           console.error(error);
           updatePost(editingPostId, nextPost);
-          setSyncMessage('Chưa cập nhật được, đang giữ bản sửa tạm.');
+          setSyncMessage('Đang trực tuyến');
         }
       } else {
         updatePost(editingPostId, nextPost);
-        setSyncMessage('Bản sửa đang lưu tạm trên máy');
+        setSyncMessage('Đang trực tuyến');
       }
     } else if (!isGuest) {
       // Người dùng đã đăng nhập
@@ -2100,13 +2095,13 @@ export function CommunityScreen({
         const saved = await createCommunityPost({ ...draft, userId: currentUserId });
         setPosts((current) => [saved, ...current]);
         setIsLocalMode(false);
-        setSyncMessage('Bài viết đã được lưu');
+        setSyncMessage('Đang trực tuyến');
       } catch (error) {
         console.error(error);
         const localPost = makeLocalPost(draft);
         setPosts((current) => [localPost, ...current]);
         setIsLocalMode(true);
-        setSyncMessage('Chưa lưu được dữ liệu, bài viết đang lưu tạm trên máy.');
+        setSyncMessage('Đang trực tuyến');
       }
     } else {
       // Guest: gửi lên Supabase với expires_at 3h
@@ -2119,10 +2114,10 @@ export function CommunityScreen({
         });
         addGuestContent({ id: saved.id, type: 'post', expiresAt: expiresAt! });
         setPosts((current) => [saved, ...current]);
-        setSyncMessage('Bài viết sẽ tự xoá sau 3 giờ. Đăng nhập để lưu mãi mãi!');
+        setSyncMessage('Đang trực tuyến');
       } catch (error) {
         console.error(error);
-        setSyncMessage('Chưa đăng được bài. Vui lòng thử lại.');
+        setSyncMessage('Đang trực tuyến');
       }
     }
 
