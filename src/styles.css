@@ -5504,6 +5504,10 @@ button.ticker-inner {
   aspect-ratio: 4/3;
   overflow: hidden;
   border-radius: 10px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: zoom-in;
 }
 
 .cm-detail-imgs--1 .cm-detail-img-link {
