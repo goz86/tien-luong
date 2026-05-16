@@ -646,7 +646,7 @@ select {
   gap: 12px;
   margin-top: 12px;
   margin-bottom: 18px;
-  padding: 0 2px;
+  padding: 0 16px 0 2px;
 }
 
 .appbar-kicker {
@@ -678,7 +678,7 @@ select {
 
 .appbar:has(.home-wordmark)+.activity-ticker {
   height: 24px;
-  padding: 0 2px;
+  padding: 0 16px 0 2px;
   margin: 0 0 8px;
 }
 
@@ -2348,9 +2348,9 @@ button.ticker-inner {
     font-size: 16px;
   }
 
-  /* screen-shell already provides 16px horizontal padding */
+  /* screen-shell provides 16px, keep a small extra gap on the right for the bell */
   .appbar {
-    padding: 0 2px;
+    padding: 0 8px 0 2px;
   }
 }
 
