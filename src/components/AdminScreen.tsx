@@ -463,7 +463,7 @@ export function AdminScreen({
       supabase
         .from('profiles')
         .select('id, display_name, school, region, avatar_url, status, last_seen_at, created_at')
-        .order('last_seen_at', { ascending: false, nullsFirst: false })
+        .order('created_at', { ascending: false })
         .limit(24),
       supabase
         .from('community_posts')
@@ -508,7 +508,7 @@ export function AdminScreen({
       supabase
         .from('profiles')
         .select('id', { count: 'exact', head: true })
-        .gt('last_seen_at', weekAgo),
+        .gt('updated_at', weekAgo),   // dùng updated_at thay last_seen_at để an toàn
     ]);
 
     let nextStats: DashboardStats | null = null;

@@ -1,11 +1,18 @@
 -- ============================================================
 -- Fix: Admin không đọc được danh sách profiles
--- Nguyên nhân: RLS trên bảng profiles chỉ cho đọc profile của chính mình
+-- + Thêm cột last_seen_at nếu chưa có
 -- Chạy file này trong Supabase SQL Editor
 -- ============================================================
 
--- 1. Thêm policy cho phép admin đọc TẤT CẢ profiles
---    (Các policy SELECT được OR lại với nhau, không cần xoá policy cũ)
+-- 1. Thêm cột last_seen_at nếu chưa tồn tại
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMP WITH TIME ZONE;
+
+CREATE INDEX IF NOT EXISTS profiles_last_seen_idx
+  ON public.profiles(last_seen_at DESC);
+
+-- 2. RLS: profiles đã có policy cho authenticated users rồi,
+--    nhưng thêm policy admin để chắc chắn
 DROP POLICY IF EXISTS "admin_select_all_profiles" ON public.profiles;
 CREATE POLICY "admin_select_all_profiles" ON public.profiles
   FOR SELECT USING (
@@ -14,7 +21,7 @@ CREATE POLICY "admin_select_all_profiles" ON public.profiles
     )
   );
 
--- 2. RPC fallback: admin_get_users (SECURITY DEFINER = bỏ qua RLS hoàn toàn)
+-- 3. RPC admin_get_users (SECURITY DEFINER = bỏ qua RLS hoàn toàn)
 CREATE OR REPLACE FUNCTION public.admin_get_users(limit_count int DEFAULT 24)
 RETURNS TABLE (
   id            uuid,
@@ -40,7 +47,7 @@ AS $$
     last_seen_at,
     created_at
   FROM public.profiles
-  ORDER BY last_seen_at DESC NULLS LAST
+  ORDER BY COALESCE(last_seen_at, created_at) DESC NULLS LAST
   LIMIT limit_count;
 $$;
 
