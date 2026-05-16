@@ -27,6 +27,7 @@ import {
   ThumbsUp,
   Trash2,
   User,
+  UserMinus,
   Users,
   X,
   MessageSquare,
@@ -1125,6 +1126,7 @@ export function CommunityScreen({
   const [likedComments, setLikedComments] = useState<Set<string>>(new Set());
   const [postReactionBusy, setPostReactionBusy] = useState<Set<string>>(new Set());
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const [showBlockConfirm, setShowBlockConfirm] = useState<string | null>(null);
   const [showReportConfirm, setShowReportConfirm] = useState<{ type: 'post' | 'comment' | 'review' | 'profile' | 'chat'; targetId: string | null; targetUserId?: string | null } | null>(null);
   const [reportedIds, setReportedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -2882,6 +2884,7 @@ export function CommunityScreen({
 
         {isWritingPost ? renderComposer() : null}
         {showDeleteConfirm ? renderDeleteConfirm() : null}
+        {showBlockConfirm ? renderBlockConfirm() : null}
         {showReportConfirm ? renderReportConfirm() : null}
         {viewProfile ? renderProfileModal() : null}
         {showLoginPrompt ? renderLoginPrompt() : null}
@@ -2960,11 +2963,12 @@ export function CommunityScreen({
                 {selectedPost.user_id ? (
                   <button
                     type="button"
-                    className="cm-icon-btn danger"
-                    onClick={() => void blockTargetUser(selectedPost.user_id)}
-                    aria-label={isKo ? '차단' : 'Chặn'}
+                    className="cm-icon-btn"
+                    onClick={() => setShowBlockConfirm(selectedPost.user_id)}
+                    aria-label={isKo ? '차단' : 'Chặn người dùng'}
+                    title={isKo ? '이 사용자 차단' : 'Chặn người dùng này'}
                   >
-                    <X size={21} />
+                    <UserMinus size={19} />
                   </button>
                 ) : null}
                 {/* Admin: xóa bài vi phạm — icon X nhỏ đỏ cạnh nút báo cáo */}
@@ -3157,6 +3161,7 @@ export function CommunityScreen({
 
         {isWritingPost ? renderComposer() : null}
         {showDeleteConfirm ? renderDeleteConfirm() : null}
+        {showBlockConfirm ? renderBlockConfirm() : null}
         {showReportConfirm ? renderReportConfirm() : null}
         {viewProfile ? renderProfileModal() : null}
         {showLoginPrompt ? renderLoginPrompt() : null}
@@ -3388,6 +3393,32 @@ export function CommunityScreen({
             ))}
           </div>
         )}
+      </div>
+    );
+  }
+
+  function renderBlockConfirm() {
+    return (
+      <div className="custom-confirm-overlay" onClick={() => setShowBlockConfirm(null)}>
+        <div className="custom-confirm-card" onClick={(e) => e.stopPropagation()}>
+          <h3>{isKo ? '사용자 차단' : 'Chặn người dùng'}</h3>
+          <p>{isKo ? '이 사용자의 게시글과 댓글이 더 이상 표시되지 않습니다.' : 'Bài viết và bình luận của người này sẽ bị ẩn khỏi trang của bạn. Bạn có chắc không?'}</p>
+          <div className="custom-confirm-actions">
+            <button type="button" className="custom-confirm-cancel" onClick={() => setShowBlockConfirm(null)}>
+              {isKo ? '취소' : 'Huỷ'}
+            </button>
+            <button
+              type="button"
+              className="custom-confirm-ok"
+              onClick={() => {
+                void blockTargetUser(showBlockConfirm);
+                setShowBlockConfirm(null);
+              }}
+            >
+              {isKo ? '차단' : 'Chặn'}
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
