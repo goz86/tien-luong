@@ -6849,7 +6849,7 @@ button.ticker-inner {
 .pf-policy-overlay {
   position: fixed;
   inset: 0;
-  z-index: 3600;
+  z-index: 4500;
   background: rgba(8, 22, 43, 0.42);
   backdrop-filter: blur(8px);
   display: flex;
