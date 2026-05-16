@@ -5419,6 +5419,13 @@ button.ticker-inner {
   margin-left: auto;
 }
 
+/* Already-reported state for shield button */
+.cm-reported-btn {
+  color: #f59e0b !important;
+  opacity: 0.75;
+  cursor: default;
+}
+
 /* ── Post card thumbnail (feed) ── */
 .cm-post-card-inner {
   display: block;

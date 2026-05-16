@@ -1081,6 +1081,8 @@ export function CommunityScreen({
   const [likedComments, setLikedComments] = useState<Set<string>>(new Set());
   const [postReactionBusy, setPostReactionBusy] = useState<Set<string>>(new Set());
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const [showReportConfirm, setShowReportConfirm] = useState<{ type: 'post' | 'comment' | 'review' | 'profile' | 'chat'; targetId: string | null; targetUserId?: string | null } | null>(null);
+  const [reportedIds, setReportedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [syncMessage, setSyncMessage] = useState('Đang làm mới');
   const [isLocalMode, setIsLocalMode] = useState(true);
@@ -1488,26 +1490,36 @@ export function CommunityScreen({
     return true;
   }, [session]);
 
-  const reportTarget = useCallback(async (
+  const reportTarget = useCallback((
     targetType: 'post' | 'comment' | 'review' | 'profile' | 'chat',
     targetId: string | null,
     targetUserId?: string | null,
   ) => {
     if (!requireLogin()) return;
+    setShowReportConfirm({ type: targetType, targetId, targetUserId });
+  }, [requireLogin]);
+
+  const handleConfirmReport = useCallback(async () => {
+    if (!showReportConfirm) return;
+    const { type, targetId, targetUserId } = showReportConfirm;
+    setShowReportConfirm(null);
     try {
       await reportCommunityContent({
-        targetType,
+        targetType: type,
         targetId,
         targetUserId,
         reason: 'user_report',
         details: 'Reported from in-app safety action.',
       });
-      setSyncMessage('Đang trực tuyến');
+      if (targetId) setReportedIds((prev) => new Set(prev).add(targetId));
+      setSyncMessage('✅ Đã gửi báo cáo – chúng tôi sẽ xem xét sớm');
+      setTimeout(() => setSyncMessage('Đang trực tuyến'), 4000);
     } catch (error) {
       console.error(error);
-      setSyncMessage('Đang trực tuyến');
+      setSyncMessage('❌ Gửi báo cáo thất bại, thử lại sau');
+      setTimeout(() => setSyncMessage('Đang trực tuyến'), 3000);
     }
-  }, [isKo, requireLogin]);
+  }, [showReportConfirm]);
 
   const blockTargetUser = useCallback(async (targetUserId?: string | null) => {
     if (!targetUserId || targetUserId === currentUserId) return;
@@ -2596,6 +2608,7 @@ export function CommunityScreen({
 
         {isWritingPost ? renderComposer() : null}
         {showDeleteConfirm ? renderDeleteConfirm() : null}
+        {showReportConfirm ? renderReportConfirm() : null}
         {viewProfile ? renderProfileModal() : null}
         {showLoginPrompt ? renderLoginPrompt() : null}
         {activeChatPartner && session && (
@@ -2663,9 +2676,10 @@ export function CommunityScreen({
               <>
                 <button
                   type="button"
-                  className="cm-icon-btn"
-                  onClick={() => void reportTarget('post', selectedPost.id, selectedPost.user_id)}
+                  className={`cm-icon-btn${reportedIds.has(selectedPost.id) ? ' cm-reported-btn' : ''}`}
+                  onClick={() => !reportedIds.has(selectedPost.id) && void reportTarget('post', selectedPost.id, selectedPost.user_id)}
                   aria-label={isKo ? '신고' : 'Báo cáo'}
+                  title={reportedIds.has(selectedPost.id) ? (isKo ? '이미 신고됨' : 'Đã báo cáo') : (isKo ? '신고' : 'Báo cáo vi phạm')}
                 >
                   <ShieldCheck size={19} />
                 </button>
@@ -2845,6 +2859,7 @@ export function CommunityScreen({
 
         {isWritingPost ? renderComposer() : null}
         {showDeleteConfirm ? renderDeleteConfirm() : null}
+        {showReportConfirm ? renderReportConfirm() : null}
         {showLoginPrompt ? renderLoginPrompt() : null}
         {activeChatPartner && session && (
           <ChatView
@@ -2989,6 +3004,50 @@ export function CommunityScreen({
           <div className="custom-confirm-actions">
             <button type="button" className="confirm-btn-cancel" onClick={() => setShowDeleteConfirm(null)}>{isKo ? '취소' : 'Hủy'}</button>
             <button type="button" className="confirm-btn-delete" onClick={() => void handleConfirmDelete()}>{isKo ? '삭제' : 'Xóa ngay'}</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function renderReportConfirm() {
+    if (!showReportConfirm) return null;
+    const typeLabel: Record<string, string> = {
+      post: 'bài viết',
+      comment: 'bình luận',
+      review: 'đánh giá',
+      profile: 'người dùng',
+      chat: 'tin nhắn',
+    };
+    const label = typeLabel[showReportConfirm.type] ?? 'nội dung';
+    return (
+      <div className="custom-confirm-overlay" onClick={() => setShowReportConfirm(null)}>
+        <div className="custom-confirm-card" onClick={(event) => event.stopPropagation()}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <ShieldCheck size={22} color="#f59e0b" />
+            <h3 style={{ margin: 0 }}>{isKo ? '신고 확인' : 'Xác nhận báo cáo'}</h3>
+          </div>
+          <p style={{ color: '#475569', fontSize: 14, lineHeight: 1.6, margin: '0 0 4px' }}>
+            {isKo
+              ? '이 콘텐츠를 신고하시겠습니까? 검토 후 조치하겠습니다.'
+              : `Bạn có muốn báo cáo ${label} này không? Chúng tôi sẽ xem xét và xử lý sớm nhất có thể.`}
+          </p>
+          <p style={{ color: '#94a3b8', fontSize: 12, margin: '0 0 16px' }}>
+            {isKo ? '허위 신고는 제재될 수 있습니다.' : 'Báo cáo sai sự thật có thể bị hạn chế tài khoản.'}
+          </p>
+          <div className="custom-confirm-actions">
+            <button type="button" className="confirm-btn-cancel" onClick={() => setShowReportConfirm(null)}>
+              {isKo ? '취소' : 'Hủy'}
+            </button>
+            <button
+              type="button"
+              className="confirm-btn-delete"
+              style={{ background: '#f59e0b', borderColor: '#f59e0b' }}
+              onClick={() => void handleConfirmReport()}
+            >
+              <ShieldCheck size={14} />
+              {isKo ? '신고하기' : 'Báo cáo'}
+            </button>
           </div>
         </div>
       </div>
