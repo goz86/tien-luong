@@ -6633,15 +6633,14 @@ button.ticker-inner {
 
 .pf-settings-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   background: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(4px);
   z-index: 4000;
   display: flex;
   align-items: flex-end;
+  justify-content: center;
+  padding: 0 12px calc(84px + env(safe-area-inset-bottom));
 }
 
 @keyframes slideUp {
@@ -6683,17 +6682,14 @@ button.ticker-inner {
 .pf-settings-popover {
   width: 100%;
   max-width: 430px;
-  margin: 0 auto;
   background: var(--bg-card);
-  border-radius: 30px 30px 0 0;
-  padding: 24px 20px;
-  padding-bottom: calc(30px + env(safe-area-inset-bottom, 0px));
+  border-radius: 22px;
+  padding: 24px 20px 28px;
   animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   flex-direction: column;
-  max-height: 85vh;
-  /* Giới hạn chiều cao */
-  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.1);
+  max-height: 78vh;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.18);
 }
 
 .pf-popover-body {
