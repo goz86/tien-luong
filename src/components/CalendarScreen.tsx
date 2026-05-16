@@ -206,7 +206,7 @@ export function CalendarScreen({
   const monthOptions = Array.from({ length: 12 }, (_, index) => index + 1);
 
   // ── 주휴수당 auto-suggestion ──────────────────────────────────────────────
-  // Tính từ thứ 2 đến ngày ca hiện tại, gộp cả ca đang nhập.
+  // Tính từ thứ 2 đến ngày ca hiện tại, CHỈ tính riêng nơi làm đang nhập.
   // Yêu cầu tối thiểu 15h/tuần mới được hưởng 주휴수당.
   const weekJuhyuSuggestion = useMemo(() => {
     if (!draft.date || !draft.startTime || !draft.endTime) return null;
@@ -219,9 +219,13 @@ export function CalendarScreen({
     monday.setDate(draftDate.getDate() - daysBack);
     const mondayStr = monday.toLocaleDateString('sv-SE');
 
-    // Các ca đã lưu trong tuần (T2 → ngày ca hiện tại), bỏ qua ca đang sửa
+    // Chỉ lấy ca CÙNG nơi làm (draft.venue), trong tuần, bỏ qua ca đang sửa
     const weekSavedShifts = shifts.filter(
-      (s) => s.date >= mondayStr && s.date <= draft.date && s.id !== editingShiftId
+      (s) =>
+        s.date >= mondayStr &&
+        s.date <= draft.date &&
+        s.id !== editingShiftId &&
+        s.label === draft.venue   // ← chỉ tính riêng nơi làm này
     );
     const savedHours = weekSavedShifts.reduce((sum, s) => sum + shiftHours(s), 0);
 
@@ -240,7 +244,7 @@ export function CalendarScreen({
     const clampedHours = Math.min(totalHours, 40);
     const minJuhyu = Math.round((clampedHours / 40) * 8 * MINIMUM_WAGE_2026);
     return { min: minJuhyu, totalHours };
-  }, [draft.date, draft.startTime, draft.endTime, draft.breakMinutes, shifts, editingShiftId]);
+  }, [draft.date, draft.startTime, draft.endTime, draft.breakMinutes, draft.venue, shifts, editingShiftId]);
   // ─────────────────────────────────────────────────────────────────────────
 
   const quickPreview = calculateShiftPay({
