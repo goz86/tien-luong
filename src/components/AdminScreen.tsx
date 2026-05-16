@@ -2,6 +2,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import {
   Activity,
+  AlertTriangle,
   ArrowLeft,
   Ban,
   Bell,
@@ -12,7 +13,9 @@ import {
   MessageCircle,
   RefreshCw,
   ShieldCheck,
+  ShieldOff,
   Star,
+  TrendingUp,
   Trash2,
   UserX,
   Users,
@@ -21,7 +24,7 @@ import { supabase } from '../lib/supabase';
 import type { AppLang } from './ProfileScreen';
 import { timeAgo } from '../data/communityData';
 
-type AdminTab = 'overview' | 'users' | 'content' | 'announcements' | 'logs';
+type AdminTab = 'overview' | 'users' | 'content' | 'reports' | 'announcements' | 'logs';
 type AdminContentView = 'posts' | 'reviews' | 'comments';
 type ModerationStatus = 'active' | 'muted' | 'suspended' | 'banned';
 type AnnouncementSeverity = 'info' | 'success' | 'warning' | 'danger';
@@ -118,12 +121,31 @@ type AdminNotification = {
   created_at: string;
 };
 
+type CommunityReport = {
+  id: string;
+  reporter_id: string | null;
+  target_type: 'post' | 'comment' | 'review' | 'profile' | 'chat';
+  target_id: string | null;
+  target_user_id: string | null;
+  reason: string;
+  details: string | null;
+  status: 'pending' | 'resolved' | 'dismissed';
+  admin_note: string | null;
+  created_at: string;
+  resolved_at: string | null;
+};
+
+type ReportFilter = 'pending' | 'resolved' | 'dismissed' | 'all';
+
 type DashboardStats = {
   users: number;
+  newUsersWeek: number;
+  activeUsersWeek: number;
   posts: number;
   comments: number;
   reviews: number;
   notifications: number;
+  reports: number;
 };
 
 type AdminSeenState = {
@@ -132,11 +154,12 @@ type AdminSeenState = {
 };
 
 const ADMIN_TABS: Array<{ id: AdminTab; icon: typeof ShieldCheck }> = [
-  { id: 'overview', icon: Activity },
-  { id: 'users', icon: Users },
-  { id: 'content', icon: FileText },
+  { id: 'overview',      icon: Activity },
+  { id: 'users',         icon: Users },
+  { id: 'content',       icon: FileText },
+  { id: 'reports',       icon: AlertTriangle },
   { id: 'announcements', icon: Megaphone },
-  { id: 'logs', icon: ShieldCheck },
+  { id: 'logs',          icon: ShieldCheck },
 ];
 
 const ADMIN_SEEN_KEY = 'duhoc-mate-admin-seen-v1';
@@ -155,18 +178,22 @@ const UI = {
     noAccess: 'Tài khoản này chưa có quyền quản trị.',
     patchHint: 'Chưa đọc được bảng admin. Hãy chạy file supabase/admin_dashboard_rebuild.sql trong Supabase.',
     tabs: {
-      overview: 'Tổng quan',
-      users: 'Người dùng',
-      content: 'Nội dung',
+      overview:      'Tổng quan',
+      users:         'Người dùng',
+      content:       'Nội dung',
+      reports:       'Báo cáo',
       announcements: 'Thông báo',
-      logs: 'Nhật ký',
+      logs:          'Nhật ký',
     },
     stats: {
-      users: 'Người dùng',
-      posts: 'Bài viết',
-      comments: 'Bình luận',
-      reviews: 'Review',
+      users:         'Người dùng',
+      posts:         'Bài viết',
+      comments:      'Bình luận',
+      reviews:       'Review',
       notifications: 'Thông báo',
+      reports:       'Báo cáo',
+      newUsersWeek:  'Mới tuần này',
+      activeWeek:    'Hoạt động 7 ngày',
     },
     recentPosts: 'Bài viết mới',
     recentReviews: 'Review mới',
@@ -183,6 +210,21 @@ const UI = {
     backToAnnouncements: 'Viết thông báo',
     logsTitle: 'Nhật ký quản trị',
     announceTitle: 'Viết thông báo',
+    reportsTitle: 'Xử lý báo cáo vi phạm',
+    reportsPending: 'Chờ xử lý',
+    reportsResolved: 'Đã xử lý',
+    reportsDismissed: 'Đã bỏ qua',
+    reportsAll: 'Tất cả',
+    resolveReport: 'Đã xử lý',
+    dismissReport: 'Bỏ qua',
+    deleteAndResolve: 'Xoá & đóng',
+    reportResolved: 'Đã đánh dấu xử lý.',
+    reportDismissed: 'Đã bỏ qua báo cáo.',
+    noReports: 'Không có báo cáo nào.',
+    reportTarget: 'Mục tiêu',
+    reportBy: 'Người báo cáo',
+    reportDetail: 'Chi tiết',
+    reportStatus: 'Trạng thái',
     empty: 'Chưa có dữ liệu.',
     reasonPrompt: 'Lý do xử lý:',
     deletePostConfirm: 'Xoá bài viết này?',
@@ -215,18 +257,22 @@ const UI = {
     noAccess: '이 계정에는 관리자 권한이 없습니다.',
     patchHint: '관리자 테이블을 읽을 수 없습니다. Supabase에서 supabase/admin_dashboard_rebuild.sql을 실행해주세요.',
     tabs: {
-      overview: '개요',
-      users: '사용자',
-      content: '콘텐츠',
+      overview:      '개요',
+      users:         '사용자',
+      content:       '콘텐츠',
+      reports:       '신고',
       announcements: '공지',
-      logs: '로그',
+      logs:          '로그',
     },
     stats: {
-      users: '사용자',
-      posts: '게시글',
-      comments: '댓글',
-      reviews: '리뷰',
+      users:         '사용자',
+      posts:         '게시글',
+      comments:      '댓글',
+      reviews:       '리뷰',
       notifications: '알림',
+      reports:       '신고',
+      newUsersWeek:  '이번 주 신규',
+      activeWeek:    '7일 활성',
     },
     recentPosts: '최근 게시글',
     recentReviews: '최근 리뷰',
@@ -243,6 +289,21 @@ const UI = {
     backToAnnouncements: '공지 작성',
     logsTitle: '관리 로그',
     announceTitle: '공지 작성',
+    reportsTitle: '신고 처리',
+    reportsPending: '처리 대기',
+    reportsResolved: '처리 완료',
+    reportsDismissed: '무시됨',
+    reportsAll: '전체',
+    resolveReport: '처리 완료',
+    dismissReport: '무시',
+    deleteAndResolve: '삭제 & 처리',
+    reportResolved: '신고가 처리되었습니다.',
+    reportDismissed: '신고를 무시했습니다.',
+    noReports: '신고 없음.',
+    reportTarget: '대상',
+    reportBy: '신고자',
+    reportDetail: '상세',
+    reportStatus: '상태',
     empty: '데이터가 없습니다.',
     reasonPrompt: '처리 사유:',
     deletePostConfirm: '이 게시글을 삭제할까요?',
@@ -350,7 +411,7 @@ export function AdminScreen({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [seen, setSeen] = useState<AdminSeenState>(() => loadAdminSeen());
-  const [stats, setStats] = useState<DashboardStats>({ users: 0, posts: 0, comments: 0, reviews: 0, notifications: 0 });
+  const [stats, setStats] = useState<DashboardStats>({ users: 0, newUsersWeek: 0, activeUsersWeek: 0, posts: 0, comments: 0, reviews: 0, notifications: 0, reports: 0 });
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [posts, setPosts] = useState<AdminPost[]>([]);
   const [reviews, setReviews] = useState<AdminReview[]>([]);
@@ -358,6 +419,8 @@ export function AdminScreen({
   const [logs, setLogs] = useState<AdminLog[]>([]);
   const [announcements, setAnnouncements] = useState<AdminAnnouncement[]>([]);
   const [notifications, setNotifications] = useState<AdminNotification[]>([]);
+  const [reports, setReports] = useState<CommunityReport[]>([]);
+  const [reportFilter, setReportFilter] = useState<ReportFilter>('pending');
   // Styled confirm/prompt modal
   type ConfirmState = { message: string; resolve: (ok: boolean, reason: string) => void };
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
@@ -377,6 +440,8 @@ export function AdminScreen({
     setLoading(true);
     setNotice(null);
 
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
     const [
       statsRes,
       profilesRes,
@@ -387,6 +452,9 @@ export function AdminScreen({
       logsRes,
       announcementsRes,
       notificationsRes,
+      reportsRes,
+      newUsersRes,
+      activeUsersRes,
     ] = await Promise.all([
       supabase.rpc('admin_get_dashboard_stats', {
         comments_seen_at: seen.comments,
@@ -428,18 +496,37 @@ export function AdminScreen({
         .select('id, recipient_id, actor_id, post_id, comment_id, type, title, body, is_read, created_at')
         .order('created_at', { ascending: false })
         .limit(50),
+      supabase
+        .from('community_reports')
+        .select('id, reporter_id, target_type, target_id, target_user_id, reason, details, status, admin_note, created_at, resolved_at')
+        .order('created_at', { ascending: false })
+        .limit(100),
+      supabase
+        .from('profiles')
+        .select('id', { count: 'exact', head: true })
+        .gt('created_at', weekAgo),
+      supabase
+        .from('profiles')
+        .select('id', { count: 'exact', head: true })
+        .gt('last_seen_at', weekAgo),
     ]);
 
     let nextStats: DashboardStats | null = null;
     const statsRow = Array.isArray(statsRes.data) ? statsRes.data[0] : null;
+    const pendingCount = (reportsRes.data as CommunityReport[] | null)?.filter(r => r.status === 'pending').length ?? 0;
+    const newUsersWeek = newUsersRes.count ?? 0;
+    const activeUsersWeek = activeUsersRes.count ?? 0;
 
     if (!statsRes.error && statsRow) {
       nextStats = {
-        users: Number(statsRow.users_count || 0),
-        posts: Number(statsRow.posts_count || 0),
-        comments: Number(statsRow.comments_new_count || 0),
-        reviews: Number(statsRow.reviews_count || 0),
-        notifications: Number(statsRow.notifications_new_count || 0),
+        users:          Number(statsRow.users_count || 0),
+        newUsersWeek,
+        activeUsersWeek,
+        posts:          Number(statsRow.posts_count || 0),
+        comments:       Number(statsRow.comments_new_count || 0),
+        reviews:        Number(statsRow.reviews_count || 0),
+        notifications:  Number(statsRow.notifications_new_count || 0),
+        reports:        pendingCount,
       };
     } else {
       const [usersCount, postsCount, commentsCount, reviewsCount, notificationsCount] = await Promise.all([
@@ -451,15 +538,19 @@ export function AdminScreen({
       ]);
 
       nextStats = {
-        users: usersCount.count || 0,
-        posts: postsCount.count || 0,
-        comments: commentsCount.count || 0,
-        reviews: reviewsCount.count || 0,
-        notifications: notificationsCount.count || 0,
+        users:          usersCount.count || 0,
+        newUsersWeek,
+        activeUsersWeek,
+        posts:          postsCount.count || 0,
+        comments:       commentsCount.count || 0,
+        reviews:        reviewsCount.count || 0,
+        notifications:  notificationsCount.count || 0,
+        reports:        pendingCount,
       };
     }
 
     setStats(nextStats);
+    setReports((reportsRes.data as CommunityReport[] | null) || []);
 
     const moderationMap = new Map<string, UserModeration>();
     (moderationsRes.data as UserModeration[] | null)?.forEach((row) => moderationMap.set(row.user_id, row));
@@ -528,6 +619,7 @@ export function AdminScreen({
       .on('postgres_changes', { event: '*', schema: 'public', table: 'user_moderation' }, queueReload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_action_logs' }, queueReload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_announcements' }, queueReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'community_reports' }, queueReload)
       .subscribe();
 
     return () => {
@@ -771,6 +863,70 @@ export function AdminScreen({
     }
   }
 
+  async function resolveReport(report: CommunityReport, nextStatus: 'resolved' | 'dismissed') {
+    if (!supabase) return;
+    setBusyId(`report-${report.id}`);
+    try {
+      const { error } = await supabase.rpc('admin_resolve_report', {
+        report_id: report.id,
+        next_status: nextStatus,
+        admin_note_text: null,
+      });
+      if (error) {
+        // Fallback: direct update (requires admin RLS UPDATE policy)
+        const fallback = await supabase
+          .from('community_reports')
+          .update({ status: nextStatus, resolved_at: new Date().toISOString() })
+          .eq('id', report.id);
+        if (fallback.error) throw error;
+      }
+      setReports((prev) => prev.map((r) => r.id === report.id ? { ...r, status: nextStatus, resolved_at: new Date().toISOString() } : r));
+      setStats((prev) => ({ ...prev, reports: Math.max(prev.reports - 1, 0) }));
+      setNotice(nextStatus === 'resolved' ? ui.reportResolved : ui.reportDismissed);
+      await safeLog(`report_${nextStatus}`, 'community_reports', report.id, report.target_user_id, null);
+    } catch (error) {
+      console.error('resolveReport failed:', error);
+      setNotice(ui.actionError);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function deleteReportedContent(report: CommunityReport) {
+    if (!supabase) return;
+    const { ok, reason } = await adminConfirm(
+      isKo ? '신고된 콘텐츠를 삭제할까요?' : 'Xoá nội dung bị báo cáo?'
+    );
+    if (!ok) return;
+    setBusyId(`report-${report.id}`);
+    try {
+      if (report.target_type === 'post' && report.target_id) {
+        const rpcRes = await supabase.rpc('admin_delete_community_post', { row_id: report.target_id, reason_text: reason || 'Violated report' });
+        if (rpcRes.error) {
+          await supabase.from('community_posts').delete().eq('id', report.target_id);
+        }
+      } else if (report.target_type === 'comment' && report.target_id) {
+        const rpcRes = await supabase.rpc('admin_delete_community_comment_hard', { row_id: report.target_id, reason_text: reason || 'Violated report' });
+        if (rpcRes.error) {
+          await supabase.from('community_comments').delete().eq('id', report.target_id);
+        }
+      } else if (report.target_type === 'review' && report.target_id) {
+        await supabase.from('place_reviews').delete().eq('id', report.target_id);
+      }
+      // Mark report resolved
+      await supabase.from('community_reports').update({ status: 'resolved', resolved_at: new Date().toISOString(), admin_note: reason || 'Content deleted' }).eq('id', report.id);
+      setReports((prev) => prev.map((r) => r.id === report.id ? { ...r, status: 'resolved' } : r));
+      setStats((prev) => ({ ...prev, reports: Math.max(prev.reports - 1, 0) }));
+      setNotice(ui.deleted);
+      await loadDashboard();
+    } catch (error) {
+      console.error('deleteReportedContent failed:', error);
+      setNotice(ui.actionError);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   if (!isAdmin) {
     return (
       <section className="admin-screen admin-access">
@@ -828,12 +984,14 @@ export function AdminScreen({
         <div className="admin-metric-strip">
           {([
             { icon: Users,         val: stats.users,         label: ui.stats.users,         color: '#60a5fa', onClick: undefined },
-            { icon: FileText,      val: stats.posts,         label: ui.stats.posts,         color: '#34d399', onClick: undefined },
+            { icon: TrendingUp,    val: stats.newUsersWeek,  label: ui.stats.newUsersWeek,  color: '#34d399', onClick: undefined },
+            { icon: Activity,      val: stats.activeUsersWeek, label: ui.stats.activeWeek,  color: '#06b6d4', onClick: undefined },
+            { icon: FileText,      val: stats.posts,         label: ui.stats.posts,         color: '#818cf8', onClick: undefined },
             { icon: MessageCircle, val: stats.comments,      label: ui.stats.comments,      color: '#f59e0b', onClick: openCommentHistory },
             { icon: Star,          val: stats.reviews,       label: ui.stats.reviews,       color: '#a78bfa', onClick: undefined },
-            { icon: Bell,          val: stats.notifications, label: ui.stats.notifications, color: '#f87171', onClick: openNotificationHistory },
+            { icon: AlertTriangle, val: stats.reports,       label: ui.stats.reports,       color: '#f87171', onClick: () => openTab('reports') },
           ] as { icon: typeof ShieldCheck; val: number; label: string; color: string; onClick?: () => void }[]).map(({ icon: Ic, val, label, color, onClick: oc }) => (
-            <button key={label} type="button" className="admin-metric-chip" style={{ '--chip-color': color } as React.CSSProperties} onClick={oc}>
+            <button key={label} type="button" className={`admin-metric-chip${label === ui.stats.reports && val > 0 ? ' has-badge' : ''}`} style={{ '--chip-color': color } as React.CSSProperties} onClick={oc}>
               <Ic size={14} />
               <strong>{val.toLocaleString()}</strong>
               <span>{label}</span>
@@ -868,25 +1026,20 @@ export function AdminScreen({
         <div className="admin-panel-stack">
           <section className="admin-command-deck" aria-label={isKo ? '관리 작업' : 'Tác vụ quản trị'}>
             {([
-              { icon: Megaphone,  label: isKo ? '공지 작성' : 'Thông báo', color: '#f97316', tab: 'announcements' as AdminTab },
-              { icon: Users,      label: isKo ? '사용자'   : 'Người dùng', color: '#2752ff', tab: 'users' as AdminTab },
-              { icon: FileText,   label: isKo ? '콘텐츠'   : 'Nội dung',   color: '#10b981', tab: 'content' as AdminTab },
-              { icon: ShieldCheck,label: isKo ? '로그'     : 'Nhật ký',    color: '#8b5cf6', tab: 'logs' as AdminTab },
-            ] as { icon: typeof ShieldCheck; label: string; color: string; tab: AdminTab }[]).map(({ icon: Ic, label, color, tab }) => (
-              <button key={tab} type="button" className="admin-qa-btn" style={{ '--qa-color': color } as React.CSSProperties} onClick={() => openTab(tab)}>
+              { icon: AlertTriangle, label: isKo ? '신고 처리' : 'Báo cáo',    color: '#ef4444', tab: 'reports' as AdminTab,       badge: stats.reports },
+              { icon: Users,         label: isKo ? '사용자'   : 'Người dùng',  color: '#2752ff', tab: 'users' as AdminTab,         badge: stats.users },
+              { icon: FileText,      label: isKo ? '콘텐츠'   : 'Nội dung',    color: '#10b981', tab: 'content' as AdminTab,       badge: posts.length + reviews.length + comments.length },
+              { icon: Megaphone,     label: isKo ? '공지 작성' : 'Thông báo',  color: '#f97316', tab: 'announcements' as AdminTab, badge: stats.notifications },
+            ] as { icon: typeof ShieldCheck; label: string; color: string; tab: AdminTab; badge: number }[]).map(({ icon: Ic, label, color, tab, badge }) => (
+              <button key={tab} type="button" className={`admin-qa-btn${tab === 'reports' && stats.reports > 0 ? ' admin-qa-urgent' : ''}`} style={{ '--qa-color': color } as React.CSSProperties} onClick={() => openTab(tab)}>
                 <span className="admin-qa-icon"><Ic size={20} /></span>
                 <span className="admin-qa-copy">
                   <strong>{label}</strong>
-                  <small>
-                    {tab === 'announcements'
-                      ? stats.notifications.toLocaleString()
-                      : tab === 'users'
-                        ? stats.users.toLocaleString()
-                        : tab === 'content'
-                          ? (posts.length + reviews.length + comments.length).toLocaleString()
-                          : visibleLogs.length.toLocaleString()}
-                  </small>
+                  <small>{badge.toLocaleString()}</small>
                 </span>
+                {tab === 'reports' && stats.reports > 0 ? (
+                  <span className="admin-qa-urgent-dot">{stats.reports}</span>
+                ) : null}
               </button>
             ))}
           </section>
@@ -1073,6 +1226,120 @@ export function AdminScreen({
               ) : null}
             </>
           )}
+        </div>
+      ) : null}
+
+      {activeTab === 'reports' ? (
+        <div className="admin-panel-stack">
+          {/* Reports alert banner nếu có pending */}
+          {stats.reports > 0 ? (
+            <div className="admin-reports-alert">
+              <AlertTriangle size={16} />
+              <span>
+                {isKo
+                  ? `처리 대기 중인 신고 ${stats.reports}건이 있습니다.`
+                  : `Có ${stats.reports} báo cáo đang chờ xử lý.`}
+              </span>
+            </div>
+          ) : null}
+
+          {/* Filter bar */}
+          <div className="admin-content-switch" role="tablist">
+            {([
+              { id: 'pending',   label: ui.reportsPending },
+              { id: 'resolved',  label: ui.reportsResolved },
+              { id: 'dismissed', label: ui.reportsDismissed },
+              { id: 'all',       label: ui.reportsAll },
+            ] as { id: ReportFilter; label: string }[]).map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={reportFilter === item.id ? 'active' : ''}
+                onClick={() => setReportFilter(item.id)}
+              >
+                <span>{item.label}</span>
+                <strong>
+                  {item.id === 'all'
+                    ? reports.length
+                    : reports.filter(r => r.status === item.id).length}
+                </strong>
+              </button>
+            ))}
+          </div>
+
+          <ContentPanel title={ui.reportsTitle} scroll>
+            {reports
+              .filter(r => reportFilter === 'all' || r.status === reportFilter)
+              .map((report) => (
+                <article key={report.id} className={`admin-report-row admin-report-row--${report.status}`}>
+                  <div className="admin-report-header">
+                    <span className={`admin-report-type admin-report-type--${report.target_type}`}>
+                      {report.target_type}
+                    </span>
+                    <span className={`admin-report-status admin-report-status--${report.status}`}>
+                      {report.status === 'pending'   ? (isKo ? '대기' : 'Chờ xử lý') :
+                       report.status === 'resolved'  ? (isKo ? '완료' : 'Đã xử lý') :
+                                                       (isKo ? '무시' : 'Bỏ qua')}
+                    </span>
+                    <time className="admin-report-time">{timeAgo(report.created_at)}</time>
+                  </div>
+
+                  <div className="admin-report-body">
+                    {report.target_id ? (
+                      <p className="admin-report-target">
+                        <span>{ui.reportTarget}:</span>
+                        <code>{report.target_id.slice(0, 12)}…</code>
+                      </p>
+                    ) : null}
+                    {report.details ? (
+                      <p className="admin-report-detail">
+                        <span>{ui.reportDetail}:</span> {report.details}
+                      </p>
+                    ) : null}
+                    {report.admin_note ? (
+                      <p className="admin-report-note">Admin: {report.admin_note}</p>
+                    ) : null}
+                  </div>
+
+                  {report.status === 'pending' ? (
+                    <div className="admin-report-actions">
+                      {(report.target_type === 'post' || report.target_type === 'comment' || report.target_type === 'review') && report.target_id ? (
+                        <button
+                          type="button"
+                          className="admin-report-btn admin-report-btn--delete"
+                          disabled={busyId === `report-${report.id}`}
+                          onClick={() => void deleteReportedContent(report)}
+                        >
+                          {busyId === `report-${report.id}` ? <Loader2 size={13} className="cm-spin" /> : <Trash2 size={13} />}
+                          {ui.deleteAndResolve}
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="admin-report-btn admin-report-btn--resolve"
+                        disabled={busyId === `report-${report.id}`}
+                        onClick={() => void resolveReport(report, 'resolved')}
+                      >
+                        <CheckCircle2 size={13} />
+                        {ui.resolveReport}
+                      </button>
+                      <button
+                        type="button"
+                        className="admin-report-btn admin-report-btn--dismiss"
+                        disabled={busyId === `report-${report.id}`}
+                        onClick={() => void resolveReport(report, 'dismissed')}
+                      >
+                        <ShieldOff size={13} />
+                        {ui.dismissReport}
+                      </button>
+                    </div>
+                  ) : null}
+                </article>
+              ))}
+            {reports.filter(r => reportFilter === 'all' || r.status === reportFilter).length === 0 ? (
+              <EmptyText text={ui.noReports} />
+            ) : null}
+          </ContentPanel>
         </div>
       ) : null}
 

@@ -12844,3 +12844,249 @@ button.admin-stat-card {
     text-overflow: ellipsis;
   }
 }
+
+/* ══════════════════════════════════════════════════════════
+   ADMIN — Reports tab + Growth stats + Quick-action badges
+   ══════════════════════════════════════════════════════════ */
+
+/* Metric chip: flashing badge when reports > 0 */
+.admin-metric-chip.has-badge {
+  animation: admin-chip-pulse 2s ease-in-out infinite;
+}
+@keyframes admin-chip-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.0); }
+  50%       { box-shadow: 0 0 0 5px rgba(248, 113, 113, 0.35); }
+}
+
+/* Quick-action button: urgent state */
+.admin-qa-btn.admin-qa-urgent {
+  border-color: rgba(239, 68, 68, 0.45) !important;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(239, 68, 68, 0.03)) !important;
+  position: relative;
+}
+
+/* Urgent badge dot on quick-action button */
+.admin-qa-urgent-dot {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+/* Reports alert banner */
+.admin-reports-alert {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1.5px solid rgba(239, 68, 68, 0.3);
+  border-radius: 12px;
+  margin-bottom: 4px;
+  color: #dc2626;
+  font-size: 13.5px;
+  font-weight: 750;
+}
+
+.admin-reports-alert svg {
+  flex: 0 0 auto;
+  color: #dc2626;
+}
+
+/* Report row card */
+.admin-report-row {
+  padding: 14px 0;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-report-row:last-child {
+  border-bottom: none;
+}
+
+.admin-report-row--pending {
+  /* default */
+}
+
+.admin-report-row--resolved {
+  opacity: 0.6;
+}
+
+.admin-report-row--dismissed {
+  opacity: 0.45;
+}
+
+/* Report row header */
+.admin-report-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-report-type {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.admin-report-type--post     { background: rgba(99, 102, 241, 0.12); color: #4f46e5; }
+.admin-report-type--comment  { background: rgba(245, 158, 11, 0.12); color: #d97706; }
+.admin-report-type--review   { background: rgba(16, 185, 129, 0.12); color: #059669; }
+.admin-report-type--profile  { background: rgba(59, 130, 246, 0.12); color: #2563eb; }
+.admin-report-type--chat     { background: rgba(236, 72, 153, 0.12); color: #db2777; }
+
+/* Status badge */
+.admin-report-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.admin-report-status--pending   { background: rgba(239, 68, 68, 0.1);  color: #dc2626; }
+.admin-report-status--resolved  { background: rgba(16, 185, 129, 0.1); color: #059669; }
+.admin-report-status--dismissed { background: rgba(148, 163, 184, 0.15); color: #64748b; }
+
+.admin-report-time {
+  margin-left: auto;
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* Report body */
+.admin-report-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.admin-report-target,
+.admin-report-detail {
+  margin: 0;
+  font-size: 12.5px;
+  color: #475569;
+  font-weight: 650;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.admin-report-target span,
+.admin-report-detail span {
+  font-weight: 800;
+  color: #334155;
+}
+
+.admin-report-target code {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 11px;
+  background: #f1f5f9;
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: #4f46e5;
+}
+
+.admin-report-note {
+  margin: 0;
+  font-size: 12px;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+/* Report action buttons */
+.admin-report-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.admin-report-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1.5px solid transparent;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.admin-report-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.admin-report-btn--delete {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.35);
+  color: #dc2626;
+}
+
+.admin-report-btn--resolve {
+  background: rgba(16, 185, 129, 0.08);
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #059669;
+}
+
+.admin-report-btn--dismiss {
+  background: rgba(148, 163, 184, 0.1);
+  border-color: rgba(148, 163, 184, 0.3);
+  color: #64748b;
+}
+
+/* Dark mode */
+.dark .admin-report-row {
+  border-bottom-color: rgba(148, 163, 184, 0.14);
+}
+
+.dark .admin-report-target,
+.dark .admin-report-detail {
+  color: #94a3b8;
+}
+
+.dark .admin-report-target span,
+.dark .admin-report-detail span {
+  color: #cbd5e1;
+}
+
+.dark .admin-report-target code {
+  background: rgba(99, 102, 241, 0.15);
+  color: #a5b4fc;
+}
+
+.dark .admin-reports-alert {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.25);
+}
+
+.dark .admin-qa-btn.admin-qa-urgent {
+  border-color: rgba(239, 68, 68, 0.4) !important;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.12), rgba(239, 68, 68, 0.05)) !important;
+}
+

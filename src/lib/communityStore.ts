@@ -588,7 +588,9 @@ export async function reportCommunityContent(input: {
   details?: string;
 }): Promise<void> {
   if (!canUseSupabase()) throw new Error('Supabase is not configured.');
-  const { error } = await supabase!.from('content_reports').insert({
+  const { data: { user } } = await supabase!.auth.getUser();
+  const { error } = await supabase!.from('community_reports').insert({
+    reporter_id: user?.id ?? null,
     target_type: input.targetType,
     target_id: input.targetId ?? null,
     target_user_id: input.targetUserId ?? null,
