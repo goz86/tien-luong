@@ -6655,6 +6655,46 @@ button.ticker-inner {
   margin-top: 4px;
 }
 
+/* ── Settings card: override mini row styles for inline page layout ── */
+.pf-settings-card .pf-setting-row.mini,
+.pf-settings-card button.pf-setting-row.mini {
+  padding: 14px 20px;
+  border-bottom: none;
+  border-radius: 0;
+  gap: 14px;
+  background: transparent;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: left;
+}
+.pf-settings-card .pf-setting-row.mini:hover,
+.pf-settings-card button.pf-setting-row.mini:hover {
+  background: var(--bg-page, #f8fafc);
+}
+.pf-settings-card .pf-setting-row.mini span {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-primary, #1e293b);
+}
+.pf-settings-card .pf-setting-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: var(--bg-page, #f1f5f9);
+  color: var(--text-secondary, #64748b);
+}
+.pf-settings-card .pf-danger-row span {
+  color: #e11d48 !important;
+}
+.pf-settings-card .pf-danger-row .pf-setting-icon {
+  background: rgba(225, 29, 72, 0.08);
+  color: #e11d48;
+}
+
 /* ── Guest banner ── */
 .pf-guest-banner {
   display: flex;
@@ -6715,6 +6755,7 @@ button.ticker-inner {
   background: var(--card-bg, #fff);
   border-top: 1px solid var(--border-light, #f1f5f9);
   border-bottom: 1px solid var(--border-light, #f1f5f9);
+  overflow: hidden;
 }
 .pf-setting-divider {
   height: 1px;
@@ -10772,6 +10813,55 @@ button.ticker-inner {
 .dark .pf-autocomplete-item:hover,
 .dark .pf-setting-row.mini:hover {
   background: rgba(255, 255, 255, 0.06);
+}
+
+/* Dark mode: new inline settings page */
+.dark .pf-guest-banner {
+  background: #111a2d;
+  border-bottom-color: rgba(255, 255, 255, 0.07);
+}
+.dark .pf-guest-banner-title {
+  color: #94a3b8;
+}
+.dark .pf-guest-login-btn {
+  border-color: #6d8dff;
+  color: #6d8dff;
+}
+.dark .pf-guest-login-btn:hover {
+  background: #6d8dff;
+  color: #fff;
+}
+.dark .pf-settings-group-label {
+  color: #6d8dff;
+}
+.dark .pf-settings-card {
+  background: #111a2d;
+  border-color: rgba(255, 255, 255, 0.07);
+}
+.dark .pf-setting-divider {
+  background: rgba(255, 255, 255, 0.07);
+}
+.dark .pf-settings-card .pf-setting-row.mini span,
+.dark .pf-settings-card .pf-setting-row.mini {
+  color: #f1f5f9;
+}
+.dark .pf-settings-card .pf-setting-row.mini:hover,
+.dark .pf-settings-card button.pf-setting-row.mini:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+.dark .pf-settings-card .pf-setting-icon {
+  background: rgba(255, 255, 255, 0.07);
+  color: #94a3b8;
+}
+.dark .pf-settings-card .pf-danger-row span {
+  color: #f87171 !important;
+}
+.dark .pf-settings-card .pf-danger-row .pf-setting-icon {
+  background: rgba(248, 113, 113, 0.12);
+  color: #f87171;
+}
+.dark .pf-account-email {
+  color: #94a3b8;
 }
 
 .dark .pf-pop-field button {

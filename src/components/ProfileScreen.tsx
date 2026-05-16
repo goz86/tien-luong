@@ -765,11 +765,6 @@ export function ProfileScreen({
               <button type="button" onClick={() => setShowAuthInline(false)}><X size={20} /></button>
             </div>
             <div className="pf-popover-body">
-              {onStartDemo && (
-                <button type="button" className="pf-demo-btn" onClick={() => { setShowAuthInline(false); onStartDemo(); }} style={{ marginBottom: 12 }}>
-                  <Info size={16} /> {isKo ? '데모로 둘러보기' : 'Dùng thử demo'}
-                </button>
-              )}
               <form onSubmit={handleAuth} className="pf-auth-form">
                 <div className="pf-field">
                   <label>{isKo ? '이메일' : 'Email'}</label>
