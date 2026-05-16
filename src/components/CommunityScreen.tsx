@@ -67,6 +67,11 @@ import {
   upsertGuestPendingBookmark,
   getGuestPendingLikes,
   getGuestPendingBookmarks,
+  getGuestLikedIds,
+  getGuestDislikedIds,
+  getGuestBookmarkedIds,
+  toggleGuestReaction,
+  toggleGuestBookmark,
 } from '../lib/guestSession';
 import { GuestExpiryTicker } from './shared/GuestExpiryTicker';
 
@@ -1055,9 +1060,16 @@ export function CommunityScreen({
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
-  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
-  const [dislikedPosts, setDislikedPosts] = useState<Set<string>>(new Set());
-  const [bookmarkedPosts, setBookmarkedPosts] = useState<Set<string>>(new Set());
+  // Guest: khởi tạo từ localStorage ngay lập tức để like/bookmark hiện đúng khi load
+  const [likedPosts, setLikedPosts] = useState<Set<string>>(() =>
+    !session ? getGuestLikedIds() : new Set()
+  );
+  const [dislikedPosts, setDislikedPosts] = useState<Set<string>>(() =>
+    !session ? getGuestDislikedIds() : new Set()
+  );
+  const [bookmarkedPosts, setBookmarkedPosts] = useState<Set<string>>(() =>
+    !session ? getGuestBookmarkedIds() : new Set()
+  );
   const [likedComments, setLikedComments] = useState<Set<string>>(new Set());
   const [postReactionBusy, setPostReactionBusy] = useState<Set<string>>(new Set());
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
@@ -1162,20 +1174,17 @@ export function CommunityScreen({
         setPosts(useLocalSnapshot ? local.posts : state.posts);
         setComments(useLocalSnapshot ? local.comments : state.comments);
 
-        // Với guest (chưa đăng nhập): khôi phục likes/bookmarks từ pendingLikes localStorage
-        const baseLiked   = new Set<string>(useLocalSnapshot ? local.likedPostIds    : state.likedPostIds);
-        const baseDis     = new Set<string>(useLocalSnapshot ? local.dislikedPostIds : state.dislikedPostIds);
-        const baseBookmark = new Set<string>(useLocalSnapshot ? local.bookmarkedPostIds : state.bookmarkedPostIds);
+        // Guest: dùng thẳng từ localStorage (đã được setState ngay khi mount)
+        // User đăng nhập: dùng data từ Supabase
         if (!currentUserId) {
-          getGuestPendingLikes().forEach((p) => {
-            if (p.reaction === 'like')    baseLiked.add(p.postId);
-            else if (p.reaction === 'dislike') baseDis.add(p.postId);
-          });
-          getGuestPendingBookmarks().filter((b) => b.bookmarked).forEach((b) => baseBookmark.add(b.postId));
+          setLikedPosts(getGuestLikedIds());
+          setDislikedPosts(getGuestDislikedIds());
+          setBookmarkedPosts(getGuestBookmarkedIds());
+        } else {
+          setLikedPosts(new Set(useLocalSnapshot ? local.likedPostIds    : state.likedPostIds));
+          setDislikedPosts(new Set(useLocalSnapshot ? local.dislikedPostIds : state.dislikedPostIds));
+          setBookmarkedPosts(new Set(useLocalSnapshot ? local.bookmarkedPostIds : state.bookmarkedPostIds));
         }
-        setLikedPosts(baseLiked);
-        setDislikedPosts(baseDis);
-        setBookmarkedPosts(baseBookmark);
         setLikedComments(new Set(useLocalSnapshot ? local.likedCommentIds : state.likedCommentIds));
         setNotifications(state.notifications);
         setIsLocalMode(state.source !== 'supabase');
@@ -1767,14 +1776,14 @@ export function CommunityScreen({
     }));
 
     if (!currentUserId || !isUuid(postId)) {
-      // Guest: lưu locally + pending sync
-      upsertGuestPendingLike(postId, reaction === 'like' ? (nextLikes.has(postId) ? 'like' : null) : (nextDislikes.has(postId) ? 'dislike' : null));
+      // Guest: lưu thẳng vào localStorage và cập nhật state
+      const { liked: savedLiked, disliked: savedDisliked } = toggleGuestReaction(postId, reaction);
+      setLikedPosts(savedLiked);
+      setDislikedPosts(savedDisliked);
+      // Cũng lưu vào pending để sync khi đăng nhập
+      upsertGuestPendingLike(postId, savedLiked.has(postId) ? 'like' : savedDisliked.has(postId) ? 'dislike' : null);
       setSyncMessage('Đã lưu tương tác trên máy. Đăng nhập để đồng bộ.');
-      setPostReactionBusy((current) => {
-        const next = new Set(current);
-        next.delete(postId);
-        return next;
-      });
+      setPostReactionBusy((current) => { const s = new Set(current); s.delete(postId); return s; });
       return;
     }
 
@@ -1815,9 +1824,11 @@ export function CommunityScreen({
     setBookmarkedPosts(next);
 
     if (!currentUserId || !isUuid(postId)) {
-      // Guest: lưu locally + pending
-      upsertGuestPendingBookmark(postId, !wasSaved);
-      setSyncMessage(wasSaved ? 'Đã bỏ lưu (trên máy)' : 'Đã lưu bài viết trên máy. Đăng nhập để đồng bộ.');
+      // Guest: lưu thẳng vào localStorage
+      const nowBookmarked = toggleGuestBookmark(postId);
+      setBookmarkedPosts(getGuestBookmarkedIds());
+      upsertGuestPendingBookmark(postId, nowBookmarked);
+      setSyncMessage(nowBookmarked ? 'Đã lưu bài viết trên máy. Đăng nhập để đồng bộ.' : 'Đã bỏ lưu (trên máy)');
       return;
     }
 
