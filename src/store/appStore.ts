@@ -8,6 +8,12 @@ import type { CommunityNotification } from '../data/communityData';
 import type { AppLang, WallpaperKey } from '../components/ProfileScreen';
 import { DEFAULT_KRW_TO_VND, calculateShiftPay, shiftHours } from '../lib/salary';
 import { startOfMonth } from '../utils/helpers';
+import {
+  getGuestPendingLikes,
+  getGuestPendingBookmarks,
+  clearGuestPending,
+} from '../lib/guestSession';
+import { togglePostReaction, toggleCommunityBookmark } from '../lib/communityStore';
 
 const STORAGE_KEY = 'duhoc-mate-redesign-state';
 const NOTIFICATION_SEEN_KEY = 'duhoc-mate-notifications-seen-at';
@@ -387,25 +393,45 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     // Auth
-    setSession: (nextSession) => set((state) => {
-      const previousUserId = state.session?.user.id ?? null;
-      const nextUserId = nextSession?.user.id ?? null;
-      const userChanged = previousUserId !== nextUserId;
-      const cleared = userChanged ? clearUserScopedState() : {};
-      const nextNotifications = userChanged ? [] : state.notifications;
-      const nextAdminRole = userChanged ? null : state.adminRole;
+    setSession: (nextSession) => {
+      set((state) => {
+        const previousUserId = state.session?.user.id ?? null;
+        const nextUserId = nextSession?.user.id ?? null;
+        const userChanged = previousUserId !== nextUserId;
+        const wasGuest = !previousUserId && Boolean(nextUserId);
+        const cleared = userChanged ? clearUserScopedState() : {};
+        const nextNotifications = userChanged ? [] : state.notifications;
+        const nextAdminRole = userChanged ? null : state.adminRole;
 
-      return {
-        ...cleared,
-        session: nextSession,
-        ...derive({
+        // Sync pending guest likes/bookmarks khi đăng nhập lần đầu
+        if (wasGuest && nextUserId) {
+          const pendingLikes = getGuestPendingLikes();
+          const pendingBookmarks = getGuestPendingBookmarks();
+          if (pendingLikes.length > 0 || pendingBookmarks.length > 0) {
+            // Chạy async sync sau khi state đã cập nhật
+            void Promise.allSettled([
+              ...pendingLikes
+                .filter((l) => l.reaction !== null)
+                .map((l) => togglePostReaction(nextUserId, l.postId, l.reaction!)),
+              ...pendingBookmarks
+                .filter((b) => b.bookmarked)
+                .map((b) => toggleCommunityBookmark(nextUserId, b.postId)),
+            ]).then(() => clearGuestPending());
+          }
+        }
+
+        return {
+          ...cleared,
           session: nextSession,
-          adminRole: nextAdminRole,
-          notifications: nextNotifications,
-          shifts: userChanged ? [] : state.shifts,
-        }),
-      };
-    }),
+          ...derive({
+            session: nextSession,
+            adminRole: nextAdminRole,
+            notifications: nextNotifications,
+            shifts: userChanged ? [] : state.shifts,
+          }),
+        };
+      });
+    },
     setAdminRole: (role) => set((state) => ({
       adminRole: role,
       ...derive({ session: state.session, adminRole: role, notifications: state.notifications }),

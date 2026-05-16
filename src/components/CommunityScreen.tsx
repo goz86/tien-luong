@@ -59,6 +59,14 @@ import {
   togglePostReaction,
   updateCommunityPost,
 } from '../lib/communityStore';
+import {
+  getGuestSessionId,
+  guestExpiresAt,
+  addGuestContent,
+  upsertGuestPendingLike,
+  upsertGuestPendingBookmark,
+} from '../lib/guestSession';
+import { GuestExpiryTicker } from './shared/GuestExpiryTicker';
 
 type CommunityView = 'feed' | 'detail';
 type CategoryFilter = CommunityCategory | 'all';
@@ -1621,7 +1629,7 @@ export function CommunityScreen({
   }
 
   function openComposer() {
-    if (!requireLogin()) return;
+    // Guest được phép mở composer — nội dung sẽ tự xoá sau 3h
     setIsWritingPost(true);
     setEditingPostId(null);
   }
@@ -1698,7 +1706,6 @@ export function CommunityScreen({
   }
 
   async function handlePostReaction(postId: string, reaction: 'like' | 'dislike') {
-    if (!requireLogin()) return;
     if (postReactionBusy.has(postId)) return;
 
     const hadLike = likedPosts.has(postId);
@@ -1746,7 +1753,9 @@ export function CommunityScreen({
     }));
 
     if (!currentUserId || !isUuid(postId)) {
-      setSyncMessage('Dang luu tuong tac tren may.');
+      // Guest: lưu locally + pending sync
+      upsertGuestPendingLike(postId, reaction === 'like' ? (nextLikes.has(postId) ? 'like' : null) : (nextDislikes.has(postId) ? 'dislike' : null));
+      setSyncMessage('Đã lưu tương tác trên máy. Đăng nhập để đồng bộ.');
       setPostReactionBusy((current) => {
         const next = new Set(current);
         next.delete(postId);
@@ -1785,7 +1794,6 @@ export function CommunityScreen({
   }
 
   async function handleBookmark(postId: string) {
-    if (!requireLogin()) return;
     const next = new Set(bookmarkedPosts);
     const wasSaved = next.has(postId);
     if (wasSaved) next.delete(postId);
@@ -1793,7 +1801,9 @@ export function CommunityScreen({
     setBookmarkedPosts(next);
 
     if (!currentUserId || !isUuid(postId)) {
-      setSyncMessage('Bài lưu đang được giữ tạm trên máy');
+      // Guest: lưu locally + pending
+      upsertGuestPendingBookmark(postId, !wasSaved);
+      setSyncMessage(wasSaved ? 'Đã bỏ lưu (trên máy)' : 'Đã lưu bài viết trên máy. Đăng nhập để đồng bộ.');
       return;
     }
 
@@ -1807,7 +1817,6 @@ export function CommunityScreen({
   }
 
   async function handleCommentLike(commentId: string) {
-    if (!requireLogin()) return;
     const next = new Set(likedComments);
     const hadLiked = next.has(commentId);
     if (hadLiked) next.delete(commentId);
@@ -1831,15 +1840,18 @@ export function CommunityScreen({
   }
 
   async function addComment() {
-    if (!requireLogin()) return;
     if (!newComment.trim() || !selectedPost) return;
 
+    const isGuest = !currentUserId;
+    const guestSessionId = isGuest ? getGuestSessionId() : undefined;
+    const expiresAt = isGuest ? guestExpiresAt() : undefined;
     const commentDisplayName = isAnonymous ? 'Ẩn danh' : displayName;
+
     const baseComment: CommunityComment = {
       id: crypto.randomUUID(),
       post_id: selectedPost.id,
       parent_id: replyTo,
-      user_id: currentUserId || 'local-user',
+      user_id: currentUserId || 'guest',
       content: newComment.trim(),
       is_anonymous: isAnonymous,
       display_name: commentDisplayName,
@@ -1848,7 +1860,7 @@ export function CommunityScreen({
       created_at: new Date().toISOString(),
     };
 
-    const canPersist = Boolean(currentUserId && isUuid(selectedPost.id));
+    const canPersist = Boolean(!isGuest && isUuid(selectedPost.id));
     let savedComment = baseComment;
 
     if (canPersist) {
@@ -1869,8 +1881,29 @@ export function CommunityScreen({
         console.error(error);
         setSyncMessage('Chưa gửi được bình luận. Đang giữ tạm trên máy.');
       }
+    } else if (isGuest && isUuid(selectedPost.id)) {
+      // Guest: gửi lên Supabase với expires_at
+      try {
+        savedComment = await createCommunityComment({
+          postId: selectedPost.id,
+          parentId: replyTo,
+          userId: null,
+          guestSessionId,
+          expiresAt,
+          content: baseComment.content,
+          isAnonymous: true,
+          displayName: 'Khách',
+          isAuthor: false,
+        });
+        addGuestContent({ id: savedComment.id, type: 'comment', expiresAt: expiresAt!, postId: selectedPost.id });
+        setSyncMessage('Bình luận sẽ tự xoá sau 3 giờ. Đăng nhập để lưu mãi.');
+      } catch (error) {
+        console.error(error);
+        setSyncMessage('Chưa gửi được bình luận.');
+        return;
+      }
     } else {
-      setSyncMessage('Bình luận đang lưu tạm. Đăng nhập để đồng bộ dữ liệu.');
+      setSyncMessage('Bình luận đang lưu tạm. Đăng nhập để đồng bộ.');
     }
 
     setComments((current) => [...current, savedComment]);
@@ -1880,15 +1913,17 @@ export function CommunityScreen({
   }
 
   async function addPost() {
-    if (!requireLogin()) return;
     if (!newTitle.trim() || !newContent.trim()) return;
 
-    const postDisplayName = isAnonymous ? 'Ẩn danh' : displayName;
+    const isGuest = !currentUserId;
+    const guestSessionId = isGuest ? getGuestSessionId() : undefined;
+    const expiresAt = isGuest ? guestExpiresAt() : undefined;
+    const postDisplayName = isAnonymous ? 'Ẩn danh' : (isGuest ? 'Khách' : displayName);
     const draft = {
       category: newCategory,
       title: newTitle.trim(),
       content: newContent.trim(),
-      isAnonymous,
+      isAnonymous: isGuest ? true : isAnonymous,
       displayName: postDisplayName,
     };
 
@@ -1906,17 +1941,18 @@ export function CommunityScreen({
         try {
           const saved = await updateCommunityPost(editingPostId, draft);
           updatePost(editingPostId, () => saved);
-          setSyncMessage('Đã cập nhật bài viết ');
+          setSyncMessage('Đã cập nhật bài viết');
         } catch (error) {
           console.error(error);
           updatePost(editingPostId, nextPost);
-          setSyncMessage('Chưa cập nhật được , đang giữ bản sửa tạm.');
+          setSyncMessage('Chưa cập nhật được, đang giữ bản sửa tạm.');
         }
       } else {
         updatePost(editingPostId, nextPost);
         setSyncMessage('Bản sửa đang lưu tạm trên máy');
       }
-    } else if (currentUserId) {
+    } else if (!isGuest) {
+      // Người dùng đã đăng nhập
       try {
         const saved = await createCommunityPost({ ...draft, userId: currentUserId });
         setPosts((current) => [saved, ...current]);
@@ -1930,9 +1966,21 @@ export function CommunityScreen({
         setSyncMessage('Chưa lưu được dữ liệu, bài viết đang lưu tạm trên máy.');
       }
     } else {
-      const localPost = makeLocalPost(draft);
-      setPosts((current) => [localPost, ...current]);
-      setSyncMessage('Bài viết đang lưu tạm. Đăng nhập để đồng bộ Supabasedữ liệu.');
+      // Guest: gửi lên Supabase với expires_at 3h
+      try {
+        const saved = await createCommunityPost({
+          ...draft,
+          userId: null,
+          guestSessionId,
+          expiresAt,
+        });
+        addGuestContent({ id: saved.id, type: 'post', expiresAt: expiresAt! });
+        setPosts((current) => [saved, ...current]);
+        setSyncMessage('Bài viết sẽ tự xoá sau 3 giờ. Đăng nhập để lưu mãi mãi!');
+      } catch (error) {
+        console.error(error);
+        setSyncMessage('Chưa đăng được bài. Vui lòng thử lại.');
+      }
     }
 
     setIsWritingPost(false);
@@ -2324,6 +2372,14 @@ export function CommunityScreen({
             </div>
           )}
         </header>
+
+        {/* Guest expiry ticker — chỉ hiện khi khách đã đăng nội dung */}
+        {!session && (
+          <GuestExpiryTicker
+            lang={lang}
+            onLoginClick={() => setShowLoginPrompt(true)}
+          />
+        )}
 
         <div className="cm-sync-strip">
           <span className={isLocalMode ? 'local' : 'live'} />

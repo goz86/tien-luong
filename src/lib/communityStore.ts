@@ -10,6 +10,8 @@ import {
 type DbPost = {
   id: string;
   user_id: string | null;
+  guest_session_id: string | null;
+  expires_at: string | null;
   category: CommunityCategory | string | null;
   title: string | null;
   content: string | null;
@@ -27,6 +29,8 @@ type DbComment = {
   post_id: string;
   parent_id: string | null;
   user_id: string | null;
+  guest_session_id: string | null;
+  expires_at: string | null;
   content: string | null;
   is_anonymous: boolean | null;
   display_name: string | null;
@@ -83,7 +87,9 @@ export type CommunityState = {
 };
 
 export type PostDraft = {
-  userId: string;
+  userId: string | null;          // null nếu là guest
+  guestSessionId?: string;        // UUID của guest
+  expiresAt?: string;             // ISO: now + 3h, chỉ có khi là guest
   category: CommunityCategory;
   title: string;
   content: string;
@@ -94,7 +100,9 @@ export type PostDraft = {
 export type CommentDraft = {
   postId: string;
   parentId: string | null;
-  userId: string;
+  userId: string | null;          // null nếu là guest
+  guestSessionId?: string;
+  expiresAt?: string;
   content: string;
   isAnonymous: boolean;
   displayName: string;
@@ -186,7 +194,11 @@ export async function loadCommunityState(userId?: string): Promise<CommunityStat
     return emptyState();
   }
 
-  let posts = (postRows as DbPost[] | null)?.map(normalizePost) ?? [];
+  // Lọc bỏ bài guest đã hết hạn (expires_at < now)
+  const now = new Date();
+  let posts = ((postRows as DbPost[] | null) ?? [])
+    .filter((row) => !row.expires_at || new Date(row.expires_at) > now)
+    .map(normalizePost);
 
   if (posts.length > 0) {
     const { data: countRows, error: countError } = await optionalQuery(
@@ -275,7 +287,10 @@ export async function loadCommunityComments(postId: string): Promise<CommunityCo
     return [];
   }
 
-  return (data as DbComment[] | null)?.map(normalizeComment) ?? [];
+  const nowTs = new Date();
+  return ((data as DbComment[] | null) ?? [])
+    .filter((row) => !row.expires_at || new Date(row.expires_at) > nowTs)
+    .map(normalizeComment);
 }
 
 export async function createCommunityPost(draft: PostDraft): Promise<CommunityPost> {
@@ -283,7 +298,9 @@ export async function createCommunityPost(draft: PostDraft): Promise<CommunityPo
   const { data, error } = await supabase!
     .from('community_posts')
     .insert({
-      user_id: draft.userId,
+      user_id: draft.userId ?? null,
+      guest_session_id: draft.guestSessionId ?? null,
+      expires_at: draft.expiresAt ?? null,
       category: draft.category,
       title: draft.title,
       content: draft.content,
@@ -330,7 +347,9 @@ export async function createCommunityComment(draft: CommentDraft): Promise<Commu
     .insert({
       post_id: draft.postId,
       parent_id: draft.parentId,
-      user_id: draft.userId,
+      user_id: draft.userId ?? null,
+      guest_session_id: draft.guestSessionId ?? null,
+      expires_at: draft.expiresAt ?? null,
       content: draft.content,
       is_anonymous: draft.isAnonymous,
       display_name: draft.displayName,
