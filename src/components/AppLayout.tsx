@@ -13,6 +13,7 @@ import { timeAgo } from '../data/communityData';
 import { shiftMonth } from '../utils/helpers';
 import type { Tab } from '../lib/types';
 import { recordAppVisit } from '../lib/appVisits';
+import { getGuestSessionId } from '../lib/guestSession';
 
 /* ── i18n labels for bottom tabs ── */
 const tabLabels: Record<string, Record<Tab, string>> = {
@@ -483,11 +484,22 @@ export default function AppLayout() {
   /* ── notifications ── */
   const markAllAsRead = useCallback(async () => {
     store.markAllAsRead();
-    if (supabaseClient && store.session) {
+    if (!supabaseClient) return;
+    if (store.session) {
+      // User đã đăng nhập: mark read theo recipient_id
       await supabaseClient.from('community_notifications')
         .update({ is_read: true })
         .eq('recipient_id', store.session.user.id)
         .eq('is_read', false);
+    } else {
+      // Khách: mark read theo guest_session_id
+      const guestId = getGuestSessionId();
+      if (guestId) {
+        await supabaseClient.from('community_notifications')
+          .update({ is_read: true })
+          .eq('recipient_guest_session_id', guestId)
+          .eq('is_read', false);
+      }
     }
   }, []);
 

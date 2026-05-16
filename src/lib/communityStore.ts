@@ -42,7 +42,8 @@ type DbComment = {
 
 type DbNotification = {
   id: string;
-  recipient_id: string;
+  recipient_id: string | null;
+  recipient_guest_session_id?: string | null;
   actor_id: string | null;
   post_id: string | null;
   comment_id: string | null;
@@ -109,7 +110,8 @@ export type CommentDraft = {
   isAnonymous: boolean;
   displayName: string;
   isAuthor: boolean;
-  recipientId?: string;
+  recipientId?: string;           // user_id của người nhận (đã đăng nhập)
+  recipientGuestSessionId?: string; // guest_session_id của người nhận (khách)
   postTitle?: string;
 };
 
@@ -156,7 +158,8 @@ function normalizeComment(row: DbComment): CommunityComment {
 function normalizeNotification(row: DbNotification): CommunityNotification {
   return {
     id: row.id,
-    recipient_id: row.recipient_id,
+    recipient_id: row.recipient_id ?? null,
+    recipient_guest_session_id: row.recipient_guest_session_id ?? null,
     actor_id: row.actor_id,
     post_id: row.post_id,
     comment_id: row.comment_id,
@@ -181,7 +184,7 @@ function emptyState(): CommunityState {
   };
 }
 
-export async function loadCommunityState(userId?: string): Promise<CommunityState> {
+export async function loadCommunityState(userId?: string, guestSessionId?: string): Promise<CommunityState> {
   if (!canUseSupabase()) return emptyState();
   const client = supabase!;
 
@@ -266,6 +269,19 @@ export async function loadCommunityState(userId?: string): Promise<CommunityStat
     likedCommentIds = reactions.filter((row) => row.comment_id && row.is_like !== false).map((row) => row.comment_id!);
     bookmarkedPostIds = ((bookmarkRows as Array<{ post_id: string }> | null) ?? []).map((row) => row.post_id);
     notifications = ((notificationRows as DbNotification[] | null) ?? []).map(normalizeNotification);
+  } else if (guestSessionId) {
+    // Khách: load thông báo theo guest_session_id
+    const { data: guestNotifRows } = await optionalQuery(
+      client
+        .from('community_notifications')
+        .select('*')
+        .eq('recipient_guest_session_id', guestSessionId)
+        .order('created_at', { ascending: false })
+        .limit(20),
+      { data: null, error: null },
+      'loadCommunityState guest notifications',
+    );
+    notifications = ((guestNotifRows as DbNotification[] | null) ?? []).map(normalizeNotification);
   }
 
   return {
@@ -371,9 +387,21 @@ export async function createCommunityComment(draft: CommentDraft): Promise<Commu
   const comment = normalizeComment(data as DbComment);
   await bumpPostCounter(draft.postId, 'comments_count', 1);
 
+  // Gửi thông báo cho người nhận: có thể là user đã đăng nhập hoặc khách
   if (draft.recipientId && draft.recipientId !== draft.userId) {
     await createCommunityNotification({
       recipientId: draft.recipientId,
+      actorId: draft.userId,
+      postId: draft.postId,
+      commentId: comment.id,
+      type: draft.parentId ? 'reply' : 'comment',
+      title: draft.parentId ? 'Có trả lời mới' : 'Có bình luận mới',
+      body: `${draft.displayName} đã bình luận trong "${draft.postTitle ?? 'bài viết của bạn'}".`,
+    });
+  } else if (draft.recipientGuestSessionId && draft.recipientGuestSessionId !== draft.guestSessionId) {
+    // Chủ bài là khách: gửi notification theo guest_session_id
+    await createCommunityNotification({
+      recipientGuestSessionId: draft.recipientGuestSessionId,
       actorId: draft.userId,
       postId: draft.postId,
       commentId: comment.id,
@@ -534,7 +562,8 @@ export async function toggleCommunityBookmark(
 }
 
 export async function createCommunityNotification(input: {
-  recipientId: string;
+  recipientId?: string | null;
+  recipientGuestSessionId?: string | null;
   actorId?: string | null;
   postId?: string | null;
   commentId?: string | null;
@@ -542,9 +571,12 @@ export async function createCommunityNotification(input: {
   title: string;
   body: string;
 }): Promise<void> {
+  // Bắt buộc phải có ít nhất một trong hai: recipientId hoặc recipientGuestSessionId
+  if (!input.recipientId && !input.recipientGuestSessionId) return;
   if (!canUseSupabase()) return;
   const { error } = await supabase!.from('community_notifications').insert({
-    recipient_id: input.recipientId,
+    recipient_id: input.recipientId ?? null,
+    recipient_guest_session_id: input.recipientGuestSessionId ?? null,
     actor_id: input.actorId ?? null,
     post_id: input.postId ?? null,
     comment_id: input.commentId ?? null,

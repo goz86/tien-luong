@@ -346,8 +346,37 @@ function getFloatingPlaceAddress(result: any) {
   return displayName.replace(new RegExp(`^${escapeRegExp(title)}\\s*,\\s*`, 'i'), '').trim() || displayName;
 }
 
+// Map English city/province names that Nominatim may return → Korean equivalents
+const EN_CITY_TO_KO: [RegExp, string][] = [
+  [/\bSeoul\b/g, '서울'],
+  [/\bBusan\b/g, '부산'],
+  [/\bDaegu\b/g, '대구'],
+  [/\bIncheon\b/g, '인천'],
+  [/\bGwangju\b/g, '광주'],
+  [/\bDaejeon\b/g, '대전'],
+  [/\bUlsan\b/g, '울산'],
+  [/\bSejong\b/g, '세종'],
+  [/\bJeju-do\b/g, '제주도'],
+  [/\bJeju\b/g, '제주'],
+  [/\bGyeonggi-do\b/g, '경기도'],
+  [/\bGyeonggi\b/g, '경기'],
+  [/\bGangwon-do\b/g, '강원도'],
+  [/\bGangwon\b/g, '강원'],
+  [/\bNorth Gyeongsang\b/g, '경상북도'],
+  [/\bSouth Gyeongsang\b/g, '경상남도'],
+  [/\bNorth Chungcheong\b/g, '충청북도'],
+  [/\bSouth Chungcheong\b/g, '충청남도'],
+  [/\bNorth Jeolla\b/g, '전라북도'],
+  [/\bSouth Jeolla\b/g, '전라남도'],
+];
+
 function compactKoreanAddress(address: string) {
-  return address
+  // Replace English city/province names with Korean equivalents first
+  let result = address;
+  for (const [pattern, replacement] of EN_CITY_TO_KO) {
+    result = result.replace(pattern, replacement);
+  }
+  return result
     .replace(/^대한민국\s+/, '')
     .replace(/^서울특별시\s+/, '서울 ')
     .replace(/^부산광역시\s+/, '부산 ')
@@ -423,6 +452,7 @@ function getLocalKoreanSearchResults(query: string) {
       title: item.title,
       formattedAddress: item.formattedAddress,
       display_name: item.formattedAddress,
+      addressEn: '',
       lat: String(item.lat),
       lon: String(item.lon),
     }));
@@ -462,6 +492,7 @@ async function searchNaverAddressResults(query: string) {
               title: buildKoreanAddressTitle(rawAddress),
               formattedAddress,
               display_name: formattedAddress,
+              addressEn: row.englishAddress || '',
               lat: row.y,
               lon: row.x,
             };
@@ -508,6 +539,7 @@ async function searchNaverAddressResults(query: string) {
               title: placeName,
               formattedAddress: compactAddr || placeName,
               display_name: item.display_name,
+              addressEn: String(item.display_name || ''),
               lat: String(item.lat),
               lon: String(item.lon),
             };
@@ -1185,7 +1217,7 @@ export function CommunityScreen({
     setNotifications([]);
     setRecentChats([]);
 
-    loadCommunityState(currentUserId || undefined)
+    loadCommunityState(currentUserId || undefined, currentUserId ? undefined : getGuestSessionId())
       .then((state) => {
         if (!alive) return;
         const local = readLocalCommunity(currentUserId || null);
@@ -1420,6 +1452,93 @@ export function CommunityScreen({
     return () => {
       void supabase?.removeChannel(reactionsChannel);
       void supabase?.removeChannel(bookmarksChannel);
+    };
+  }, [currentUserId]);
+
+  // Realtime: nhận thông báo mới (cho user đăng nhập và khách)
+  useEffect(() => {
+    if (!supabase) return;
+
+    const channelsToClean: ReturnType<typeof supabase.channel>[] = [];
+
+    if (currentUserId) {
+      // User đã đăng nhập: lắng nghe theo recipient_id
+      const notifChannel = supabase
+        .channel(`community-notifications:${currentUserId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'community_notifications',
+            filter: `recipient_id=eq.${currentUserId}`,
+          },
+          (payload) => {
+            const row = payload.new as any;
+            setNotifications((current) => {
+              // Tránh trùng lặp
+              if (current.some((n) => n.id === row.id)) return current;
+              const newNotif: CommunityNotification = {
+                id: row.id,
+                recipient_id: row.recipient_id ?? null,
+                recipient_guest_session_id: row.recipient_guest_session_id ?? null,
+                actor_id: row.actor_id ?? null,
+                post_id: row.post_id ?? null,
+                comment_id: row.comment_id ?? null,
+                type: (row.type ?? 'system') as CommunityNotification['type'],
+                title: row.title ?? 'Thông báo',
+                body: row.body ?? '',
+                is_read: false,
+                created_at: row.created_at ?? new Date().toISOString(),
+              };
+              return [newNotif, ...current];
+            });
+          },
+        )
+        .subscribe();
+      channelsToClean.push(notifChannel);
+    } else {
+      // Khách: lắng nghe theo recipient_guest_session_id
+      const guestId = getGuestSessionId();
+      if (guestId) {
+        const guestNotifChannel = supabase
+          .channel(`community-notifications-guest:${guestId}`)
+          .on(
+            'postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'community_notifications',
+              filter: `recipient_guest_session_id=eq.${guestId}`,
+            },
+            (payload) => {
+              const row = payload.new as any;
+              setNotifications((current) => {
+                if (current.some((n) => n.id === row.id)) return current;
+                const newNotif: CommunityNotification = {
+                  id: row.id,
+                  recipient_id: row.recipient_id ?? null,
+                  recipient_guest_session_id: row.recipient_guest_session_id ?? null,
+                  actor_id: row.actor_id ?? null,
+                  post_id: row.post_id ?? null,
+                  comment_id: row.comment_id ?? null,
+                  type: (row.type ?? 'system') as CommunityNotification['type'],
+                  title: row.title ?? 'Thông báo',
+                  body: row.body ?? '',
+                  is_read: false,
+                  created_at: row.created_at ?? new Date().toISOString(),
+                };
+                return [newNotif, ...current];
+              });
+            },
+          )
+          .subscribe();
+        channelsToClean.push(guestNotifChannel);
+      }
+    }
+
+    return () => {
+      channelsToClean.forEach((ch) => void supabase?.removeChannel(ch));
     };
   }, [currentUserId]);
 
@@ -1915,15 +2034,28 @@ export function CommunityScreen({
 
     try {
       await togglePostReaction(currentUserId, postId, reaction);
-      if (reaction === 'like' && !hadLike && previousPost?.user_id && previousPost.user_id !== currentUserId) {
-        await createCommunityNotification({
-          recipientId: previousPost.user_id,
-          actorId: currentUserId,
-          postId,
-          type: 'like',
-          title: 'Có lượt thích mới',
-          body: `${isAnonymous ? 'Ẩn danh' : displayName} đã thích bài "${previousPost.title}".`,
-        });
+      if (reaction === 'like' && !hadLike) {
+        if (previousPost?.user_id && previousPost.user_id !== currentUserId) {
+          // Tác giả đã đăng nhập
+          await createCommunityNotification({
+            recipientId: previousPost.user_id,
+            actorId: currentUserId,
+            postId,
+            type: 'like',
+            title: 'Có lượt thích mới',
+            body: `${isAnonymous ? 'Ẩn danh' : displayName} đã thích bài "${previousPost.title}".`,
+          });
+        } else if (!previousPost?.user_id && previousPost?.guest_session_id) {
+          // Tác giả là khách
+          await createCommunityNotification({
+            recipientGuestSessionId: previousPost.guest_session_id,
+            actorId: currentUserId,
+            postId,
+            type: 'like',
+            title: 'Có lượt thích mới',
+            body: `${isAnonymous ? 'Ẩn danh' : displayName} đã thích bài "${previousPost.title}".`,
+          });
+        }
       }
       setSyncMessage('Đang trực tuyến');
     } catch (error) {
@@ -1989,8 +2121,20 @@ export function CommunityScreen({
       if (!hadLiked) {
         const targetComment = postComments.find((c) => c.id === commentId);
         if (targetComment?.user_id && targetComment.user_id !== currentUserId) {
+          // Chủ bình luận đã đăng nhập
           await createCommunityNotification({
             recipientId: targetComment.user_id,
+            actorId: currentUserId,
+            postId: targetComment.post_id,
+            commentId,
+            type: 'like',
+            title: 'Có lượt thích mới',
+            body: `${isAnonymous ? 'Ẩn danh' : displayName} đã thích bình luận của bạn.`,
+          });
+        } else if (!targetComment?.user_id && targetComment?.guest_session_id) {
+          // Chủ bình luận là khách
+          await createCommunityNotification({
+            recipientGuestSessionId: targetComment.guest_session_id,
             actorId: currentUserId,
             postId: targetComment.post_id,
             commentId,
@@ -2036,7 +2180,12 @@ export function CommunityScreen({
       try {
         // Nếu là reply: notify chủ comment gốc; nếu là comment mới: notify chủ post
         const parentComment = replyTo ? postComments.find((c) => c.id === replyTo) : null;
-        const notifyRecipient = parentComment?.user_id ?? selectedPost.user_id;
+        // Dùng isUuid() để loại bỏ giá trị rỗng '' (guest posts normalize user_id = '')
+        const rawRecipientUid = parentComment?.user_id ?? selectedPost.user_id ?? null;
+        const notifyRecipientUserId = (rawRecipientUid && isUuid(rawRecipientUid)) ? rawRecipientUid : null;
+        const notifyRecipientGuestId = !notifyRecipientUserId
+          ? (parentComment?.guest_session_id ?? selectedPost.guest_session_id ?? null)
+          : null;
 
         savedComment = await createCommunityComment({
           postId: selectedPost.id,
@@ -2046,7 +2195,8 @@ export function CommunityScreen({
           isAnonymous,
           displayName: commentDisplayName,
           isAuthor: selectedPost.user_id === currentUserId,
-          recipientId: notifyRecipient,
+          recipientId: notifyRecipientUserId ?? undefined,
+          recipientGuestSessionId: notifyRecipientGuestId ?? undefined,
           postTitle: selectedPost.title,
         });
         setSyncMessage('Đang trực tuyến');
@@ -2057,6 +2207,15 @@ export function CommunityScreen({
     } else if (isGuest && isUuid(selectedPost.id)) {
       // Guest: gửi lên Supabase với expires_at
       try {
+        // Tìm recipient: chủ post hoặc chủ comment gốc (có thể là user hoặc guest)
+        const parentComment = replyTo ? postComments.find((c) => c.id === replyTo) : null;
+        // Dùng isUuid() để loại bỏ giá trị rỗng '' (guest posts normalize user_id = '')
+        const rawRecipientUid = parentComment?.user_id ?? selectedPost.user_id ?? null;
+        const notifyRecipientUserId = (rawRecipientUid && isUuid(rawRecipientUid)) ? rawRecipientUid : null;
+        const notifyRecipientGuestId = !notifyRecipientUserId
+          ? (parentComment?.guest_session_id ?? selectedPost.guest_session_id ?? null)
+          : null;
+
         savedComment = await createCommunityComment({
           postId: selectedPost.id,
           parentId: replyTo,
@@ -2067,8 +2226,13 @@ export function CommunityScreen({
           isAnonymous: true,
           displayName: 'Khách',
           isAuthor: false,
+          recipientId: notifyRecipientUserId ?? undefined,
+          recipientGuestSessionId: (notifyRecipientGuestId && notifyRecipientGuestId !== guestSessionId) ? notifyRecipientGuestId : undefined,
+          postTitle: selectedPost.title,
         });
-        addGuestContent({ id: savedComment.id, type: 'comment', expiresAt: expiresAt!, postId: selectedPost.id });
+        if (expiresAt) {
+          addGuestContent({ id: savedComment.id, type: 'comment', expiresAt, postId: selectedPost.id });
+        }
         setSyncMessage('Đang trực tuyến');
       } catch (error) {
         console.error(error);
@@ -3313,8 +3477,8 @@ function ReviewBoard({
   // Write form state
   const [searchQuery, setSearchQuery] = useState('');
   const [searching, setSearching] = useState(false);
-  const [selectedPlace, setSelectedPlace] = useState<{ name: string; address: string; lat: number; lng: number } | null>(null);
-  const [addressSuggestions, setAddressSuggestions] = useState<Array<{ title: string; formattedAddress: string; lat: string; lon: string }>>([]);
+  const [selectedPlace, setSelectedPlace] = useState<{ name: string; address: string; addressEn?: string; lat: number; lng: number } | null>(null);
+  const [addressSuggestions, setAddressSuggestions] = useState<Array<{ title: string; formattedAddress: string; addressEn?: string; lat: string; lon: string }>>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [fetchingSuggestions, setFetchingSuggestions] = useState(false);
   const [writeCat, setWriteCat] = useState<Exclude<ReviewCategory, 'all'>>('food');
@@ -3351,10 +3515,11 @@ function ReviewBoard({
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  const handleSelectSuggestion = useCallback((s: { title: string; formattedAddress: string; lat: string; lon: string }) => {
+  const handleSelectSuggestion = useCallback((s: { title: string; formattedAddress: string; addressEn?: string; lat: string; lon: string }) => {
     setSelectedPlace({
-      name: s.formattedAddress,
-      address: s.formattedAddress,
+      name: s.formattedAddress,   // Korean compact address (stored as place_name)
+      address: s.formattedAddress, // Korean compact address (stored as place_address)
+      addressEn: s.addressEn || '', // English address (display only)
       lat: Number(s.lat),
       lng: Number(s.lon),
     });
@@ -4669,7 +4834,11 @@ function ReviewBoard({
                   <MapPin size={20} color="#2752ff" />
                   <div className="place-info">
                     <div className="place-name">{selectedPlace.name}</div>
-                    <div className="place-addr">{selectedPlace.address.split(',').slice(0, 3).join(', ')}</div>
+                    {selectedPlace.addressEn ? (
+                      <div className="place-addr place-addr--en">{selectedPlace.addressEn.split(',').slice(0, 4).join(',')}</div>
+                    ) : (
+                      <div className="place-addr">{selectedPlace.address}</div>
+                    )}
                   </div>
                   <button type="button" className="cm-icon-btn" onClick={() => setSelectedPlace(null)}>
                     <X size={16} />

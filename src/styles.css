@@ -9832,6 +9832,17 @@ button.ticker-inner {
   color: var(--text-soft);
 }
 
+.rv-write-place-selected .place-addr--en {
+  font-size: 11px;
+  color: var(--text-muted, #9ca3af);
+  font-style: italic;
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 240px;
+}
+
 /* Star Rating */
 .rv-star-row {
   display: flex;

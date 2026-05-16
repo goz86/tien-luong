@@ -36,7 +36,8 @@ export interface CommunityComment {
 
 export interface CommunityNotification {
   id: string;
-  recipient_id: string;
+  recipient_id: string | null;
+  recipient_guest_session_id?: string | null;
   actor_id: string | null;
   post_id: string | null;
   comment_id: string | null;
