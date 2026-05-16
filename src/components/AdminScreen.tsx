@@ -1018,69 +1018,73 @@ export function AdminScreen({
 
   return (
     <section className="admin-screen">
-      {/* Dark header */}
-      <header className="admin-hero">
-        <div className="admin-hero-top">
-          <button type="button" className="admin-back-btn" onClick={onBack}>
-            <ArrowLeft size={16} />
-            {ui.back}
-          </button>
-          <div className="admin-hero-actions">
-            <span className="admin-live-pill"><ShieldCheck size={13} />{ui.online}</span>
-            <button type="button" className="admin-refresh-btn" onClick={() => void loadDashboard()} disabled={loading}>
-              {loading ? <Loader2 size={15} className="cm-spin" /> : <RefreshCw size={15} />}
+      {/* ── Sidebar shell: hero + tab nav (becomes left sidebar on PC) ── */}
+      <div className="admin-sidebar-shell">
+        <header className="admin-hero">
+          <div className="admin-hero-top">
+            <button type="button" className="admin-back-btn" onClick={onBack}>
+              <ArrowLeft size={16} />
+              {ui.back}
             </button>
+            <div className="admin-hero-actions">
+              <span className="admin-live-pill"><ShieldCheck size={13} />{ui.online}</span>
+              <button type="button" className="admin-refresh-btn" onClick={() => void loadDashboard()} disabled={loading}>
+                {loading ? <Loader2 size={15} className="cm-spin" /> : <RefreshCw size={15} />}
+              </button>
+            </div>
           </div>
-        </div>
-        <div className="admin-hero-body">
-          <h1>{ui.title}</h1>
-          <p>{ui.subtitle}</p>
-        </div>
+          <div className="admin-hero-body">
+            <h1>{ui.title}</h1>
+            <p>{ui.subtitle}</p>
+          </div>
 
-        {/* Metric chips */}
-        <div className="admin-metric-strip">
-          {([
-            { icon: Users,         val: stats.users,         label: ui.stats.users,         color: '#60a5fa', onClick: undefined },
-            { icon: TrendingUp,    val: stats.newUsersWeek,  label: ui.stats.newUsersWeek,  color: '#34d399', onClick: undefined },
-            { icon: Activity,      val: stats.activeUsersWeek, label: ui.stats.activeWeek,  color: '#06b6d4', onClick: undefined },
-            { icon: FileText,      val: stats.posts,         label: ui.stats.posts,         color: '#818cf8', onClick: undefined },
-            { icon: MessageCircle, val: stats.comments,      label: ui.stats.comments,      color: '#f59e0b', onClick: openCommentHistory },
-            { icon: Star,          val: stats.reviews,       label: ui.stats.reviews,       color: '#a78bfa', onClick: undefined },
-            { icon: AlertTriangle, val: stats.reports,       label: ui.stats.reports,       color: '#f87171', onClick: () => openTab('reports') },
-          ] as { icon: typeof ShieldCheck; val: number; label: string; color: string; onClick?: () => void }[]).map(({ icon: Ic, val, label, color, onClick: oc }) => (
-            <button key={label} type="button" className={`admin-metric-chip${label === ui.stats.reports && val > 0 ? ' has-badge' : ''}`} style={{ '--chip-color': color } as React.CSSProperties} onClick={oc}>
-              <Ic size={14} />
-              <strong>{val.toLocaleString()}</strong>
-              <span>{label}</span>
+          {/* Metric chips */}
+          <div className="admin-metric-strip">
+            {([
+              { icon: Users,         val: stats.users,         label: ui.stats.users,         color: '#60a5fa', onClick: undefined },
+              { icon: TrendingUp,    val: stats.newUsersWeek,  label: ui.stats.newUsersWeek,  color: '#34d399', onClick: undefined },
+              { icon: Activity,      val: stats.activeUsersWeek, label: ui.stats.activeWeek,  color: '#06b6d4', onClick: undefined },
+              { icon: FileText,      val: stats.posts,         label: ui.stats.posts,         color: '#818cf8', onClick: undefined },
+              { icon: MessageCircle, val: stats.comments,      label: ui.stats.comments,      color: '#f59e0b', onClick: openCommentHistory },
+              { icon: Star,          val: stats.reviews,       label: ui.stats.reviews,       color: '#a78bfa', onClick: undefined },
+              { icon: AlertTriangle, val: stats.reports,       label: ui.stats.reports,       color: '#f87171', onClick: () => openTab('reports') },
+            ] as { icon: typeof ShieldCheck; val: number; label: string; color: string; onClick?: () => void }[]).map(({ icon: Ic, val, label, color, onClick: oc }) => (
+              <button key={label} type="button" className={`admin-metric-chip${label === ui.stats.reports && val > 0 ? ' has-badge' : ''}`} style={{ '--chip-color': color } as React.CSSProperties} onClick={oc}>
+                <Ic size={14} />
+                <strong>{val.toLocaleString()}</strong>
+                <span>{label}</span>
+              </button>
+            ))}
+          </div>
+        </header>
+
+        {/* Tab bar */}
+        <nav className="admin-tabbar" aria-label="Admin sections">
+          {ADMIN_TABS.map(({ id, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              className={activeTab === id ? 'active' : ''}
+              onClick={() => openTab(id)}
+            >
+              <Icon size={15} />
+              <span>{ui.tabs[id]}</span>
             </button>
           ))}
-        </div>
-      </header>
+        </nav>
+      </div>{/* /admin-sidebar-shell */}
 
-      {notice ? (
-        <div className="admin-notice">
-          <Bell size={15} />
-          <span>{notice}</span>
-        </div>
-      ) : null}
-
-      {/* Tab bar */}
-      <nav className="admin-tabbar" aria-label="Admin sections">
-        {ADMIN_TABS.map(({ id, icon: Icon }) => (
-          <button
-            key={id}
-            type="button"
-            className={activeTab === id ? 'active' : ''}
-            onClick={() => openTab(id)}
-          >
-            <Icon size={15} />
-            <span>{ui.tabs[id]}</span>
-          </button>
-        ))}
-      </nav>
+      {/* ── Main content area ── */}
+      <main className="admin-main-content">
+        {notice ? (
+          <div className="admin-notice">
+            <Bell size={15} />
+            <span>{notice}</span>
+          </div>
+        ) : null}
 
       {activeTab === 'overview' ? (
-        <div className="admin-panel-stack">
+        <div className="admin-panel-stack admin-overview-grid">
           <section className="admin-command-deck" aria-label={isKo ? '관리 작업' : 'Tác vụ quản trị'}>
             {([
               { icon: AlertTriangle, label: isKo ? '신고 처리' : 'Báo cáo',    color: '#ef4444', tab: 'reports' as AdminTab,       badge: stats.reports },
@@ -1579,6 +1583,8 @@ export function AdminScreen({
           </div>
         </ContentPanel>
       ) : null}
+
+      </main>{/* /admin-main-content */}
 
       {/* Styled delete confirm modal */}
       {confirmState ? (

@@ -12769,6 +12769,317 @@ button.admin-stat-card {
   color: #94a3b8;
 }
 
+/* ════════════════════════════════════════════════════════════
+   Admin: Full-screen PC layout  (≥1024px)
+   ════════════════════════════════════════════════════════════ */
+@media (min-width: 1024px) {
+
+  /* 1 ─ Break phone-shell frame to full viewport */
+  .phone-shell:has(.admin-screen) {
+    max-width: 100vw;
+    min-height: 100vh;
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
+    overflow: hidden;
+    background: #f1f5f9;
+  }
+
+  /* 2 ─ Admin screen becomes a flex row */
+  .admin-screen {
+    display: flex;
+    flex-direction: row;
+    height: 100vh;
+    min-height: 100vh;
+    padding: 0;
+    overflow: hidden;
+    background: #f1f5f9;
+  }
+
+  /* 3 ─ Sidebar shell: left column */
+  .admin-sidebar-shell {
+    width: 252px;
+    flex: 0 0 252px;
+    background: linear-gradient(180deg, #0f172a 0%, #1a2744 100%);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: none;
+    border-right: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .admin-sidebar-shell::-webkit-scrollbar { display: none; }
+
+  /* 4 ─ Hero → compact sidebar header */
+  .admin-hero {
+    flex: 0 0 auto;
+    margin: 0;
+    border-radius: 0;
+    padding: 28px 18px 14px;
+    background: transparent;
+    margin-bottom: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .admin-hero-top {
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .admin-hero-top .admin-back-btn {
+    font-size: 11px;
+    min-height: 30px;
+    padding: 0 10px;
+    background: rgba(255, 255, 255, 0.07);
+    color: #94a3b8;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: none;
+  }
+
+  .admin-hero-actions .admin-refresh-btn {
+    width: 30px;
+    height: 30px;
+    min-height: 30px;
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .admin-hero-body {
+    display: grid;
+    gap: 4px;
+  }
+
+  .admin-hero-body h1 {
+    font-size: 17px;
+    margin: 0 0 2px;
+  }
+
+  .admin-hero-body p {
+    font-size: 11px;
+    line-height: 1.3;
+    opacity: 0.65;
+  }
+
+  /* 5 ─ Metric strip → compact vertical list */
+  .admin-metric-strip {
+    flex-direction: column;
+    gap: 3px;
+    padding: 10px 0 2px;
+    overflow: visible;
+  }
+
+  .admin-metric-chip {
+    flex-direction: row;
+    min-width: 0;
+    width: 100%;
+    min-height: 36px;
+    max-height: 36px;
+    padding: 6px 10px;
+    gap: 8px;
+    border-radius: 10px;
+    justify-content: flex-start;
+    text-align: left;
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.07);
+  }
+
+  .admin-metric-chip strong {
+    font-size: 13px;
+    min-width: 26px;
+    line-height: 1;
+  }
+
+  .admin-metric-chip span {
+    font-size: 11px;
+    flex: 1;
+    text-align: left;
+  }
+
+  /* 6 ─ Tab bar → vertical sidebar nav */
+  .admin-tabbar {
+    flex-direction: column;
+    background: transparent;
+    border: none;
+    padding: 10px 10px 16px;
+    gap: 2px;
+    overflow: visible;
+    flex: 1;
+    margin-top: 4px;
+  }
+
+  .admin-tabbar button {
+    flex-direction: row;
+    justify-content: flex-start;
+    width: 100%;
+    min-height: 44px;
+    padding: 10px 14px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #94a3b8;
+    background: transparent;
+    border: none;
+    gap: 10px;
+    text-align: left;
+    transition: background 0.15s, color 0.15s;
+  }
+
+  .admin-tabbar button:hover {
+    background: rgba(255, 255, 255, 0.07);
+    color: #cbd5e1;
+  }
+
+  .admin-tabbar button.active {
+    background: rgba(255, 255, 255, 0.12);
+    color: #f8fafc;
+    border-bottom: none;
+    border-left: 3px solid #60a5fa;
+    padding-left: 11px;
+    border-radius: 0 12px 12px 0;
+  }
+
+  .admin-tabbar button span {
+    opacity: 1;
+  }
+
+  /* 7 ─ Main content area */
+  .admin-main-content {
+    flex: 1;
+    min-width: 0;
+    height: 100vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 28px 32px 48px;
+    background: #f1f5f9;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(15, 23, 42, 0.14) transparent;
+  }
+
+  .admin-main-content::-webkit-scrollbar { width: 6px; }
+  .admin-main-content::-webkit-scrollbar-thumb {
+    background: rgba(15, 23, 42, 0.14);
+    border-radius: 3px;
+  }
+
+  /* Notice banner at top of main */
+  .admin-notice {
+    margin: 0 0 20px;
+    border-radius: 12px;
+  }
+
+  /* 8 ─ Overview: 2-column grid */
+  .admin-overview-grid {
+    display: grid;
+    grid-template-columns: 3fr 2fr;
+    grid-template-areas:
+      "deck   deck"
+      "feed   stats"
+      "signal stats";
+    gap: 20px;
+    align-items: start;
+  }
+
+  .admin-overview-grid .admin-command-deck {
+    grid-area: deck;
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .admin-overview-grid > .admin-content-panel {
+    grid-area: feed;
+  }
+
+  .admin-overview-grid .admin-signal-panel {
+    grid-area: signal;
+  }
+
+  .admin-overview-grid .admin-visit-panel {
+    grid-area: stats;
+    position: sticky;
+    top: 0;
+  }
+
+  /* 9 ─ Content panel: taller scrollable area on PC */
+  .admin-panel-scroll {
+    max-height: calc(100vh - 260px);
+  }
+
+  /* 10 ─ Non-overview panel stacks: full-width single column */
+  .admin-panel-stack:not(.admin-overview-grid) {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  /* 11 ─ Bigger QA action buttons on PC */
+  .admin-command-deck .admin-qa-btn {
+    min-height: 96px;
+    border-radius: 20px;
+  }
+
+  /* 12 ─ Content panels on PC */
+  .admin-content-panel {
+    border-radius: 20px;
+    padding: 20px;
+  }
+
+  .admin-content-panel h2 {
+    font-size: 17px;
+  }
+
+  /* 13 ─ Visit chart: taller */
+  .admin-visit-chart {
+    height: 150px;
+  }
+
+  /* 14 ─ User rows on PC */
+  .admin-user-row {
+    border-radius: 16px;
+  }
+
+  /* 15 ─ Content/report switch: 3 or 4 cols on PC */
+  .admin-content-switch {
+    gap: 6px;
+    padding: 5px;
+  }
+
+  /* 16 ─ Urgent badge on metric chip */
+  .admin-metric-chip.has-badge {
+    border-color: rgba(248, 113, 113, 0.38);
+    background: rgba(248, 113, 113, 0.1);
+  }
+}
+
+/* Dark mode overrides for PC sidebar */
+@media (min-width: 1024px) {
+  .dark .phone-shell:has(.admin-screen) {
+    background: #08111f;
+  }
+
+  .dark .admin-screen {
+    background: #0b1220;
+  }
+
+  .dark .admin-main-content {
+    background: #0b1220;
+    scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+  }
+
+  .dark .admin-main-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .dark .admin-tabbar button:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #e2e8f0;
+  }
+
+  .dark .admin-tabbar button.active {
+    border-left-color: #60a5fa;
+  }
+}
+
 /* ===== MOBILE 375px — overrides after base styles (must stay at end of file) ===== */
 @media (max-width: 390px) {
 
