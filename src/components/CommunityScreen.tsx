@@ -65,6 +65,8 @@ import {
   addGuestContent,
   upsertGuestPendingLike,
   upsertGuestPendingBookmark,
+  getGuestPendingLikes,
+  getGuestPendingBookmarks,
 } from '../lib/guestSession';
 import { GuestExpiryTicker } from './shared/GuestExpiryTicker';
 
@@ -1159,9 +1161,21 @@ export function CommunityScreen({
 
         setPosts(useLocalSnapshot ? local.posts : state.posts);
         setComments(useLocalSnapshot ? local.comments : state.comments);
-        setLikedPosts(new Set(useLocalSnapshot ? local.likedPostIds : state.likedPostIds));
-        setDislikedPosts(new Set(useLocalSnapshot ? local.dislikedPostIds : state.dislikedPostIds));
-        setBookmarkedPosts(new Set(useLocalSnapshot ? local.bookmarkedPostIds : state.bookmarkedPostIds));
+
+        // Với guest (chưa đăng nhập): khôi phục likes/bookmarks từ pendingLikes localStorage
+        const baseLiked   = new Set<string>(useLocalSnapshot ? local.likedPostIds    : state.likedPostIds);
+        const baseDis     = new Set<string>(useLocalSnapshot ? local.dislikedPostIds : state.dislikedPostIds);
+        const baseBookmark = new Set<string>(useLocalSnapshot ? local.bookmarkedPostIds : state.bookmarkedPostIds);
+        if (!currentUserId) {
+          getGuestPendingLikes().forEach((p) => {
+            if (p.reaction === 'like')    baseLiked.add(p.postId);
+            else if (p.reaction === 'dislike') baseDis.add(p.postId);
+          });
+          getGuestPendingBookmarks().filter((b) => b.bookmarked).forEach((b) => baseBookmark.add(b.postId));
+        }
+        setLikedPosts(baseLiked);
+        setDislikedPosts(baseDis);
+        setBookmarkedPosts(baseBookmark);
         setLikedComments(new Set(useLocalSnapshot ? local.likedCommentIds : state.likedCommentIds));
         setNotifications(state.notifications);
         setIsLocalMode(state.source !== 'supabase');
@@ -2442,19 +2456,24 @@ export function CommunityScreen({
   if (view === 'detail' && selectedPost) {
     const category = CATEGORIES[selectedPost.category];
 
+    // Dùng guest_session_id (nếu có) hoặc user_id để phân biệt người dùng ẩn danh
+    // Tránh trường hợp nhiều guest khác nhau đều có user_id=null → cùng tên
     const anonMap = new Map<string, string>();
     let anonCounter = 1;
     postComments.forEach((c) => {
-      if (c.user_id === selectedPost.user_id) {
-        anonMap.set(c.user_id, 'Ẩn danh (Tác giả)');
-      } else if (!anonMap.has(c.user_id)) {
-        anonMap.set(c.user_id, `Ẩn danh ${anonCounter++}`);
+      const key = c.guest_session_id ?? c.user_id ?? `unknown-${c.id}`;
+      const postAuthorKey = selectedPost.guest_session_id ?? selectedPost.user_id ?? '';
+      if (key === postAuthorKey && postAuthorKey !== '') {
+        anonMap.set(key, 'Ẩn danh (Tác giả)');
+      } else if (!anonMap.has(key)) {
+        anonMap.set(key, `Ẩn danh ${anonCounter++}`);
       }
     });
 
     const getDisplayName = (c: CommunityComment) => {
       if (!c.is_anonymous) return c.display_name;
-      return anonMap.get(c.user_id) || 'Ẩn danh';
+      const key = c.guest_session_id ?? c.user_id ?? `unknown-${c.id}`;
+      return anonMap.get(key) || 'Ẩn danh';
     };
 
     return (

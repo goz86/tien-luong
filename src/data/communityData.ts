@@ -5,6 +5,7 @@ export type CommunityReactionType = 'like' | 'dislike';
 export interface CommunityPost {
   id: string;
   user_id: string;
+  guest_session_id?: string | null;  // để phân biệt tác giả guest
   category: CommunityCategory;
   title: string;
   content: string;
@@ -22,6 +23,7 @@ export interface CommunityComment {
   post_id: string;
   parent_id: string | null;
   user_id: string;
+  guest_session_id?: string | null;  // để phân biệt từng guest khác nhau
   content: string;
   is_anonymous: boolean;
   display_name: string;

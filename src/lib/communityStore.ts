@@ -119,6 +119,7 @@ function normalizePost(row: DbPost): CommunityPost {
   return {
     id: row.id,
     user_id: row.user_id ?? '',
+    guest_session_id: row.guest_session_id ?? null,
     category: (row.category ?? 'free') as CommunityCategory,
     title: row.title ?? '',
     content: row.content ?? '',
@@ -138,6 +139,7 @@ function normalizeComment(row: DbComment): CommunityComment {
     post_id: row.post_id,
     parent_id: row.parent_id,
     user_id: row.user_id ?? '',
+    guest_session_id: row.guest_session_id ?? null,
     content: row.content ?? '',
     is_anonymous: row.is_anonymous ?? true,
     display_name: row.display_name ?? 'Ẩn danh',
@@ -182,7 +184,7 @@ export async function loadCommunityState(userId?: string): Promise<CommunityStat
   const { data: postRows, error: postsError } = await withQueryTimeout(
     client
       .from('community_posts')
-      .select('id,user_id,category,title,content,is_anonymous,display_name,likes_count,dislikes_count,comments_count,views_count,created_at')
+      .select('id,user_id,guest_session_id,category,title,content,is_anonymous,display_name,likes_count,dislikes_count,comments_count,views_count,created_at')
       .order('created_at', { ascending: false })
       .limit(50),
     REQUIRED_QUERY_TIMEOUT_MS,
@@ -278,7 +280,7 @@ export async function loadCommunityComments(postId: string): Promise<CommunityCo
   if (!canUseSupabase()) return [];
   const { data, error } = await supabase!
     .from('community_comments')
-    .select('id,post_id,parent_id,user_id,content,is_anonymous,display_name,is_author,likes_count,created_at')
+    .select('id,post_id,parent_id,user_id,guest_session_id,content,is_anonymous,display_name,is_author,likes_count,created_at')
     .eq('post_id', postId)
     .order('created_at', { ascending: true });
 
