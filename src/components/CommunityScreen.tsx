@@ -1130,6 +1130,7 @@ export function CommunityScreen({
   const [syncMessage, setSyncMessage] = useState('Đang làm mới');
   const [isLocalMode, setIsLocalMode] = useState(true);
   const [viewProfile, setViewProfile] = useState<CompanionProfile | null>(null);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [activeChatPartner, setActiveChatPartner] = useState<CompanionProfile | null>(null);
   const [friendFilter, setFriendFilter] = useState<'discovery' | 'chats' | 'unread'>('discovery');
@@ -2997,9 +2998,15 @@ export function CommunityScreen({
           {selectedPost.image_urls && selectedPost.image_urls.length > 0 && (
             <div className={`cm-detail-imgs cm-detail-imgs--${selectedPost.image_urls.length}`}>
               {selectedPost.image_urls.map((url, i) => (
-                <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="cm-detail-img-link">
+                <button
+                  key={i}
+                  type="button"
+                  className="cm-detail-img-link"
+                  onClick={() => setLightboxUrl(url)}
+                  aria-label={`Xem ảnh ${i + 1}`}
+                >
                   <img src={url} alt={`Ảnh ${i + 1}`} className="cm-detail-img" />
-                </a>
+                </button>
               ))}
             </div>
           )}
@@ -3139,6 +3146,7 @@ export function CommunityScreen({
         {showReportConfirm ? renderReportConfirm() : null}
         {viewProfile ? renderProfileModal() : null}
         {showLoginPrompt ? renderLoginPrompt() : null}
+        {lightboxUrl ? renderLightbox() : null}
         {activeChatPartner && session && (
           <ChatView
             session={session}
@@ -3269,6 +3277,46 @@ export function CommunityScreen({
             <span className="cm-write-fs-count">{newContent.length}/2000</span>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  function renderLightbox() {
+    if (!lightboxUrl) return null;
+    return (
+      <div
+        style={{
+          position: 'fixed', inset: 0, zIndex: 9500,
+          background: 'rgba(0,0,0,0.92)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'zoom-out',
+        }}
+        onClick={() => setLightboxUrl(null)}
+      >
+        <button
+          type="button"
+          aria-label="Đóng"
+          style={{
+            position: 'absolute', top: 16, right: 16,
+            background: 'rgba(255,255,255,0.12)', border: 'none',
+            borderRadius: '50%', width: 40, height: 40,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: '#fff', cursor: 'pointer',
+          }}
+          onClick={() => setLightboxUrl(null)}
+        >
+          <X size={20} />
+        </button>
+        <img
+          src={lightboxUrl}
+          alt="Ảnh bài viết"
+          style={{
+            maxWidth: '90vw', maxHeight: '90vh',
+            objectFit: 'contain', borderRadius: 8,
+            boxShadow: '0 8px 48px rgba(0,0,0,0.6)',
+          }}
+          onClick={(e) => e.stopPropagation()}
+        />
       </div>
     );
   }
