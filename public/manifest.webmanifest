@@ -1,13 +1,24 @@
 {
   "name": "Duhoc Mate",
   "short_name": "DuhocMate",
-  "description": "Lương, tỷ giá và kết nối bạn bè cho du học sinh Việt tại Hàn Quốc.",
+  "description": "Ứng dụng theo dõi lương, lịch làm việc và cộng đồng dành cho du học sinh Việt tại Hàn Quốc.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
   "background_color": "#f8fafc",
   "theme_color": "#2563eb",
+  "lang": "vi",
+  "dir": "ltr",
+  "categories": ["finance", "productivity", "social"],
+  "iarc_rating_id": "",
+  "related_applications": [
+    {
+      "platform": "play",
+      "id": "com.duhocmate.app"
+    }
+  ],
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/logo.png",
@@ -20,6 +31,11 @@
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon.png",
+      "sizes": "96x96",
+      "type": "image/png"
     }
   ],
   "shortcuts": [

@@ -5,6 +5,12 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undef
 
 export const hasSupabaseConfig = Boolean(supabaseUrl && supabaseAnonKey);
 
+const runWithoutAuthLock = async <T>(
+  _name: string,
+  _acquireTimeout: number,
+  fn: () => Promise<T>,
+) => fn();
+
 export const supabase = hasSupabaseConfig
   ? createClient(supabaseUrl!, supabaseAnonKey!, {
       auth: {
@@ -12,6 +18,7 @@ export const supabase = hasSupabaseConfig
         autoRefreshToken: true,
         detectSessionInUrl: true,
         flowType: 'pkce',
+        lock: runWithoutAuthLock,
       },
     })
   : null;

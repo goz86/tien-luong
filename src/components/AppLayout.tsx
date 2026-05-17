@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { CalendarDays, House, MessageCircleMore, UserRound, WalletCards, Bell, ThumbsUp, MessageCircle, X, Megaphone } from 'lucide-react';
+import { CalendarDays, House, MessageCircleMore, UserRound, WalletCards, Bell, ThumbsUp, MessageCircle, X, Megaphone, Users, MessageSquare } from 'lucide-react';
 import { hasSupabaseConfig, supabase as supabaseClient } from '../lib/supabase';
 import { useAppStore } from '../store/appStore';
 import { HomeScreen } from './HomeScreen';
@@ -9,9 +9,12 @@ import { IncomeScreen } from './IncomeScreen';
 import { CommunityScreen } from './CommunityScreen';
 import { AdminScreen } from './AdminScreen';
 import { ProfileScreen, WALLPAPERS } from './ProfileScreen';
+import { AppLockOverlay } from './AppLockOverlay';
 import { timeAgo } from '../data/communityData';
 import { shiftMonth } from '../utils/helpers';
 import type { Tab } from '../lib/types';
+import { recordAppVisit } from '../lib/appVisits';
+import { getGuestSessionId } from '../lib/guestSession';
 
 /* ── i18n labels for bottom tabs ── */
 const tabLabels: Record<string, Record<Tab, string>> = {
@@ -32,19 +35,21 @@ type WallpaperKey = string;
 
 const REFRESH_RATE_URL = 'https://open.er-api.com/v6/latest/KRW';
 
-const ANNOUNCEMENT_HIDE_TODAY_KEY = 'duhocmate-announcement-hide-today';
+const ANNOUNCEMENT_PERM_HIDE_KEY = 'duhocmate-announcement-perm-hide'; // user bấm "không hiển thị lại"
 const ANNOUNCEMENT_SESSION_DISMISS_KEY = 'duhocmate-announcement-session-dismissed';
-
-function localDateKey() {
-  const date = new Date();
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
+const ANNOUNCEMENT_AUTO_DISMISS_MS = 12000;
+const ANNOUNCEMENT_TTL_MS = 24 * 60 * 60 * 1000; // 24h kể từ created_at
 
 export default function AppLayout() {
   const store = useAppStore();
   const suppressPopstate = useRef(false);
-  const [activeBanner, setActiveBanner] = useState<{ id: string; title: string; body: string; severity: string } | null>(null);
+  const [activeBanner, setActiveBanner] = useState<{ id: string; title: string; body: string; severity: string; created_at: string } | null>(null);
   const [communityTargetPostId, setCommunityTargetPostId] = useState<string | null>(null);
+
+  // Ping visitor tracking — ghi nhận lượt truy cập (guest + registered)
+  useEffect(() => {
+    void recordAppVisit(store.session?.user.id ?? null);
+  }, [store.session]);
 
   // Fetch latest admin announcement and show it as an entry popup for signed-in users.
   useEffect(() => {
@@ -54,28 +59,39 @@ export default function AppLayout() {
     }
     const client = supabaseClient;
 
-    const shouldShow = (item: { id: string }) => {
-      const todayDismissed = localStorage.getItem(ANNOUNCEMENT_HIDE_TODAY_KEY);
+    const shouldShow = (item: { id: string; created_at: string }) => {
+      // 1. Thông báo đã quá 24h kể từ khi tạo → không hiện với bất kỳ ai
+      const ageMs = Date.now() - new Date(item.created_at).getTime();
+      if (ageMs >= ANNOUNCEMENT_TTL_MS) return false;
+
+      // 2. User đã bấm "không hiển thị lại" → lưu vĩnh viễn trong localStorage
+      const permHidden = localStorage.getItem(ANNOUNCEMENT_PERM_HIDE_KEY);
+      if (permHidden === item.id) return false;
+
+      // 3. Đã tắt trong session này → không hiện lại cho đến khi đăng nhập lại
       const sessionDismissed = sessionStorage.getItem(ANNOUNCEMENT_SESSION_DISMISS_KEY);
-      return todayDismissed !== `${item.id}:${localDateKey()}` && sessionDismissed !== item.id;
+      if (sessionDismissed === item.id) return false;
+
+      return true;
     };
 
-    const showIfNeeded = (item: { id: string; title: string; body: string; severity: string } | null) => {
+    const showIfNeeded = (item: { id: string; title: string; body: string; severity: string; created_at: string } | null) => {
       if (!item) return;
       if (shouldShow(item)) setActiveBanner(item);
     };
 
     const loadLatest = () => {
-      const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+      // Chỉ lấy thông báo trong vòng 24h để nhất quán với TTL
+      const cutoff = new Date(Date.now() - ANNOUNCEMENT_TTL_MS).toISOString();
       void client
         .from('admin_announcements')
-        .select('id, title, body, severity')
+        .select('id, title, body, severity, created_at')
         .eq('is_published', true)
         .gte('created_at', cutoff)
         .order('created_at', { ascending: false })
         .limit(1)
         .then(({ data }) => {
-          showIfNeeded((data?.[0] as { id: string; title: string; body: string; severity: string } | undefined) ?? null);
+          showIfNeeded((data?.[0] as { id: string; title: string; body: string; severity: string; created_at: string } | undefined) ?? null);
         });
     };
 
@@ -94,6 +110,7 @@ export default function AppLayout() {
               title: row.title ?? '',
               body: row.body ?? '',
               severity: row.severity ?? 'info',
+              created_at: row.created_at ?? new Date().toISOString(),
             });
           }
         },
@@ -104,6 +121,17 @@ export default function AppLayout() {
       void client.removeChannel(channel);
     };
   }, [store.session]);
+
+  useEffect(() => {
+    if (!activeBanner) return;
+    const timer = window.setTimeout(() => {
+      // Auto-dismiss sau 12s → chỉ lưu session (sẽ hiện lại khi đăng nhập lần sau trong 24h đầu)
+      sessionStorage.setItem(ANNOUNCEMENT_SESSION_DISMISS_KEY, activeBanner.id);
+      setActiveBanner((current) => (current?.id === activeBanner.id ? null : current));
+    }, ANNOUNCEMENT_AUTO_DISMISS_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [activeBanner?.id]);
 
   /* ── tab routing ── */
   const changeTab = useCallback((nextTab: Tab) => {
@@ -129,6 +157,37 @@ export default function AppLayout() {
     setCommunityTargetPostId(postId);
     changeTab('friends');
   }, [changeTab]);
+
+  const startDemoMode = useCallback(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const demoShifts = [
+      { id: 'demo-shift-1', date: `${y}-${m}-03`, label: 'Cafe Hongdae', startTime: '18:00', endTime: '22:30', hourlyWage: 11500, breakMinutes: 0, notes: 'Ca toi', nightShift: false, taxDeduction: false, holidayAllowance: 0 },
+      { id: 'demo-shift-2', date: `${y}-${m}-08`, label: 'Chicken House', startTime: '17:00', endTime: '23:30', hourlyWage: 12000, breakMinutes: 30, notes: 'Cuoi tuan', nightShift: true, taxDeduction: true, holidayAllowance: 0 },
+      { id: 'demo-shift-3', date: `${y}-${m}-14`, label: 'Convenience Store', startTime: '09:00', endTime: '15:00', hourlyWage: 11000, breakMinutes: 30, notes: 'Ca sang', nightShift: false, taxDeduction: false, holidayAllowance: 0 },
+      { id: 'demo-shift-4', date: `${y}-${m}-21`, label: 'Cafe Hongdae', startTime: '18:00', endTime: '23:00', hourlyWage: 11500, breakMinutes: 0, notes: 'Training', nightShift: true, taxDeduction: false, holidayAllowance: 0 },
+    ];
+    store.setProfile({
+      displayName: 'Demo Student',
+      school: 'Hongik University',
+      region: 'Seoul Mapo-gu',
+      note: 'Demo mode for store reviewers.',
+      tags: ['TOPIK', 'Budget', 'Cafe'],
+    });
+    store.setShifts(demoShifts as any);
+    store.setExpenses([
+      { id: 'demo-expense-1', category: 'rent', amount: 450000, date: `${y}-${m}-01`, note: 'Goshiwon' },
+      { id: 'demo-expense-2', category: 'food', amount: 180000, date: `${y}-${m}-12`, note: 'Food' },
+      { id: 'demo-expense-3', category: 'transport', amount: 62000, date: `${y}-${m}-16`, note: 'T-money' },
+    ] as any);
+    store.setIncomeTarget(1800000);
+    store.setCalendarMonth(`${y}-${m}-01`);
+    store.setTab('home');
+    store.recalc();
+    store.persist();
+    localStorage.setItem('duhoc-mate-demo-mode', 'true');
+  }, [store]);
 
   useEffect(() => {
     function handlePopstate(e: PopStateEvent) {
@@ -162,6 +221,20 @@ export default function AppLayout() {
       const clean = window.location.pathname + window.location.hash;
       history.replaceState({}, '', clean);
       setTimeout(() => openAddToday(), 300);
+    }
+  }, []);
+
+  /* ── Deep link: ?post={id} → mở đúng bài viết trong cộng đồng ── */
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const postId = params.get('post');
+    if (postId) {
+      // Xoá query param khỏi URL ngay (tránh reload lại)
+      const clean = window.location.pathname + window.location.hash;
+      history.replaceState({}, '', clean);
+      // Chuyển sang tab Cộng đồng và báo hiệu mở bài
+      useAppStore.getState().setTab('friends');
+      setCommunityTargetPostId(postId);
     }
   }, []);
 
@@ -330,7 +403,7 @@ export default function AppLayout() {
       endTime: s.draft.endTime,
       hourlyWage: s.draft.hourlyWage,
       breakMinutes: s.draft.breakMinutes,
-      notes: s.draft.note || s.draft.label,
+      notes: s.draft.note || '',
       nightShift: s.draft.nightShift,
       taxDeduction: s.draft.taxDeduction,
       holidayAllowance: s.draft.holidayAllowance,
@@ -412,11 +485,22 @@ export default function AppLayout() {
   /* ── notifications ── */
   const markAllAsRead = useCallback(async () => {
     store.markAllAsRead();
-    if (supabaseClient && store.session) {
+    if (!supabaseClient) return;
+    if (store.session) {
+      // User đã đăng nhập: mark read theo recipient_id
       await supabaseClient.from('community_notifications')
         .update({ is_read: true })
         .eq('recipient_id', store.session.user.id)
         .eq('is_read', false);
+    } else {
+      // Khách: mark read theo guest_session_id
+      const guestId = getGuestSessionId();
+      if (guestId) {
+        await supabaseClient.from('community_notifications')
+          .update({ is_read: true })
+          .eq('recipient_guest_session_id', guestId)
+          .eq('is_read', false);
+      }
     }
   }, []);
 
@@ -465,21 +549,30 @@ export default function AppLayout() {
                     <p key={`${activeBanner.id}-${index}`}>{line || '\u00a0'}</p>
                   ))}
                 </div>
+                <motion.div
+                  key={activeBanner.id}
+                  className="admin-entry-announcement-progress"
+                  initial={{ scaleX: 1 }}
+                  animate={{ scaleX: 0 }}
+                  transition={{ duration: ANNOUNCEMENT_AUTO_DISMISS_MS / 1000, ease: 'linear' }}
+                />
                 <div className="admin-entry-announcement-actions">
                   <button
                     type="button"
                     className="admin-entry-announcement-muted"
                     onClick={() => {
-                      localStorage.setItem(ANNOUNCEMENT_HIDE_TODAY_KEY, `${activeBanner.id}:${localDateKey()}`);
+                      // Lưu vĩnh viễn vào localStorage → không bao giờ hiện lại trên thiết bị này
+                      localStorage.setItem(ANNOUNCEMENT_PERM_HIDE_KEY, activeBanner.id);
                       setActiveBanner(null);
                     }}
                   >
-                    {store.lang === 'ko' ? '오늘 하루 보지 않기' : 'Hôm nay không xem lại'}
+                    {store.lang === 'ko' ? '다시 보지 않기' : 'không hiển thị lại'}
                   </button>
                   <button
                     type="button"
                     className="admin-entry-announcement-close"
                     onClick={() => {
+                      // Đóng → chỉ lưu session, sẽ hiện lại khi đăng nhập lần sau (nếu còn trong 24h)
                       sessionStorage.setItem(ANNOUNCEMENT_SESSION_DISMISS_KEY, activeBanner.id);
                       setActiveBanner(null);
                     }}
@@ -612,6 +705,7 @@ export default function AppLayout() {
               targetPostId={communityTargetPostId}
               onTargetPostConsumed={() => setCommunityTargetPostId(null)}
               lang={store.lang}
+              isAdmin={store.isAdmin}
             />
           )}
           {store.tab === 'profile' && (
@@ -627,9 +721,9 @@ export default function AppLayout() {
               onChangeWallpaper={store.setWallpaper}
               lang={store.lang}
               onChangeLang={store.setLang}
-              earnedBadges={store.earnedBadges}
               isAdmin={store.isAdmin}
               onOpenAdmin={() => changeTab('admin')}
+              onStartDemo={startDemoMode}
             />
           )}
           {store.tab === 'admin' && (
@@ -678,7 +772,10 @@ export default function AppLayout() {
               onClick={handleOpenNotifications}
             >
               <div className={`cm-notif-icon-circle ${store.toastNotification.type}`}>
-                {store.toastNotification.type === 'like' ? <ThumbsUp size={14} /> : <MessageCircle size={14} />}
+                {store.toastNotification.type === 'like' ? <ThumbsUp size={14} />
+                  : store.toastNotification.type === 'friend_request' || store.toastNotification.type === 'friend_accept' ? <Users size={14} />
+                  : store.toastNotification.type === 'message' ? <MessageSquare size={14} />
+                  : <MessageCircle size={14} />}
               </div>
               <div className="cm-push-toast-content">
                 <strong>{store.toastNotification.title}</strong>
@@ -725,7 +822,10 @@ export default function AppLayout() {
                     store.notifications.map((n) => (
                       <div key={`notif-${n.id}`} className={`cm-notif-item ${!n.is_read ? 'unread' : ''}`} style={{ cursor: 'pointer' }}>
                         <div className={`cm-notif-icon-circle ${n.type}`}>
-                          {n.type === 'like' ? <ThumbsUp size={12} /> : <MessageCircle size={12} />}
+                          {n.type === 'like' ? <ThumbsUp size={12} />
+                            : n.type === 'friend_request' || n.type === 'friend_accept' ? <Users size={12} />
+                            : n.type === 'message' ? <MessageSquare size={12} />
+                            : <MessageCircle size={12} />}
                         </div>
                         <div className="cm-notif-item-content">
                           <p>{n.body}</p>
@@ -740,6 +840,7 @@ export default function AppLayout() {
             </>
           )}
         </AnimatePresence>
+        <AppLockOverlay lang={store.lang} />
       </div>
     </div>
   );

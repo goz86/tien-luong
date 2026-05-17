@@ -1,7 +1,7 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { toPng } from 'html-to-image';
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Download, Settings2, Plus, Clock } from 'lucide-react';
-import { calculateShiftPay, shiftHours, formatKrw } from '../lib/salary';
+import { calculateShiftPay, shiftHours, formatKrw, MINIMUM_WAGE_2026 } from '../lib/salary';
 import { Shift, ShiftDraft, VenueColors } from '../lib/types';
 import {
   buildCalendar,
@@ -108,6 +108,8 @@ export function CalendarScreen({
     nightHint: '보통 22:00 이후 적용',
     holiday: '휴일/주휴수당',
     holidayPlaceholder: '수당 금액 입력 (있는 경우)',
+    juhyuSuggestLabel: (amt: string) => `최저 기준: ${amt}원 ↓`,
+    juhyuSuggestHint: (h: number) => `이번 주 ${h.toFixed(1)}h 기준`,
     saveChanges: '변경 저장',
     saveShift: '이 날짜에 근무 저장',
     deleteTitle: '확인',
@@ -141,7 +143,7 @@ export function CalendarScreen({
     editShift: 'Sửa giờ làm',
     addShift: 'Thêm giờ làm thêm',
     totalDay: 'Tổng ngày',
-    addNewShift: 'Thêm ca làm mới cho ngày này',
+    addNewShift: 'Thêm mới',
     workplace: 'Nơi làm',
     quickNote: 'Ghi chú nhanh',
     notePlaceholder: 'Nhập ghi chú...',
@@ -158,8 +160,10 @@ export function CalendarScreen({
     nightHint: 'Thường áp dụng sau 22:00',
     holiday: 'Phụ cấp nghỉ / Cuối tuần (주휴수당)',
     holidayPlaceholder: 'Nhập số tiền phụ cấp (nếu có)',
+    juhyuSuggestLabel: (amt: string) => `Mức tối thiểu: ${amt}원 ↓`,
+    juhyuSuggestHint: (h: number) => `Tuần này ${h.toFixed(1)}h`,
     saveChanges: 'Lưu thay đổi',
-    saveShift: 'Lưu ca cho ngày này',
+    saveShift: 'Lưu',
     deleteTitle: 'Xác nhận',
     deleteBody: 'Bạn có chắc chắn muốn xoá ca làm việc này không? Dữ liệu đã xoá sẽ không thể khôi phục.',
     datePicker: 'Chọn ngày',
@@ -179,7 +183,7 @@ export function CalendarScreen({
   const grid = buildCalendar(month, gridShifts);
   const monthTotal = filteredMonthShifts.reduce((sum, shift) => sum + calculateShiftPay(shift).total, 0);
   const monthHours = filteredMonthShifts.reduce((sum, shift) => sum + shiftHours(shift), 0);
-  
+
   const [calendarDisplay, setCalendarDisplay] = useState<'duration' | 'range'>('duration');
   const [isMonthPickerOpen, setIsMonthPickerOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -200,6 +204,48 @@ export function CalendarScreen({
   const calendarYear = new Date(`${month}T00:00:00`).getFullYear();
   const yearOptions = Array.from({ length: 9 }, (_, index) => calendarYear - 4 + index);
   const monthOptions = Array.from({ length: 12 }, (_, index) => index + 1);
+
+  // ── 주휴수당 auto-suggestion ──────────────────────────────────────────────
+  // Tính từ thứ 2 đến ngày ca hiện tại, CHỈ tính riêng nơi làm đang nhập.
+  // Yêu cầu tối thiểu 15h/tuần mới được hưởng 주휴수당.
+  const weekJuhyuSuggestion = useMemo(() => {
+    if (!draft.date || !draft.startTime || !draft.endTime) return null;
+
+    // Tìm thứ 2 của tuần chứa draft.date
+    const draftDate = new Date(`${draft.date}T00:00:00`);
+    const dow = draftDate.getDay(); // 0=CN, 1=T2,...6=T7
+    const daysBack = dow === 0 ? 6 : dow - 1;
+    const monday = new Date(draftDate);
+    monday.setDate(draftDate.getDate() - daysBack);
+    const mondayStr = monday.toLocaleDateString('sv-SE');
+
+    // Chỉ lấy ca CÙNG nơi làm (draft.venue), trong tuần, bỏ qua ca đang sửa
+    const weekSavedShifts = shifts.filter(
+      (s) =>
+        s.date >= mondayStr &&
+        s.date <= draft.date &&
+        s.id !== editingShiftId &&
+        s.label === draft.venue   // ← chỉ tính riêng nơi làm này
+    );
+    const savedHours = weekSavedShifts.reduce((sum, s) => sum + shiftHours(s), 0);
+
+    // Giờ của ca hiện đang nhập
+    const [sh, sm] = draft.startTime.split(':').map(Number);
+    const [eh, em] = draft.endTime.split(':').map(Number);
+    let startMins = sh * 60 + sm;
+    let endMins   = eh * 60 + em;
+    if (endMins <= startMins) endMins += 24 * 60;
+    const draftHrs = Math.max(0, (endMins - startMins - draft.breakMinutes) / 60);
+
+    const totalHours = savedHours + draftHrs;
+    if (totalHours < 15) return null; // 주휴수당 chỉ áp dụng khi >= 15h/tuần
+
+    // Công thức: (giờ làm / 40) × 8 × lương giờ (tối thiểu)
+    const clampedHours = Math.min(totalHours, 40);
+    const minJuhyu = Math.round((clampedHours / 40) * 8 * MINIMUM_WAGE_2026);
+    return { min: minJuhyu, totalHours };
+  }, [draft.date, draft.startTime, draft.endTime, draft.breakMinutes, draft.venue, shifts, editingShiftId]);
+  // ─────────────────────────────────────────────────────────────────────────
 
   const quickPreview = calculateShiftPay({
     id: 'quick-preview',
@@ -233,7 +279,7 @@ export function CalendarScreen({
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent | TouchEvent) => {
       const target = event.target as HTMLElement;
-      if (activeSelect && !target.closest('.settings-select-wrap')) {
+      if (activeSelect && !target.closest('.settings-select-wrap') && !target.closest('.venue-color-list')) {
         setActiveSelect(null);
       }
     };
@@ -410,10 +456,41 @@ export function CalendarScreen({
         }
       });
 
+      // Chuyển data URL → Blob URL để tránh hiện chuỗi base64 trên mobile
+      const res = await fetch(dataUrl);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+
+      // Tên file: {ten-noi-lam}-YYYY.MM.png
+      // Tiếng Việt/Anh → slug ASCII | Tiếng Hàn/CJK → giữ nguyên ký tự
+      const slugifyFilename = (text: string): string => {
+        const latinized = text
+          .replace(/[đĐ]/g, (c) => (c === 'đ' ? 'd' : 'D'))
+          .normalize('NFD')
+          .replace(/[̀-ͯ]/g, '');
+        const latinChars = (latinized.match(/[a-zA-Z0-9]/g) ?? []).length;
+        const totalNonSpace = text.replace(/\s/g, '').length;
+        if (totalNonSpace > 0 && latinChars / totalNonSpace >= 0.5) {
+          // Latin/Việt → slug hoá đầy đủ
+          return latinized.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+        }
+        // Hàn/CJK → giữ ký tự, chỉ xử lý space + ký tự invalid
+        return text.trim().replace(/\s+/g, '-').replace(/[/\\:*?"<>|]/g, '');
+      };
+
+      const venueSlug = effectiveVenue !== 'all' && effectiveVenue
+        ? slugifyFilename(effectiveVenue)
+        : 'lich-lam-viec';
+      const monthTitle = formatCalendarMonthTitle(month); // "2026.05"
+      const filename = `${venueSlug}-${monthTitle}.png`;
+
       const link = document.createElement('a');
-      link.download = `lich-lam-viec-${formatCalendarMonthTitle(month)}.png`;
-      link.href = dataUrl;
+      link.download = filename;
+      link.href = blobUrl;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
     } catch (error) {
       console.error('Lỗi khi tải ảnh:', error);
     }
@@ -446,7 +523,7 @@ export function CalendarScreen({
                   flexShrink: 0
                 }}
               >
-                  {ui.today}
+                {ui.today}
               </button>
             )}
           </div>
@@ -656,7 +733,7 @@ export function CalendarScreen({
                   <button type="button" className="history-main" onClick={() => startEditShift(shift)}>
                     <strong>{formatDateChip(shift.date)}</strong>
                     <span>
-                      {shift.startTime}-{shift.endTime} • {formatHoursCompact(shiftHours(shift))}
+                      {shift.startTime}-{shift.endTime} · {formatHoursCompact(shiftHours(shift))}
                     </span>
                   </button>
                   <strong className="history-pay">{formatCalendarKrw(calculateShiftPay(shift).total)}</strong>
@@ -689,13 +766,13 @@ export function CalendarScreen({
                       textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px'
                     }}
                   >
-                    <h3 style={{ fontSize: '24px', fontWeight: 900, color: '#08162b', margin: 0 }}>
+                    <h3 style={{ fontSize: 'clamp(17px, 5.5vw, 24px)', fontWeight: 900, color: '#08162b', margin: 0, whiteSpace: 'nowrap' }}>
                       {isKo ? new Intl.DateTimeFormat(locale, { weekday: 'long', month: '2-digit', day: '2-digit' }).format(new Date(`${draft.date}T00:00:00`)) : formatSelectedDate(draft.date)}
                     </h3>
                     <ChevronDown size={20} color="#64748b" />
                   </button>
                 ) : (
-                  <h3 style={{ fontSize: '24px', fontWeight: 900, color: '#08162b', margin: 0 }}>
+                  <h3 style={{ fontSize: 'clamp(17px, 5.5vw, 24px)', fontWeight: 900, color: '#08162b', margin: 0, whiteSpace: 'nowrap' }}>
                     {isKo ? new Intl.DateTimeFormat(locale, { weekday: 'long', month: '2-digit', day: '2-digit' }).format(new Date(`${selectedDate}T00:00:00`)) : formatSelectedDate(selectedDate)}
                   </h3>
                 )}
@@ -719,7 +796,8 @@ export function CalendarScreen({
                         <button type="button" onClick={() => startEditShift(shift)}>
                           <strong>{shift.label}</strong>
                           <span>
-                            {shift.startTime}-{shift.endTime} • {formatCalendarKrw(calculateShiftPay(shift).total)}
+                            {shift.startTime}-{shift.endTime} · {formatCalendarKrw(calculateShiftPay(shift).total)}
+                            {shift.notes && <span style={{ display: 'block', fontSize: '11px', color: '#94a3b8', fontStyle: 'italic', marginTop: '2px' }}>{shift.notes}</span>}
                           </span>
                         </button>
                         <button type="button" className="danger" onClick={() => setDeleteConfirmId(shift.id)}>{ui.delete}</button>
@@ -820,10 +898,14 @@ export function CalendarScreen({
                     <span className="field-label">{ui.hourlyWage}</span>
                     <div className="settings-select-wrap">
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="numeric"
                         className="premium-input"
-                        value={draft.hourlyWage}
-                        onChange={(event) => setDraft({ ...draft, hourlyWage: Number(event.target.value) })}
+                        value={draft.hourlyWage ? draft.hourlyWage.toLocaleString('en-US') : ''}
+                        onChange={(event) => {
+                          const val = event.target.value.replace(/\D/g, '');
+                          setDraft({ ...draft, hourlyWage: val ? Number(val) : 0 });
+                        }}
                       />
                       <span className="input-unit">KRW</span>
                     </div>
@@ -882,13 +964,40 @@ export function CalendarScreen({
                   </label>
 
                   <label className="korean-law-row" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <strong style={{ fontSize: '14px', color: '#08162b' }}>{ui.holiday}</strong>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+                      <strong style={{ fontSize: '14px', color: '#08162b' }}>{ui.holiday}</strong>
+                      {weekJuhyuSuggestion && (
+                        <button
+                          type="button"
+                          onClick={() => setDraft({ ...draft, holidayAllowance: weekJuhyuSuggestion.min })}
+                          title={ui.juhyuSuggestHint(weekJuhyuSuggestion.totalHours)}
+                          style={{
+                            background: 'linear-gradient(135deg, #eef3ff 0%, #dce8ff 100%)',
+                            border: '1.5px solid #b8d0ff',
+                            borderRadius: '20px',
+                            padding: '4px 11px',
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            color: '#2752ff',
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                            lineHeight: 1.4,
+                          }}
+                        >
+                          {ui.juhyuSuggestLabel(weekJuhyuSuggestion.min.toLocaleString('ko-KR'))}
+                        </button>
+                      )}
+                    </div>
                     <div className="settings-select-wrap">
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="numeric"
                         className="premium-input"
-                        value={draft.holidayAllowance || ''}
-                        onChange={(event) => setDraft({ ...draft, holidayAllowance: Number(event.target.value) })}
+                        value={draft.holidayAllowance ? draft.holidayAllowance.toLocaleString('en-US') : ''}
+                        onChange={(event) => {
+                          const val = event.target.value.replace(/\D/g, '');
+                          setDraft({ ...draft, holidayAllowance: val ? Number(val) : 0 });
+                        }}
                         placeholder={ui.holidayPlaceholder}
                       />
                       <span style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', color: '#657080', fontSize: '13px', fontWeight: 700 }}>KRW</span>

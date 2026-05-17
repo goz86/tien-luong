@@ -10,9 +10,9 @@ type TickerItem = {
 };
 
 const ADMIN_MESSAGES: TickerItem[] = [
-  { type: 'admin', author: 'Duhoc Mate', text: 'Chao mung ban den voi cong dong du hoc sinh Viet tai Han!' },
-  { type: 'admin', author: 'Duhoc Mate', text: 'Hay chia se kinh nghiem lam them de giup do moi nguoi nhe!' },
-  { type: 'admin', author: 'Duhoc Mate', text: 'Meo: ban co the theo doi thu nhap theo tung noi lam viec.' },
+  { type: 'admin', author: 'Duhoc Mate', text: 'Chào mừng bạn đến với cộng đồng du học sinh Việt tại Hàn!' },
+  { type: 'admin', author: 'Duhoc Mate', text: 'Hãy chia sẻ kinh nghiệm làm thêm để giúp đỡ mọi người nhé!' },
+  { type: 'admin', author: 'Duhoc Mate', text: 'Mẹo: bạn có thể theo dõi thu nhập theo từng nơi làm việc.' },
 ];
 
 export function ActivityTicker({

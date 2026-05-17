@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient, useIsFetching } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { useAppStore } from '../store/appStore';
 import type { Shift, Expense, ProfileDraft, CompanionProfile } from '../lib/types';
@@ -232,6 +232,7 @@ export function useCompanionsQuery(userId: string | undefined) {
         region: row.region || 'Chưa cập nhật',
         focus: row.note || '',
         availability: 'Đang hoạt động',
+        avatarUrl: row.avatar_url || null,
         tags: Array.isArray(row.tags) ? row.tags : [],
         latitude: row.latitude ? Number(row.latitude) : null,
         longitude: row.longitude ? Number(row.longitude) : null,

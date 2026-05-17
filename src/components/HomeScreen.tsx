@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { Plus, ChevronLeft, ChevronRight, X, Edit3, Trash2, Bell, TrendingUp, ShieldCheck } from 'lucide-react';
 import { formatKrw, calculateShiftPay, shiftHours } from '../lib/salary';
 import { RateState, Shift, VenueColors } from '../lib/types';
-import { formatDateChip, getVenueColor } from '../utils/helpers';
+import { formatDateChip, getVenueColor, formatHoursCompact } from '../utils/helpers';
 import { FinanceMetric } from './shared/ui';
 import { ActivityTicker } from './shared/ActivityTicker';
+import { AchievementBanner, AchievementScreen } from './AchievementScreen';
 
 export function HomeScreen({
   monthlyTotal,
@@ -101,6 +102,7 @@ export function HomeScreen({
   const [selectedWorkplace, setSelectedWorkplace] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [isVND, setIsVND] = useState(false);
+  const [showAchievement, setShowAchievement] = useState(false);
   const monthNumber = new Date(`${currentMonth}T00:00:00`).getMonth() + 1;
 
   const workplaceShifts = allShifts.filter(s => s.label === selectedWorkplace)
@@ -140,6 +142,16 @@ export function HomeScreen({
       </header>
 
       <ActivityTicker lang={lang} onOpenPost={onOpenCommunityPost} />
+
+      {/* ── Achievement Banner ── */}
+      <div style={{ padding: '0 16px 4px' }}>
+        <AchievementBanner
+          isKo={lang === 'ko'}
+          onClick={() => setShowAchievement(true)}
+          allShifts={allShifts}
+          rateValue={rate.value}
+        />
+      </div>
 
       <section className="hero-balance-card">
         <div className="hero-topline">
@@ -181,7 +193,7 @@ export function HomeScreen({
         </div>
 
         <div className="hero-metrics">
-          <FinanceMetric label={ui.totalHours} value={`${monthlyHours.toFixed(1)}h`} />
+          <FinanceMetric label={ui.totalHours} value={formatHoursCompact(monthlyHours)} />
           <FinanceMetric label={ui.averageHourly} value={formatKrw(averageHourly)} />
           <FinanceMetric label={ui.exchangeRate} value={rate.source === 'live' ? `${rate.value.toFixed(2)} VND` : ui.cachedRate} />
         </div>
@@ -327,7 +339,7 @@ export function HomeScreen({
               <div className="workplace-copy">
                 <strong>{workplace.label}</strong>
                 <span>
-                  {workplace.count} ca • {workplace.hours.toFixed(1)}h
+                  {workplace.count} ca · {formatHoursCompact(workplace.hours)}
                 </span>
               </div>
               <strong className="workplace-amount">{formatKrw(workplace.total)}</strong>
@@ -344,7 +356,7 @@ export function HomeScreen({
             <div className="modal-handle" />
             <div className="modal-header">
               <div>
-                <p style={{ fontSize: '13px', fontWeight: 700, color: '#2752ff', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{ui.shiftHistory}</p>
+                <p className="section-kicker">{ui.shiftHistory}</p>
                 <h3 style={{ fontSize: '24px', fontWeight: 900, color: 'var(--text-main)' }}>{selectedWorkplace}</h3>
               </div>
               <button onClick={() => setSelectedWorkplace(null)} style={{ border: 'none', background: '#f1f5f9', borderRadius: '16px', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -358,7 +370,8 @@ export function HomeScreen({
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 800, fontSize: '16px', color: 'var(--text-main)' }}>{formatDateChip(shift.date)}</div>
                     <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px', fontWeight: 500 }}>
-                      {shift.startTime} - {shift.endTime} • {shiftHours(shift)}h
+                      {shift.startTime} - {shift.endTime} · {formatHoursCompact(shiftHours(shift))}
+                      {shift.notes && <div style={{ fontSize: '11px', color: '#94a3b8', fontStyle: 'italic', marginTop: '2px' }}>{shift.notes}</div>}
                     </div>
                   </div>
                   <div style={{ textAlign: 'right', marginRight: '16px' }}>
@@ -428,7 +441,7 @@ export function HomeScreen({
               // Cute names list
               const cuteNames = lang === 'ko'
                 ? ["성실한 랭커", "꾸준한 알바생", "행운의 유학생", "열정 가득 멤버", "친절한 친구", "노력형 멤버", "활기찬 랭커", "부지런한 메이트"]
-                : ["Gấu Trúc Chăm Chỉ 🐼", "Mèo Con Cần Mẫn 🐱", "Thỏ Ngọc May Mắn 🐰", "Sóc Nhỏ Năng Động 🐿️", "Cánh Cụt Đáng Yêu 🐧", "Hươu Sao Tốt Bụng 🦌", "Vịt Vàng Lon Ton 🐥", "Cún Con Tinh Nghịch 🐶"];
+                : ["Gấu Trúc", "Mèo Con", "Thỏ Ngọc", "Sóc Nhỏ", "Cánh Cụt", "Hươu Sao", "Vịt Vàng", "Cún Con"];
 
               const getCuteName = (uid: string) => {
                 const index = uid ? uid.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0) % cuteNames.length : 0;
@@ -495,7 +508,8 @@ export function HomeScreen({
               <div className="workplace-copy">
                 <strong>{shift.label}</strong>
                 <span>
-                  {formatDateChip(shift.date)} • {shift.startTime}-{shift.endTime}
+                  {formatDateChip(shift.date)} · {shift.startTime}-{shift.endTime}
+                  {shift.notes && <span style={{ display: 'block', fontStyle: 'italic', color: '#94a3b8', fontSize: '11px', marginTop: '2px' }}>{shift.notes}</span>}
                 </span>
               </div>
               <strong className="workplace-amount">{formatKrw(calculateShiftPay(shift).total)}</strong>
@@ -525,6 +539,14 @@ export function HomeScreen({
             </div>
           </div>
         </section>
+      )}
+
+      {/* ── Achievement Screen ── */}
+      {showAchievement && (
+        <AchievementScreen
+          isKo={lang === 'ko'}
+          onClose={() => setShowAchievement(false)}
+        />
       )}
     </>
   );

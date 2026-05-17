@@ -17,6 +17,7 @@ export interface CompanionProfile {
   region: string;
   focus: string;
   availability?: string;
+  avatarUrl?: string | null;
   tags: string[];
   latitude?: number | null;
   longitude?: number | null;

@@ -8,6 +8,12 @@ import type { CommunityNotification } from '../data/communityData';
 import type { AppLang, WallpaperKey } from '../components/ProfileScreen';
 import { DEFAULT_KRW_TO_VND, calculateShiftPay, shiftHours } from '../lib/salary';
 import { startOfMonth } from '../utils/helpers';
+import {
+  getGuestPendingLikes,
+  getGuestPendingBookmarks,
+  clearGuestPending,
+} from '../lib/guestSession';
+import { togglePostReaction, toggleCommunityBookmark } from '../lib/communityStore';
 
 const STORAGE_KEY = 'duhoc-mate-redesign-state';
 const NOTIFICATION_SEEN_KEY = 'duhoc-mate-notifications-seen-at';
@@ -57,6 +63,25 @@ function fallbackState(): StoredState {
     venueColors: {},
     incomeTarget: 2000000,
     expenses: [],
+  };
+}
+
+function clearUserScopedState() {
+  return {
+    shifts: [],
+    profile: fallbackState().profile,
+    companions: [],
+    requested: [],
+    friendships: [],
+    expenses: [],
+    notifications: [],
+    showNotifications: false,
+    toastNotification: null,
+    earnedBadges: [],
+    rankings: [],
+    userStats: { postsCount: 0, commentsCount: 0, likesCount: 0 },
+    savingProfile: false,
+    adminRole: null,
   };
 }
 
@@ -368,10 +393,45 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     // Auth
-    setSession: (nextSession) => set((state) => ({
-      session: nextSession,
-      ...derive({ session: nextSession, adminRole: state.adminRole, notifications: state.notifications }),
-    })),
+    setSession: (nextSession) => {
+      set((state) => {
+        const previousUserId = state.session?.user.id ?? null;
+        const nextUserId = nextSession?.user.id ?? null;
+        const userChanged = previousUserId !== nextUserId;
+        const wasGuest = !previousUserId && Boolean(nextUserId);
+        const cleared = userChanged ? clearUserScopedState() : {};
+        const nextNotifications = userChanged ? [] : state.notifications;
+        const nextAdminRole = userChanged ? null : state.adminRole;
+
+        // Sync pending guest likes/bookmarks khi đăng nhập lần đầu
+        if (wasGuest && nextUserId) {
+          const pendingLikes = getGuestPendingLikes();
+          const pendingBookmarks = getGuestPendingBookmarks();
+          if (pendingLikes.length > 0 || pendingBookmarks.length > 0) {
+            // Chạy async sync sau khi state đã cập nhật
+            void Promise.allSettled([
+              ...pendingLikes
+                .filter((l) => l.reaction !== null)
+                .map((l) => togglePostReaction(nextUserId, l.postId, l.reaction!)),
+              ...pendingBookmarks
+                .filter((b) => b.bookmarked)
+                .map((b) => toggleCommunityBookmark(nextUserId, b.postId)),
+            ]).then(() => clearGuestPending());
+          }
+        }
+
+        return {
+          ...cleared,
+          session: nextSession,
+          ...derive({
+            session: nextSession,
+            adminRole: nextAdminRole,
+            notifications: nextNotifications,
+            shifts: userChanged ? [] : state.shifts,
+          }),
+        };
+      });
+    },
     setAdminRole: (role) => set((state) => ({
       adminRole: role,
       ...derive({ session: state.session, adminRole: role, notifications: state.notifications }),
@@ -396,12 +456,14 @@ export const useAppStore = create<AppState>((set, get) => {
           ...next,
         };
       });
+      get().persist();
     },
     updateShift: (nextShift) => {
       set((state) => {
         const nextShifts = state.shifts.map((s) => (s.id === nextShift.id ? nextShift : s));
         return { shifts: nextShifts, ...derive({ shifts: nextShifts, calendarMonth: state.calendarMonth }) };
       });
+      get().persist();
     },
     deleteShift: (id) => {
       set((state) => {
@@ -413,15 +475,25 @@ export const useAppStore = create<AppState>((set, get) => {
           ...derive({ shifts: nextShifts, calendarMonth: state.calendarMonth }),
         };
       });
+      get().persist();
     },
 
     // Profile
-    setProfile: (p) => set((s) => ({ profile: typeof p === 'function' ? p(s.profile) : p })),
+    setProfile: (p) => {
+      set((s) => ({ profile: typeof p === 'function' ? p(s.profile) : p }));
+      get().persist();
+    },
 
     // Expenses
     setExpenses: (e) => set({ expenses: e }),
-    addExpenseLocally: (expense) => set((s) => ({ expenses: [...s.expenses, expense] })),
-    removeExpenseLocally: (id) => set((s) => ({ expenses: s.expenses.filter((e) => e.id !== id) })),
+    addExpenseLocally: (expense) => {
+      set((s) => ({ expenses: [...s.expenses, expense] }));
+      get().persist();
+    },
+    removeExpenseLocally: (id) => {
+      set((s) => ({ expenses: s.expenses.filter((e) => e.id !== id) }));
+      get().persist();
+    },
 
     // Friends
     setCompanions: (c) => set((s) => ({ companions: typeof c === 'function' ? c(s.companions) : c })),
@@ -432,12 +504,17 @@ export const useAppStore = create<AppState>((set, get) => {
     // Rate
     setRate: (r) => set((s) => ({ rate: typeof r === 'function' ? r(s.rate) : r })),
 
-    // Venue colors
     setVenueColors: (c) => set({ venueColors: c }),
-    setVenueColor: (venue, color) => set((s) => ({ venueColors: { ...s.venueColors, [venue]: color } })),
+    setVenueColor: (venue, color) => {
+      set((s) => ({ venueColors: { ...s.venueColors, [venue]: color } }));
+      get().persist();
+    },
 
     // Income target
-    setIncomeTarget: (n) => set({ incomeTarget: n }),
+    setIncomeTarget: (n) => {
+      set({ incomeTarget: n });
+      get().persist();
+    },
 
     // UI
     setDraft: (d) => set((s) => ({ draft: typeof d === 'function' ? d(s.draft) : d })),

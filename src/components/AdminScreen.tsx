@@ -2,17 +2,22 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import {
   Activity,
+  AlertTriangle,
   ArrowLeft,
   Ban,
   Bell,
+  Calendar,
   CheckCircle2,
   FileText,
   Loader2,
   Megaphone,
   MessageCircle,
+  Plus,
   RefreshCw,
   ShieldCheck,
+  ShieldOff,
   Star,
+  TrendingUp,
   Trash2,
   UserX,
   Users,
@@ -21,7 +26,7 @@ import { supabase } from '../lib/supabase';
 import type { AppLang } from './ProfileScreen';
 import { timeAgo } from '../data/communityData';
 
-type AdminTab = 'overview' | 'users' | 'content' | 'announcements' | 'logs';
+type AdminTab = 'overview' | 'users' | 'content' | 'reports' | 'announcements' | 'logs' | 'events';
 type AdminContentView = 'posts' | 'reviews' | 'comments';
 type ModerationStatus = 'active' | 'muted' | 'suspended' | 'banned';
 type AnnouncementSeverity = 'info' | 'success' | 'warning' | 'danger';
@@ -54,8 +59,10 @@ type AdminPost = {
   title: string;
   content: string;
   display_name: string;
+  is_anonymous: boolean | null;
   likes_count: number | null;
   comments_count: number | null;
+  image_urls: string[] | null;
   created_at: string;
 };
 
@@ -118,12 +125,57 @@ type AdminNotification = {
   created_at: string;
 };
 
+type CommunityReport = {
+  id: string;
+  reporter_id: string | null;
+  target_type: 'post' | 'comment' | 'review' | 'profile' | 'chat';
+  target_id: string | null;
+  target_user_id: string | null;
+  reason: string;
+  details: string | null;
+  status: 'pending' | 'resolved' | 'dismissed';
+  admin_note: string | null;
+  created_at: string;
+  resolved_at: string | null;
+};
+
+type ReportFilter = 'pending' | 'resolved' | 'dismissed' | 'all';
+
+type VisitStats = {
+  total_sessions_ever: number;
+  total_guests_ever: number;
+  total_users_ever: number;
+  sessions_today: number;
+  guests_today: number;
+  sessions_week: number;
+  guests_week: number;
+  sessions_month: number;
+  guests_month: number;
+};
+
+type DailyVisit = {
+  day: string;
+  total_sessions: number;
+  guest_sessions: number;
+  user_sessions: number;
+};
+
+type MonthlyVisit = {
+  month: string; // 'YYYY-MM'
+  total_sessions: number;
+  guest_sessions: number;
+  user_sessions: number;
+};
+
 type DashboardStats = {
   users: number;
+  newUsersWeek: number;
+  activeUsersWeek: number;
   posts: number;
   comments: number;
   reviews: number;
   notifications: number;
+  reports: number;
 };
 
 type AdminSeenState = {
@@ -132,11 +184,13 @@ type AdminSeenState = {
 };
 
 const ADMIN_TABS: Array<{ id: AdminTab; icon: typeof ShieldCheck }> = [
-  { id: 'overview', icon: Activity },
-  { id: 'users', icon: Users },
-  { id: 'content', icon: FileText },
+  { id: 'overview',      icon: Activity },
+  { id: 'users',         icon: Users },
+  { id: 'content',       icon: FileText },
+  { id: 'reports',       icon: AlertTriangle },
   { id: 'announcements', icon: Megaphone },
-  { id: 'logs', icon: ShieldCheck },
+  { id: 'logs',          icon: ShieldCheck },
+  { id: 'events',        icon: Calendar },
 ];
 
 const ADMIN_SEEN_KEY = 'duhoc-mate-admin-seen-v1';
@@ -155,18 +209,23 @@ const UI = {
     noAccess: 'Tài khoản này chưa có quyền quản trị.',
     patchHint: 'Chưa đọc được bảng admin. Hãy chạy file supabase/admin_dashboard_rebuild.sql trong Supabase.',
     tabs: {
-      overview: 'Tổng quan',
-      users: 'Người dùng',
-      content: 'Nội dung',
+      overview:      'Tổng quan',
+      users:         'Người dùng',
+      content:       'Nội dung',
+      reports:       'Báo cáo',
       announcements: 'Thông báo',
-      logs: 'Nhật ký',
+      logs:          'Nhật ký',
+      events:        'Sự kiện',
     },
     stats: {
-      users: 'Người dùng',
-      posts: 'Bài viết',
-      comments: 'Bình luận',
-      reviews: 'Review',
+      users:         'Người dùng',
+      posts:         'Bài viết',
+      comments:      'Bình luận',
+      reviews:       'Review',
       notifications: 'Thông báo',
+      reports:       'Báo cáo',
+      newUsersWeek:  'Mới tuần này',
+      activeWeek:    'Hoạt động 7 ngày',
     },
     recentPosts: 'Bài viết mới',
     recentReviews: 'Review mới',
@@ -183,6 +242,21 @@ const UI = {
     backToAnnouncements: 'Viết thông báo',
     logsTitle: 'Nhật ký quản trị',
     announceTitle: 'Viết thông báo',
+    reportsTitle: 'Xử lý báo cáo vi phạm',
+    reportsPending: 'Chờ xử lý',
+    reportsResolved: 'Đã xử lý',
+    reportsDismissed: 'Đã bỏ qua',
+    reportsAll: 'Tất cả',
+    resolveReport: 'Đã xử lý',
+    dismissReport: 'Bỏ qua',
+    deleteAndResolve: 'Xoá & đóng',
+    reportResolved: 'Đã đánh dấu xử lý.',
+    reportDismissed: 'Đã bỏ qua báo cáo.',
+    noReports: 'Không có báo cáo nào.',
+    reportTarget: 'Mục tiêu',
+    reportBy: 'Người báo cáo',
+    reportDetail: 'Chi tiết',
+    reportStatus: 'Trạng thái',
     empty: 'Chưa có dữ liệu.',
     reasonPrompt: 'Lý do xử lý:',
     deletePostConfirm: 'Xoá bài viết này?',
@@ -215,18 +289,23 @@ const UI = {
     noAccess: '이 계정에는 관리자 권한이 없습니다.',
     patchHint: '관리자 테이블을 읽을 수 없습니다. Supabase에서 supabase/admin_dashboard_rebuild.sql을 실행해주세요.',
     tabs: {
-      overview: '개요',
-      users: '사용자',
-      content: '콘텐츠',
+      overview:      '개요',
+      users:         '사용자',
+      content:       '콘텐츠',
+      reports:       '신고',
       announcements: '공지',
-      logs: '로그',
+      logs:          '로그',
+      events:        '이벤트',
     },
     stats: {
-      users: '사용자',
-      posts: '게시글',
-      comments: '댓글',
-      reviews: '리뷰',
+      users:         '사용자',
+      posts:         '게시글',
+      comments:      '댓글',
+      reviews:       '리뷰',
       notifications: '알림',
+      reports:       '신고',
+      newUsersWeek:  '이번 주 신규',
+      activeWeek:    '7일 활성',
     },
     recentPosts: '최근 게시글',
     recentReviews: '최근 리뷰',
@@ -243,6 +322,21 @@ const UI = {
     backToAnnouncements: '공지 작성',
     logsTitle: '관리 로그',
     announceTitle: '공지 작성',
+    reportsTitle: '신고 처리',
+    reportsPending: '처리 대기',
+    reportsResolved: '처리 완료',
+    reportsDismissed: '무시됨',
+    reportsAll: '전체',
+    resolveReport: '처리 완료',
+    dismissReport: '무시',
+    deleteAndResolve: '삭제 & 처리',
+    reportResolved: '신고가 처리되었습니다.',
+    reportDismissed: '신고를 무시했습니다.',
+    noReports: '신고 없음.',
+    reportTarget: '대상',
+    reportBy: '신고자',
+    reportDetail: '상세',
+    reportStatus: '상태',
     empty: '데이터가 없습니다.',
     reasonPrompt: '처리 사유:',
     deletePostConfirm: '이 게시글을 삭제할까요?',
@@ -350,7 +444,7 @@ export function AdminScreen({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [seen, setSeen] = useState<AdminSeenState>(() => loadAdminSeen());
-  const [stats, setStats] = useState<DashboardStats>({ users: 0, posts: 0, comments: 0, reviews: 0, notifications: 0 });
+  const [stats, setStats] = useState<DashboardStats>({ users: 0, newUsersWeek: 0, activeUsersWeek: 0, posts: 0, comments: 0, reviews: 0, notifications: 0, reports: 0 });
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [posts, setPosts] = useState<AdminPost[]>([]);
   const [reviews, setReviews] = useState<AdminReview[]>([]);
@@ -358,6 +452,12 @@ export function AdminScreen({
   const [logs, setLogs] = useState<AdminLog[]>([]);
   const [announcements, setAnnouncements] = useState<AdminAnnouncement[]>([]);
   const [notifications, setNotifications] = useState<AdminNotification[]>([]);
+  const [reports, setReports] = useState<CommunityReport[]>([]);
+  const [reportFilter, setReportFilter] = useState<ReportFilter>('pending');
+  const [visitStats, setVisitStats] = useState<VisitStats | null>(null);
+  const [dailyVisits, setDailyVisits] = useState<DailyVisit[]>([]);
+  const [monthlyVisits, setMonthlyVisits] = useState<MonthlyVisit[]>([]);
+  const [imgLightbox, setImgLightbox] = useState<{ urls: string[]; idx: number } | null>(null);
   // Styled confirm/prompt modal
   type ConfirmState = { message: string; resolve: (ok: boolean, reason: string) => void };
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
@@ -377,6 +477,8 @@ export function AdminScreen({
     setLoading(true);
     setNotice(null);
 
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
     const [
       statsRes,
       profilesRes,
@@ -387,6 +489,9 @@ export function AdminScreen({
       logsRes,
       announcementsRes,
       notificationsRes,
+      reportsRes,
+      newUsersRes,
+      activeUsersRes,
     ] = await Promise.all([
       supabase.rpc('admin_get_dashboard_stats', {
         comments_seen_at: seen.comments,
@@ -395,11 +500,11 @@ export function AdminScreen({
       supabase
         .from('profiles')
         .select('id, display_name, school, region, avatar_url, status, last_seen_at, created_at')
-        .order('last_seen_at', { ascending: false, nullsFirst: false })
+        .order('created_at', { ascending: false })
         .limit(24),
       supabase
         .from('community_posts')
-        .select('id, user_id, category, title, content, display_name, likes_count, comments_count, created_at')
+        .select('id, user_id, category, title, content, display_name, is_anonymous, likes_count, comments_count, image_urls, created_at')
         .order('created_at', { ascending: false })
         .limit(18),
       supabase
@@ -428,18 +533,37 @@ export function AdminScreen({
         .select('id, recipient_id, actor_id, post_id, comment_id, type, title, body, is_read, created_at')
         .order('created_at', { ascending: false })
         .limit(50),
+      supabase
+        .from('community_reports')
+        .select('id, reporter_id, target_type, target_id, target_user_id, reason, details, status, admin_note, created_at, resolved_at')
+        .order('created_at', { ascending: false })
+        .limit(100),
+      supabase
+        .from('profiles')
+        .select('id', { count: 'exact', head: true })
+        .gt('created_at', weekAgo),
+      supabase
+        .from('profiles')
+        .select('id', { count: 'exact', head: true })
+        .gt('updated_at', weekAgo),   // dùng updated_at thay last_seen_at để an toàn
     ]);
 
     let nextStats: DashboardStats | null = null;
     const statsRow = Array.isArray(statsRes.data) ? statsRes.data[0] : null;
+    const pendingCount = (reportsRes.data as CommunityReport[] | null)?.filter(r => r.status === 'pending').length ?? 0;
+    const newUsersWeek = newUsersRes.count ?? 0;
+    const activeUsersWeek = activeUsersRes.count ?? 0;
 
     if (!statsRes.error && statsRow) {
       nextStats = {
-        users: Number(statsRow.users_count || 0),
-        posts: Number(statsRow.posts_count || 0),
-        comments: Number(statsRow.comments_new_count || 0),
-        reviews: Number(statsRow.reviews_count || 0),
-        notifications: Number(statsRow.notifications_new_count || 0),
+        users:          Number(statsRow.users_count || 0),
+        newUsersWeek,
+        activeUsersWeek,
+        posts:          Number(statsRow.posts_count || 0),
+        comments:       Number(statsRow.comments_new_count || 0),
+        reviews:        Number(statsRow.reviews_count || 0),
+        notifications:  Number(statsRow.notifications_new_count || 0),
+        reports:        pendingCount,
       };
     } else {
       const [usersCount, postsCount, commentsCount, reviewsCount, notificationsCount] = await Promise.all([
@@ -451,20 +575,85 @@ export function AdminScreen({
       ]);
 
       nextStats = {
-        users: usersCount.count || 0,
-        posts: postsCount.count || 0,
-        comments: commentsCount.count || 0,
-        reviews: reviewsCount.count || 0,
-        notifications: notificationsCount.count || 0,
+        users:          usersCount.count || 0,
+        newUsersWeek,
+        activeUsersWeek,
+        posts:          postsCount.count || 0,
+        comments:       commentsCount.count || 0,
+        reviews:        reviewsCount.count || 0,
+        notifications:  notificationsCount.count || 0,
+        reports:        pendingCount,
       };
     }
 
     setStats(nextStats);
+    setReports((reportsRes.data as CommunityReport[] | null) || []);
+
+    // Visitor stats (non-critical — bỏ qua lỗi nếu bảng chưa tạo)
+    const [visitStatsRes, dailyVisitsRes] = await Promise.all([
+      supabase.rpc('admin_get_visit_stats'),
+      supabase.rpc('admin_get_daily_visits', { days_back: 180 }),
+    ]);
+    if (!visitStatsRes.error && visitStatsRes.data) {
+      const row = Array.isArray(visitStatsRes.data) ? visitStatsRes.data[0] : visitStatsRes.data;
+      if (row) {
+        setVisitStats({
+          total_sessions_ever: Number(row.total_sessions_ever || 0),
+          total_guests_ever:   Number(row.total_guests_ever   || 0),
+          total_users_ever:    Number(row.total_users_ever    || 0),
+          sessions_today:      Number(row.sessions_today      || 0),
+          guests_today:        Number(row.guests_today        || 0),
+          sessions_week:       Number(row.sessions_week       || 0),
+          guests_week:         Number(row.guests_week         || 0),
+          sessions_month:      Number(row.sessions_month      || 0),
+          guests_month:        Number(row.guests_month        || 0),
+        });
+      }
+    }
+    if (!dailyVisitsRes.error && Array.isArray(dailyVisitsRes.data)) {
+      const rawVisits = dailyVisitsRes.data as DailyVisit[];
+      const today = new Date();
+
+      // Pad last 14 days for chart (fill missing days with 0)
+      const padded: DailyVisit[] = Array.from({ length: 14 }, (_, i) => {
+        const d = new Date(today);
+        d.setDate(d.getDate() - (13 - i));
+        const dayStr = d.toISOString().slice(0, 10);
+        return rawVisits.find(v => v.day === dayStr)
+          ?? { day: dayStr, total_sessions: 0, guest_sessions: 0, user_sessions: 0 };
+      });
+      setDailyVisits(padded);
+
+      // Group by month for monthly stats
+      const monthMap = new Map<string, MonthlyVisit>();
+      rawVisits.forEach(v => {
+        const month = v.day.slice(0, 7); // 'YYYY-MM'
+        const prev = monthMap.get(month) ?? { month, total_sessions: 0, guest_sessions: 0, user_sessions: 0 };
+        monthMap.set(month, {
+          month,
+          total_sessions: prev.total_sessions + (v.total_sessions || 0),
+          guest_sessions:  prev.guest_sessions  + (v.guest_sessions  || 0),
+          user_sessions:   prev.user_sessions   + (v.user_sessions   || 0),
+        });
+      });
+      const sortedMonths = Array.from(monthMap.values()).sort((a, b) => b.month.localeCompare(a.month));
+      setMonthlyVisits(sortedMonths);
+    }
 
     const moderationMap = new Map<string, UserModeration>();
     (moderationsRes.data as UserModeration[] | null)?.forEach((row) => moderationMap.set(row.user_id, row));
 
-    setUsers(((profilesRes.data as AdminUser[] | null) || []).map((user) => ({
+    // Nếu profiles query bị RLS chặn → thử qua RPC admin_get_users
+    let profileRows = (profilesRes.data as AdminUser[] | null) || [];
+    if (profilesRes.error || profileRows.length === 0) {
+      console.warn('[Admin] profiles direct select failed, trying admin_get_users RPC:', profilesRes.error);
+      const rpcFallback = await supabase.rpc('admin_get_users', { limit_count: 24 });
+      if (!rpcFallback.error && Array.isArray(rpcFallback.data) && rpcFallback.data.length > 0) {
+        profileRows = rpcFallback.data as AdminUser[];
+      }
+    }
+
+    setUsers(profileRows.map((user) => ({
       ...user,
       moderation: moderationMap.get(user.id) || null,
     })));
@@ -528,6 +717,8 @@ export function AdminScreen({
       .on('postgres_changes', { event: '*', schema: 'public', table: 'user_moderation' }, queueReload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_action_logs' }, queueReload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'admin_announcements' }, queueReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'community_reports' }, queueReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'app_visits' }, queueReload)
       .subscribe();
 
     return () => {
@@ -771,6 +962,70 @@ export function AdminScreen({
     }
   }
 
+  async function resolveReport(report: CommunityReport, nextStatus: 'resolved' | 'dismissed') {
+    if (!supabase) return;
+    setBusyId(`report-${report.id}`);
+    try {
+      const { error } = await supabase.rpc('admin_resolve_report', {
+        report_id: report.id,
+        next_status: nextStatus,
+        admin_note_text: null,
+      });
+      if (error) {
+        // Fallback: direct update (requires admin RLS UPDATE policy)
+        const fallback = await supabase
+          .from('community_reports')
+          .update({ status: nextStatus, resolved_at: new Date().toISOString() })
+          .eq('id', report.id);
+        if (fallback.error) throw error;
+      }
+      setReports((prev) => prev.map((r) => r.id === report.id ? { ...r, status: nextStatus, resolved_at: new Date().toISOString() } : r));
+      setStats((prev) => ({ ...prev, reports: Math.max(prev.reports - 1, 0) }));
+      setNotice(nextStatus === 'resolved' ? ui.reportResolved : ui.reportDismissed);
+      await safeLog(`report_${nextStatus}`, 'community_reports', report.id, report.target_user_id, null);
+    } catch (error) {
+      console.error('resolveReport failed:', error);
+      setNotice(ui.actionError);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function deleteReportedContent(report: CommunityReport) {
+    if (!supabase) return;
+    const { ok, reason } = await adminConfirm(
+      isKo ? '신고된 콘텐츠를 삭제할까요?' : 'Xoá nội dung bị báo cáo?'
+    );
+    if (!ok) return;
+    setBusyId(`report-${report.id}`);
+    try {
+      if (report.target_type === 'post' && report.target_id) {
+        const rpcRes = await supabase.rpc('admin_delete_community_post', { row_id: report.target_id, reason_text: reason || 'Violated report' });
+        if (rpcRes.error) {
+          await supabase.from('community_posts').delete().eq('id', report.target_id);
+        }
+      } else if (report.target_type === 'comment' && report.target_id) {
+        const rpcRes = await supabase.rpc('admin_delete_community_comment_hard', { row_id: report.target_id, reason_text: reason || 'Violated report' });
+        if (rpcRes.error) {
+          await supabase.from('community_comments').delete().eq('id', report.target_id);
+        }
+      } else if (report.target_type === 'review' && report.target_id) {
+        await supabase.from('place_reviews').delete().eq('id', report.target_id);
+      }
+      // Mark report resolved
+      await supabase.from('community_reports').update({ status: 'resolved', resolved_at: new Date().toISOString(), admin_note: reason || 'Content deleted' }).eq('id', report.id);
+      setReports((prev) => prev.map((r) => r.id === report.id ? { ...r, status: 'resolved' } : r));
+      setStats((prev) => ({ ...prev, reports: Math.max(prev.reports - 1, 0) }));
+      setNotice(ui.deleted);
+      await loadDashboard();
+    } catch (error) {
+      console.error('deleteReportedContent failed:', error);
+      setNotice(ui.actionError);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   if (!isAdmin) {
     return (
       <section className="admin-screen admin-access">
@@ -805,138 +1060,332 @@ export function AdminScreen({
 
   return (
     <section className="admin-screen">
-      {/* Dark header */}
-      <header className="admin-hero">
-        <div className="admin-hero-top">
-          <button type="button" className="admin-back-btn" onClick={onBack}>
-            <ArrowLeft size={16} />
-            {ui.back}
-          </button>
-          <div className="admin-hero-actions">
-            <span className="admin-live-pill"><ShieldCheck size={13} />{ui.online}</span>
-            <button type="button" className="admin-refresh-btn" onClick={() => void loadDashboard()} disabled={loading}>
-              {loading ? <Loader2 size={15} className="cm-spin" /> : <RefreshCw size={15} />}
+      {/* ── Sidebar shell: hero + tab nav (becomes left sidebar on PC) ── */}
+      <div className="admin-sidebar-shell">
+        <header className="admin-hero">
+          <div className="admin-hero-top">
+            <button type="button" className="admin-back-btn" onClick={onBack}>
+              <ArrowLeft size={16} />
+              {ui.back}
             </button>
+            <div className="admin-hero-actions">
+              <span className="admin-live-pill"><ShieldCheck size={13} />{ui.online}</span>
+              <button type="button" className="admin-refresh-btn" onClick={() => void loadDashboard()} disabled={loading}>
+                {loading ? <Loader2 size={15} className="cm-spin" /> : <RefreshCw size={15} />}
+              </button>
+            </div>
           </div>
-        </div>
-        <div className="admin-hero-body">
-          <h1>{ui.title}</h1>
-          <p>{ui.subtitle}</p>
-        </div>
+          <div className="admin-hero-body">
+            <h1>{ui.title}</h1>
+            <p>{ui.subtitle}</p>
+          </div>
 
-        {/* Metric chips */}
-        <div className="admin-metric-strip">
-          {([
-            { icon: Users,         val: stats.users,         label: ui.stats.users,         color: '#60a5fa', onClick: undefined },
-            { icon: FileText,      val: stats.posts,         label: ui.stats.posts,         color: '#34d399', onClick: undefined },
-            { icon: MessageCircle, val: stats.comments,      label: ui.stats.comments,      color: '#f59e0b', onClick: openCommentHistory },
-            { icon: Star,          val: stats.reviews,       label: ui.stats.reviews,       color: '#a78bfa', onClick: undefined },
-            { icon: Bell,          val: stats.notifications, label: ui.stats.notifications, color: '#f87171', onClick: openNotificationHistory },
-          ] as { icon: typeof ShieldCheck; val: number; label: string; color: string; onClick?: () => void }[]).map(({ icon: Ic, val, label, color, onClick: oc }) => (
-            <button key={label} type="button" className="admin-metric-chip" style={{ '--chip-color': color } as React.CSSProperties} onClick={oc}>
-              <Ic size={14} />
-              <strong>{val.toLocaleString()}</strong>
-              <span>{label}</span>
-            </button>
-          ))}
-        </div>
-      </header>
-
-      {notice ? (
-        <div className="admin-notice">
-          <Bell size={15} />
-          <span>{notice}</span>
-        </div>
-      ) : null}
-
-      {/* Tab bar */}
-      <nav className="admin-tabbar" aria-label="Admin sections">
-        {ADMIN_TABS.map(({ id, icon: Icon }) => (
-          <button
-            key={id}
-            type="button"
-            className={activeTab === id ? 'active' : ''}
-            onClick={() => openTab(id)}
-          >
-            <Icon size={15} />
-            <span>{ui.tabs[id]}</span>
-          </button>
-        ))}
-      </nav>
-
-      {activeTab === 'overview' ? (
-        <div className="admin-panel-stack">
-          <section className="admin-command-deck" aria-label={isKo ? '관리 작업' : 'Tác vụ quản trị'}>
+          {/* Metric chips */}
+          <div className="admin-metric-strip">
             {([
-              { icon: Megaphone,  label: isKo ? '공지 작성' : 'Thông báo', color: '#f97316', tab: 'announcements' as AdminTab },
-              { icon: Users,      label: isKo ? '사용자'   : 'Người dùng', color: '#2752ff', tab: 'users' as AdminTab },
-              { icon: FileText,   label: isKo ? '콘텐츠'   : 'Nội dung',   color: '#10b981', tab: 'content' as AdminTab },
-              { icon: ShieldCheck,label: isKo ? '로그'     : 'Nhật ký',    color: '#8b5cf6', tab: 'logs' as AdminTab },
-            ] as { icon: typeof ShieldCheck; label: string; color: string; tab: AdminTab }[]).map(({ icon: Ic, label, color, tab }) => (
-              <button key={tab} type="button" className="admin-qa-btn" style={{ '--qa-color': color } as React.CSSProperties} onClick={() => openTab(tab)}>
-                <span className="admin-qa-icon"><Ic size={20} /></span>
-                <span className="admin-qa-copy">
-                  <strong>{label}</strong>
-                  <small>
-                    {tab === 'announcements'
-                      ? stats.notifications.toLocaleString()
-                      : tab === 'users'
-                        ? stats.users.toLocaleString()
-                        : tab === 'content'
-                          ? (posts.length + reviews.length + comments.length).toLocaleString()
-                          : visibleLogs.length.toLocaleString()}
-                  </small>
-                </span>
+              { icon: Users,         val: stats.users,           label: ui.stats.users,        color: '#60a5fa', onClick: () => openTab('users') },
+              { icon: TrendingUp,    val: stats.newUsersWeek,    label: ui.stats.newUsersWeek, color: '#34d399', onClick: () => openTab('users') },
+              { icon: Activity,      val: stats.activeUsersWeek, label: ui.stats.activeWeek,   color: '#06b6d4', onClick: () => openTab('users') },
+              { icon: FileText,      val: stats.posts,           label: ui.stats.posts,        color: '#818cf8', onClick: () => { openTab('content'); setContentView('posts'); } },
+              { icon: MessageCircle, val: stats.comments,        label: ui.stats.comments,     color: '#f59e0b', onClick: openCommentHistory },
+              { icon: Star,          val: stats.reviews,         label: ui.stats.reviews,      color: '#a78bfa', onClick: () => { openTab('content'); setContentView('reviews'); } },
+              { icon: AlertTriangle, val: stats.reports,         label: ui.stats.reports,      color: '#f87171', onClick: () => openTab('reports') },
+            ] as { icon: typeof ShieldCheck; val: number; label: string; color: string; onClick: () => void }[]).map(({ icon: Ic, val, label, color, onClick: oc }) => (
+              <button key={label} type="button" className={`admin-metric-chip${label === ui.stats.reports && val > 0 ? ' has-badge' : ''}`} style={{ '--chip-color': color } as React.CSSProperties} onClick={oc}>
+                <Ic size={14} />
+                <strong>{val.toLocaleString()}</strong>
+                <span>{label}</span>
               </button>
             ))}
-          </section>
+          </div>
+        </header>
 
-          {/* Unified activity feed */}
-          <ContentPanel title={isKo ? '최근 활동' : 'Hoạt động gần đây'} scroll>
-            {activityFeed.length === 0 ? <EmptyText text={ui.empty} /> : activityFeed.map((item) => (
-              <article key={`${item.type}-${item.id}`} className="admin-feed-row">
-                <span className={`admin-feed-dot admin-feed-dot--${item.type}`} />
-                <div className="admin-feed-body">
-                  <div className="admin-feed-top">
-                    <span className={`admin-feed-badge admin-feed-badge--${item.type}`}>{item.type}</span>
-                    <span className="admin-feed-badge admin-feed-badge--cat">{item.badge}</span>
-                    <span className="admin-feed-time">{timeAgo(item.ts)}</span>
+        {/* Tab bar */}
+        <nav className="admin-tabbar" aria-label="Admin sections">
+          {ADMIN_TABS.map(({ id, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              className={activeTab === id ? 'active' : ''}
+              onClick={() => openTab(id)}
+            >
+              <Icon size={15} />
+              <span>{ui.tabs[id]}</span>
+            </button>
+          ))}
+        </nav>
+      </div>{/* /admin-sidebar-shell */}
+
+      {/* ── Main content area ── */}
+      <main className="admin-main-content">
+        {notice ? (
+          <div className="admin-notice">
+            <Bell size={15} />
+            <span>{notice}</span>
+          </div>
+        ) : null}
+
+      {activeTab === 'overview' ? (
+        <>
+          {/* ── Pending reports urgent banner ── */}
+          {stats.reports > 0 ? (
+            <button type="button" className="admin-reports-banner" onClick={() => openTab('reports')}>
+              <AlertTriangle size={15} />
+              <span>
+                {isKo
+                  ? <><strong>{stats.reports}건</strong>의 신고가 처리를 기다리고 있습니다.</>
+                  : <>Có <strong>{stats.reports}</strong> báo cáo đang chờ xử lý</>}
+              </span>
+              <span className="admin-reports-banner-cta">
+                {isKo ? '바로 처리 →' : 'Xử lý ngay →'}
+              </span>
+            </button>
+          ) : null}
+
+          <div className="admin-overview-grid">
+            {/* ── KPI strip ── */}
+            <div className="admin-kpi-strip">
+              {([
+                {
+                  icon: Users,
+                  label: ui.stats.users,
+                  val: stats.users,
+                  delta: `↑ ${stats.newUsersWeek} ${isKo ? '이번 주' : 'tuần này'}`,
+                  color: '#2752ff',
+                  bg: 'rgba(39,82,255,0.1)',
+                  onClick: () => openTab('users'),
+                },
+                {
+                  icon: FileText,
+                  label: ui.stats.posts,
+                  val: stats.posts,
+                  delta: isKo ? '전체 게시글' : 'tổng bài viết',
+                  color: '#10b981',
+                  bg: 'rgba(16,185,129,0.1)',
+                  onClick: () => { openTab('content'); setContentView('posts'); },
+                },
+                {
+                  icon: MessageCircle,
+                  label: ui.stats.comments,
+                  val: stats.comments,
+                  delta: isKo ? '미확인 댓글' : 'bình luận mới',
+                  color: '#f59e0b',
+                  bg: 'rgba(245,158,11,0.1)',
+                  onClick: openCommentHistory,
+                },
+                {
+                  icon: Activity,
+                  label: isKo ? '오늘 방문' : 'Ghé thăm hôm nay',
+                  val: visitStats?.sessions_today ?? 0,
+                  delta: `${visitStats?.guests_today ?? 0} ${isKo ? '비회원' : 'khách vãng lai'}`,
+                  color: '#06b6d4',
+                  bg: 'rgba(6,182,212,0.1)',
+                  onClick: undefined,
+                },
+                {
+                  icon: AlertTriangle,
+                  label: ui.stats.reports,
+                  val: stats.reports,
+                  delta: isKo ? '처리 대기' : 'chờ xử lý',
+                  color: stats.reports > 0 ? '#ef4444' : '#94a3b8',
+                  bg: stats.reports > 0 ? 'rgba(239,68,68,0.1)' : 'rgba(148,163,184,0.1)',
+                  onClick: () => openTab('reports'),
+                  isAlert: stats.reports > 0,
+                },
+              ] as { icon: typeof ShieldCheck; label: string; val: number; delta: string; color: string; bg: string; onClick?: () => void; isAlert?: boolean }[]).map(
+                ({ icon: Ic, label, val, delta, color, bg, onClick, isAlert }) => (
+                  <div
+                    key={label}
+                    className={`admin-kpi-card${onClick ? ' clickable' : ''}${isAlert ? ' is-alert' : ''}`}
+                    style={{ '--kpi-color': color, '--kpi-bg': bg } as React.CSSProperties}
+                    onClick={onClick}
+                    role={onClick ? 'button' : undefined}
+                    tabIndex={onClick ? 0 : undefined}
+                  >
+                    <span className="admin-kpi-icon"><Ic size={15} /></span>
+                    <strong className="admin-kpi-value">{val.toLocaleString()}</strong>
+                    <span className="admin-kpi-label">{label}</span>
+                    <span className={`admin-kpi-delta${isAlert && val > 0 ? ' is-alert' : val === 0 ? ' is-neutral' : ''}`}>
+                      {delta}
+                    </span>
                   </div>
-                  <p className="admin-feed-title">{item.title.length > 60 ? item.title.slice(0, 60) + '…' : item.title}</p>
-                  <span className="admin-feed-sub">{item.sub || ui.unknownUser}</span>
+                )
+              )}
+            </div>
+
+            {/* ── Activity feed ── */}
+            <ContentPanel title={isKo ? '최근 활동' : 'Hoạt động gần đây'} scroll>
+              {activityFeed.length === 0 ? <EmptyText text={ui.empty} /> : activityFeed.map((item) => (
+                <article key={`${item.type}-${item.id}`} className="admin-feed-row">
+                  <span className={`admin-feed-dot admin-feed-dot--${item.type}`} />
+                  <div className="admin-feed-body">
+                    <div className="admin-feed-top">
+                      <span className={`admin-feed-badge admin-feed-badge--${item.type}`}>{item.type}</span>
+                      <span className="admin-feed-badge admin-feed-badge--cat">{item.badge}</span>
+                      <span className="admin-feed-time">{timeAgo(item.ts)}</span>
+                    </div>
+                    <p className="admin-feed-title">{item.title.length > 60 ? item.title.slice(0, 60) + '…' : item.title}</p>
+                    <span className="admin-feed-sub">{item.sub || ui.unknownUser}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="admin-feed-del"
+                    disabled={busyId === `${item.type}-${item.id}`}
+                    onClick={() => {
+                      if (item.type === 'post')    void deletePost(item.raw as AdminPost);
+                      if (item.type === 'review')  void deleteReview(item.raw as AdminReview);
+                      if (item.type === 'comment') void deleteComment(item.raw as AdminComment);
+                    }}
+                  >
+                    {busyId === `${item.type}-${item.id}` ? <Loader2 size={14} className="cm-spin" /> : <Trash2 size={14} />}
+                  </button>
+                </article>
+              ))}
+            </ContentPanel>
+
+          {/* Visitor stats panel */}
+          {visitStats ? (
+            <section className="admin-visit-panel" aria-label={isKo ? '방문자 통계' : 'Lượt truy cập'}>
+              <h2 className="admin-visit-title">
+                <TrendingUp size={16} />
+                {isKo ? '방문자 통계' : 'Lượt ghé thăm app'}
+              </h2>
+
+              {/* 3 time-range cards */}
+              <div className="admin-visit-grid">
+                {([
+                  {
+                    label: isKo ? '오늘' : 'Hôm nay',
+                    total: visitStats.sessions_today,
+                    guests: visitStats.guests_today,
+                    users: visitStats.sessions_today - visitStats.guests_today,
+                  },
+                  {
+                    label: isKo ? '7일' : '7 ngày',
+                    total: visitStats.sessions_week,
+                    guests: visitStats.guests_week,
+                    users: visitStats.sessions_week - visitStats.guests_week,
+                  },
+                  {
+                    label: isKo ? '30일' : '30 ngày',
+                    total: visitStats.sessions_month,
+                    guests: visitStats.guests_month,
+                    users: visitStats.sessions_month - visitStats.guests_month,
+                  },
+                ]).map(({ label, total, guests, users }) => (
+                  <div key={label} className="admin-visit-card">
+                    <span className="admin-visit-period">{label}</span>
+                    <strong className="admin-visit-total">{total.toLocaleString()}</strong>
+                    <div className="admin-visit-breakdown">
+                      <span className="admin-visit-guest">
+                        {isKo ? '비회원' : 'Khách'} {guests}
+                      </span>
+                      <span className="admin-visit-member">
+                        {isKo ? '회원' : 'Thành viên'} {users}
+                      </span>
+                    </div>
+                    {/* Guest ratio bar */}
+                    {total > 0 ? (
+                      <div className="admin-visit-bar">
+                        <div
+                          className="admin-visit-bar-guest"
+                          style={{ width: `${Math.round((guests / total) * 100)}%` }}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+
+              {/* All-time summary */}
+              <div className="admin-visit-alltime">
+                <span>{isKo ? '누적 방문자' : 'Tổng lượt ghé thăm'}</span>
+                <strong>{visitStats.total_sessions_ever.toLocaleString()}</strong>
+                <span className="admin-visit-alltime-split">
+                  ({isKo ? '비회원' : 'Khách'} {visitStats.total_guests_ever.toLocaleString()}
+                  {' · '}
+                  {isKo ? '회원' : 'TV'} {visitStats.total_users_ever.toLocaleString()})
+                </span>
+              </div>
+
+              {/* Bar chart — 14 ngày gần nhất (luôn đủ 14 cột) */}
+              <div className="admin-visit-chart" aria-label={isKo ? '14일 방문 추이' : 'Biểu đồ 14 ngày'}>
+                {(() => {
+                  const todayStr = new Date().toISOString().slice(0, 10);
+                  const maxVal = Math.max(...dailyVisits.map(d => d.total_sessions), 1);
+                  return dailyVisits.map((d) => {
+                    const heightPct = Math.max(Math.round((d.total_sessions / maxVal) * 100), d.total_sessions > 0 ? 6 : 0);
+                    const guestPct  = d.total_sessions > 0
+                      ? Math.round((d.guest_sessions / d.total_sessions) * 100)
+                      : 0;
+                    const dateObj   = new Date(d.day + 'T00:00:00');
+                    const dayNum    = dateObj.getDate();
+                    const monthNum  = dateObj.getMonth() + 1;
+                    const isToday   = d.day === todayStr;
+                    const titleStr  = isKo
+                      ? `${monthNum}월 ${dayNum}일: ${d.total_sessions}회 (비회원 ${d.guest_sessions} · 회원 ${d.total_sessions - d.guest_sessions})`
+                      : `${dayNum}/${monthNum}: ${d.total_sessions} lượt (Khách ${d.guest_sessions} · TV ${d.total_sessions - d.guest_sessions})`;
+                    return (
+                      <div
+                        key={d.day}
+                        className={`admin-visit-bar-col${isToday ? ' is-today' : ''}`}
+                        title={titleStr}
+                      >
+                        <span className="admin-visit-bar-val">{d.total_sessions > 0 ? d.total_sessions : ''}</span>
+                        <div className="admin-visit-bar-col-inner" style={{ height: `${heightPct}%` }}>
+                          <div className="admin-visit-bar-col-guest" style={{ height: `${guestPct}%` }} />
+                        </div>
+                        <span className="admin-visit-bar-label">
+                          {isToday ? (isKo ? '오늘' : 'HN') : dayNum}
+                        </span>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+
+              {/* Monthly breakdown */}
+              {monthlyVisits.length > 0 ? (
+                <div className="admin-monthly-stats">
+                  <div className="admin-monthly-header">
+                    <span>{isKo ? '월별 통계' : 'Thống kê theo tháng'}</span>
+                  </div>
+                  {(() => {
+                    const todayMonth = new Date().toISOString().slice(0, 7);
+                    const maxMonthTotal = Math.max(...monthlyVisits.map(m => m.total_sessions), 1);
+                    return monthlyVisits.slice(0, 6).map(m => {
+                      const [year, month] = m.month.split('-');
+                      const label = isKo
+                        ? `${year}년 ${parseInt(month)}월`
+                        : `Th.${parseInt(month)}/${year}`;
+                      const barPct = Math.round((m.total_sessions / maxMonthTotal) * 100);
+                      const isCurrentMonth = m.month === todayMonth;
+                      return (
+                        <div key={m.month} className={`admin-monthly-row${isCurrentMonth ? ' is-current' : ''}`}>
+                          <span className="admin-monthly-label">{label}</span>
+                          <div className="admin-monthly-bar-track">
+                            <div className="admin-monthly-bar-fill" style={{ width: `${barPct}%` }} />
+                          </div>
+                          <strong className="admin-monthly-val">{m.total_sessions.toLocaleString()}</strong>
+                          <span className="admin-monthly-sub">
+                            {isKo ? '비' : 'K'}&nbsp;{m.guest_sessions}&nbsp;·&nbsp;{isKo ? '회' : 'TV'}&nbsp;{m.user_sessions}
+                          </span>
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
-                <button
-                  type="button"
-                  className="admin-feed-del"
-                  disabled={busyId === `${item.type}-${item.id}`}
-                  onClick={() => {
-                    if (item.type === 'post')    void deletePost(item.raw as AdminPost);
-                    if (item.type === 'review')  void deleteReview(item.raw as AdminReview);
-                    if (item.type === 'comment') void deleteComment(item.raw as AdminComment);
-                  }}
-                >
-                  {busyId === `${item.type}-${item.id}` ? <Loader2 size={14} className="cm-spin" /> : <Trash2 size={14} />}
-                </button>
-              </article>
-            ))}
-          </ContentPanel>
-          <section className="admin-signal-panel" aria-label={isKo ? '주요 알림' : 'Tín hiệu mới'}>
-            <button type="button" onClick={openCommentHistory}>
-              <MessageCircle size={18} />
-              <span>
-                <strong>{stats.comments.toLocaleString()}</strong>
-                <small>{ui.stats.comments}</small>
-              </span>
-            </button>
-            <button type="button" onClick={openNotificationHistory}>
-              <Bell size={18} />
-              <span>
-                <strong>{stats.notifications.toLocaleString()}</strong>
-                <small>{ui.stats.notifications}</small>
-              </span>
-            </button>
-          </section>
-        </div>
+              ) : null}
+
+              <p className="admin-visit-hint">
+                {isKo
+                  ? '* 1시간마다 1회 기록 (기기 기준)'
+                  : '* Ghi nhận tối đa 1 lần/giờ/thiết bị'}
+              </p>
+            </section>
+          ) : null}
+          </div>{/* /admin-overview-grid */}
+        </>
       ) : null}
 
       {activeTab === 'users' ? (
@@ -953,7 +1402,7 @@ export function AdminScreen({
                       <h3>{name}</h3>
                       <span className={`admin-status ${status}`}>{ui[STATUS_LABELS[status] || 'active']}</span>
                     </div>
-                    <p>{[user.school, user.region].filter(Boolean).join(' • ') || user.id}</p>
+                    <p>{[user.school, user.region].filter(Boolean).join(' · ') || user.id}</p>
                     <small>{user.last_seen_at ? `${timeAgo(user.last_seen_at)} · ${localTime(user.last_seen_at, lang)}` : user.id}</small>
                     {user.moderation?.reason ? <em>{user.moderation.reason}</em> : null}
                   </div>
@@ -990,7 +1439,7 @@ export function AdminScreen({
                 <ContentRow
                   key={comment.id}
                   title={comment.display_name || ui.unknownUser}
-                  meta={`${timeAgo(comment.created_at)} • post ${comment.post_id.slice(0, 8)} • ${comment.likes_count || 0} likes`}
+                  meta={`${timeAgo(comment.created_at)} · post ${comment.post_id.slice(0, 8)} · ${comment.likes_count || 0} likes`}
                   body={comment.content}
                   badge={comment.parent_id ? 'reply' : 'comment'}
                   actionLabel={ui.delete}
@@ -1026,9 +1475,11 @@ export function AdminScreen({
                   <ContentRow
                     key={post.id}
                     title={post.title}
-                    meta={`${post.display_name || ui.unknownUser} • ${timeAgo(post.created_at)} • ${post.comments_count || 0} comments`}
+                    meta={`${post.is_anonymous ? ui.unknownUser : (post.display_name || ui.unknownUser)} · ${timeAgo(post.created_at)} · ${post.comments_count || 0} comments`}
                     body={post.content}
                     badge={post.category}
+                    images={post.image_urls}
+                    onImageClick={(urls, idx) => setImgLightbox({ urls, idx })}
                     actionLabel={ui.delete}
                     busy={busyId === `post-${post.id}`}
                     onAction={() => void deletePost(post)}
@@ -1043,7 +1494,7 @@ export function AdminScreen({
                   <ContentRow
                     key={review.id}
                     title={`${review.place_name} · ${Number(review.rating).toFixed(1)}`}
-                    meta={`${review.display_name || ui.unknownUser} • ${timeAgo(review.created_at)} • ${review.upvotes_count || 0}/${review.downvotes_count || 0}`}
+                    meta={`${review.display_name || ui.unknownUser} · ${timeAgo(review.created_at)} · ${review.upvotes_count || 0}/${review.downvotes_count || 0}`}
                     body={`${review.title} - ${review.content}`}
                     badge={review.category}
                     actionLabel={ui.delete}
@@ -1060,7 +1511,7 @@ export function AdminScreen({
                   <ContentRow
                     key={comment.id}
                     title={comment.display_name || ui.unknownUser}
-                    meta={`${timeAgo(comment.created_at)} • post ${comment.post_id.slice(0, 8)} • ${comment.likes_count || 0} likes`}
+                    meta={`${timeAgo(comment.created_at)} · post ${comment.post_id.slice(0, 8)} · ${comment.likes_count || 0} likes`}
                     body={comment.content}
                     badge={comment.parent_id ? 'reply' : 'comment'}
                     actionLabel={ui.delete}
@@ -1073,6 +1524,120 @@ export function AdminScreen({
               ) : null}
             </>
           )}
+        </div>
+      ) : null}
+
+      {activeTab === 'reports' ? (
+        <div className="admin-panel-stack">
+          {/* Reports alert banner nếu có pending */}
+          {stats.reports > 0 ? (
+            <div className="admin-reports-alert">
+              <AlertTriangle size={16} />
+              <span>
+                {isKo
+                  ? `처리 대기 중인 신고 ${stats.reports}건이 있습니다.`
+                  : `Có ${stats.reports} báo cáo đang chờ xử lý.`}
+              </span>
+            </div>
+          ) : null}
+
+          {/* Filter bar */}
+          <div className="admin-content-switch" role="tablist">
+            {([
+              { id: 'pending',   label: ui.reportsPending },
+              { id: 'resolved',  label: ui.reportsResolved },
+              { id: 'dismissed', label: ui.reportsDismissed },
+              { id: 'all',       label: ui.reportsAll },
+            ] as { id: ReportFilter; label: string }[]).map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={reportFilter === item.id ? 'active' : ''}
+                onClick={() => setReportFilter(item.id)}
+              >
+                <span>{item.label}</span>
+                <strong>
+                  {item.id === 'all'
+                    ? reports.length
+                    : reports.filter(r => r.status === item.id).length}
+                </strong>
+              </button>
+            ))}
+          </div>
+
+          <ContentPanel title={ui.reportsTitle} scroll>
+            {reports
+              .filter(r => reportFilter === 'all' || r.status === reportFilter)
+              .map((report) => (
+                <article key={report.id} className={`admin-report-row admin-report-row--${report.status}`}>
+                  <div className="admin-report-header">
+                    <span className={`admin-report-type admin-report-type--${report.target_type}`}>
+                      {report.target_type}
+                    </span>
+                    <span className={`admin-report-status admin-report-status--${report.status}`}>
+                      {report.status === 'pending'   ? (isKo ? '대기' : 'Chờ xử lý') :
+                       report.status === 'resolved'  ? (isKo ? '완료' : 'Đã xử lý') :
+                                                       (isKo ? '무시' : 'Bỏ qua')}
+                    </span>
+                    <time className="admin-report-time">{timeAgo(report.created_at)}</time>
+                  </div>
+
+                  <div className="admin-report-body">
+                    {report.target_id ? (
+                      <p className="admin-report-target">
+                        <span>{ui.reportTarget}:</span>
+                        <code>{report.target_id.slice(0, 12)}…</code>
+                      </p>
+                    ) : null}
+                    {report.details ? (
+                      <p className="admin-report-detail">
+                        <span>{ui.reportDetail}:</span> {report.details}
+                      </p>
+                    ) : null}
+                    {report.admin_note ? (
+                      <p className="admin-report-note">Admin: {report.admin_note}</p>
+                    ) : null}
+                  </div>
+
+                  {report.status === 'pending' ? (
+                    <div className="admin-report-actions">
+                      {(report.target_type === 'post' || report.target_type === 'comment' || report.target_type === 'review') && report.target_id ? (
+                        <button
+                          type="button"
+                          className="admin-report-btn admin-report-btn--delete"
+                          disabled={busyId === `report-${report.id}`}
+                          onClick={() => void deleteReportedContent(report)}
+                        >
+                          {busyId === `report-${report.id}` ? <Loader2 size={13} className="cm-spin" /> : <Trash2 size={13} />}
+                          {ui.deleteAndResolve}
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="admin-report-btn admin-report-btn--resolve"
+                        disabled={busyId === `report-${report.id}`}
+                        onClick={() => void resolveReport(report, 'resolved')}
+                      >
+                        <CheckCircle2 size={13} />
+                        {ui.resolveReport}
+                      </button>
+                      <button
+                        type="button"
+                        className="admin-report-btn admin-report-btn--dismiss"
+                        disabled={busyId === `report-${report.id}`}
+                        onClick={() => void resolveReport(report, 'dismissed')}
+                      >
+                        <ShieldOff size={13} />
+                        {ui.dismissReport}
+                      </button>
+                    </div>
+                  ) : null}
+                </article>
+              ))}
+            {reports.filter(r => reportFilter === 'all' || r.status === reportFilter).length === 0 ? (
+              <EmptyText text={ui.noReports} />
+            ) : null}
+          </ContentPanel>
         </div>
       ) : null}
 
@@ -1098,15 +1663,28 @@ export function AdminScreen({
                     <span>{ui.formBody}</span>
                     <textarea value={announcementBody} onChange={(event) => setAnnouncementBody(event.target.value)} rows={4} maxLength={1000} />
                   </label>
-                  <label>
-                    <span>{ui.formSeverity}</span>
-                    <select value={announcementSeverity} onChange={(event) => setAnnouncementSeverity(event.target.value as AnnouncementSeverity)}>
-                      <option value="info">{isKo ? '정보' : 'Thông tin'}</option>
-                      <option value="success">{isKo ? '성공' : 'Thành công'}</option>
-                      <option value="warning">{isKo ? '경고' : 'Cảnh báo'}</option>
-                      <option value="danger">{isKo ? '위험' : 'Khẩn cấp'}</option>
-                    </select>
-                  </label>
+                  <div className="admin-severity-group">
+                    <span className="admin-severity-label">{ui.formSeverity}</span>
+                    <div className="admin-severity-options">
+                      {([
+                        { val: 'info',    label: isKo ? '정보'  : 'Thông tin', color: '#2752ff' },
+                        { val: 'success', label: isKo ? '성공'  : 'Thành công', color: '#16a34a' },
+                        { val: 'warning', label: isKo ? '경고'  : 'Cảnh báo',  color: '#d97706' },
+                        { val: 'danger',  label: isKo ? '위험'  : 'Khẩn cấp',  color: '#dc2626' },
+                      ] as { val: AnnouncementSeverity; label: string; color: string }[]).map(({ val, label, color }) => (
+                        <button
+                          key={val}
+                          type="button"
+                          className={`admin-severity-btn admin-severity-btn--${val}${announcementSeverity === val ? ' active' : ''}`}
+                          style={{ '--sev-color': color } as React.CSSProperties}
+                          onClick={() => setAnnouncementSeverity(val)}
+                        >
+                          <span className="admin-severity-dot" />
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <button type="submit" disabled={busyId === 'announcement' || !announcementTitle.trim() || !announcementBody.trim()}>
                     {busyId === 'announcement' ? <Loader2 size={16} className="cm-spin" /> : <Megaphone size={16} />}
                     {ui.publish}
@@ -1154,6 +1732,50 @@ export function AdminScreen({
             {visibleLogs.length === 0 ? <EmptyText text={ui.empty} /> : null}
           </div>
         </ContentPanel>
+      ) : null}
+
+      {activeTab === 'events' && supabase ? (
+        <EventsPanel isKo={isKo} supabaseClient={supabase} />
+      ) : null}
+
+      </main>{/* /admin-main-content */}
+
+      {/* Image lightbox */}
+      {imgLightbox ? (
+        <div
+          className="admin-lightbox-overlay"
+          onClick={() => setImgLightbox(null)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <button
+            type="button"
+            className="admin-lightbox-close"
+            onClick={() => setImgLightbox(null)}
+            aria-label="Đóng"
+          >✕</button>
+          {imgLightbox.idx > 0 && (
+            <button
+              type="button"
+              className="admin-lightbox-nav admin-lightbox-prev"
+              onClick={e => { e.stopPropagation(); setImgLightbox(s => s ? { ...s, idx: s.idx - 1 } : s); }}
+            >‹</button>
+          )}
+          <img
+            src={imgLightbox.urls[imgLightbox.idx]}
+            alt=""
+            className="admin-lightbox-img"
+            onClick={e => e.stopPropagation()}
+          />
+          {imgLightbox.idx < imgLightbox.urls.length - 1 && (
+            <button
+              type="button"
+              className="admin-lightbox-nav admin-lightbox-next"
+              onClick={e => { e.stopPropagation(); setImgLightbox(s => s ? { ...s, idx: s.idx + 1 } : s); }}
+            >›</button>
+          )}
+          <span className="admin-lightbox-counter">{imgLightbox.idx + 1} / {imgLightbox.urls.length}</span>
+        </div>
       ) : null}
 
       {/* Styled delete confirm modal */}
@@ -1255,7 +1877,7 @@ function NotificationRow({ item, lang }: { item: AdminNotification; lang: AppLan
       <span className="admin-row-badge">{item.type || 'system'}</span>
       <h3>{item.title}</h3>
       <p>{shortText(item.body, 120)}</p>
-      <small>{[localTime(item.created_at, lang), status, target].filter(Boolean).join(' • ')}</small>
+      <small>{[localTime(item.created_at, lang), status, target].filter(Boolean).join(' · ')}</small>
     </article>
   );
 }
@@ -1265,6 +1887,8 @@ function ContentRow({
   meta,
   body,
   badge,
+  images,
+  onImageClick,
   actionLabel,
   busy,
   onAction,
@@ -1273,17 +1897,45 @@ function ContentRow({
   meta: string;
   body: string;
   badge: string;
+  images?: string[] | null;
+  onImageClick?: (urls: string[], idx: number) => void;
   actionLabel: string;
   busy: boolean;
   onAction: () => void;
 }) {
+  const hasImages = images && images.length > 0;
   return (
     <article className="admin-content-row">
-      <div>
-        <span className="admin-row-badge">{badge}</span>
-        <h3>{title}</h3>
-        <p>{shortText(body)}</p>
-        <small>{meta}</small>
+      <div className="admin-content-row-body">
+        <div className="admin-content-row-text">
+          <span className="admin-row-badge">{badge}</span>
+          <h3>{title}</h3>
+          <p>{shortText(body)}</p>
+          <small>{meta}</small>
+        </div>
+        {hasImages && (
+          <div className={`admin-post-thumbs admin-post-thumbs--${Math.min(images.length, 4)}`}>
+            {images.slice(0, 4).map((url, i) => (
+              <button
+                key={i}
+                type="button"
+                className="admin-post-thumb-btn"
+                onClick={() => onImageClick?.(images, i)}
+              >
+                <img
+                  src={url}
+                  alt=""
+                  className="admin-post-thumb"
+                  loading="lazy"
+                  onError={(e) => { (e.currentTarget.parentElement as HTMLElement).style.display = 'none'; }}
+                />
+                {i === 3 && images.length > 4 && (
+                  <span className="admin-post-thumb-more">+{images.length - 4}</span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       <button type="button" className="admin-delete-btn" disabled={busy} onClick={onAction}>
         {busy ? <Loader2 size={15} className="cm-spin" /> : <Trash2 size={15} />}
@@ -1295,4 +1947,130 @@ function ContentRow({
 
 function EmptyText({ text }: { text: string }) {
   return <p className="admin-empty">{text}</p>;
+}
+
+/* ─── EventsPanel ─────────────────────────────────────────────── */
+interface AdminEvent {
+  id: string;
+  title: string;
+  description: string | null;
+  reward_emoji: string;
+  start_date: string;
+  end_date: string;
+  active: boolean;
+  created_at: string;
+}
+
+function EventsPanel({ isKo, supabaseClient }: { isKo: boolean; supabaseClient: NonNullable<typeof import('../lib/supabase').supabase> }) {
+  const [events, setEvents] = useState<AdminEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ title: '', description: '', reward_emoji: '🎁', start_date: '', end_date: '', active: true });
+  const [editId, setEditId] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [notice, setNotice] = useState('');
+
+  const t = isKo
+    ? { title: '이벤트 관리', add: '+ 이벤트 추가', save: '저장', cancel: '취소', delete: '삭제', active: '활성', inactive: '비활성', empty: '이벤트 없음', start: '시작일', end: '종료일', titleLabel: '제목', desc: '설명', emoji: '보상 이모지', saved: '저장되었습니다.', deleted: '삭제되었습니다.' }
+    : { title: 'Quản lý sự kiện', add: '+ Thêm sự kiện', save: 'Lưu', cancel: 'Huỷ', delete: 'Xoá', active: 'Đang hoạt động', inactive: 'Tắt', empty: 'Chưa có sự kiện nào.', start: 'Ngày bắt đầu', end: 'Ngày kết thúc', titleLabel: 'Tiêu đề', desc: 'Mô tả', emoji: 'Emoji phần thưởng', saved: 'Đã lưu.', deleted: 'Đã xoá.' };
+
+  const loadEvents = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabaseClient.from('admin_events').select('*').order('start_date', { ascending: false });
+    setEvents(data ?? []);
+    setLoading(false);
+  }, [supabaseClient]);
+
+  useEffect(() => { loadEvents(); }, [loadEvents]);
+
+  function startAdd() {
+    setEditId(null);
+    setForm({ title: '', description: '', reward_emoji: '🎁', start_date: '', end_date: '', active: true });
+    setShowForm(true);
+  }
+
+  function startEdit(ev: AdminEvent) {
+    setEditId(ev.id);
+    setForm({ title: ev.title, description: ev.description ?? '', reward_emoji: ev.reward_emoji, start_date: ev.start_date, end_date: ev.end_date, active: ev.active });
+    setShowForm(true);
+  }
+
+  async function handleSave() {
+    if (!form.title.trim() || !form.start_date || !form.end_date) return;
+    setSaving(true);
+    if (editId) {
+      await supabaseClient.from('admin_events').update({ ...form, description: form.description || null }).eq('id', editId);
+    } else {
+      await supabaseClient.from('admin_events').insert({ ...form, description: form.description || null });
+    }
+    setSaving(false);
+    setShowForm(false);
+    setNotice(t.saved);
+    setTimeout(() => setNotice(''), 2500);
+    loadEvents();
+  }
+
+  async function handleDelete(id: string) {
+    await supabaseClient.from('admin_events').delete().eq('id', id);
+    setNotice(t.deleted);
+    setTimeout(() => setNotice(''), 2500);
+    loadEvents();
+  }
+
+  return (
+    <ContentPanel title={t.title} scroll>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        {notice ? <span style={{ fontSize: 13, color: '#28cd41', fontWeight: 600 }}>{notice}</span> : <span />}
+        <button type="button" className="admin-action-btn" onClick={startAdd}>
+          <Plus size={14} /> {t.add}
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="admin-events-form">
+          <div className="admin-events-form-grid">
+            <label>{t.titleLabel}<input value={form.title} onChange={e => setForm(s => ({ ...s, title: e.target.value }))} /></label>
+            <label>{t.emoji}<input value={form.reward_emoji} onChange={e => setForm(s => ({ ...s, reward_emoji: e.target.value }))} style={{ maxWidth: 80 }} /></label>
+            <label>{t.start}<input type="date" value={form.start_date} onChange={e => setForm(s => ({ ...s, start_date: e.target.value }))} /></label>
+            <label>{t.end}<input type="date" value={form.end_date} onChange={e => setForm(s => ({ ...s, end_date: e.target.value }))} /></label>
+            <label style={{ gridColumn: '1/-1' }}>{t.desc}<textarea value={form.description} rows={2} onChange={e => setForm(s => ({ ...s, description: e.target.value }))} /></label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, gridColumn: '1/-1' }}>
+              <input type="checkbox" checked={form.active} onChange={e => setForm(s => ({ ...s, active: e.target.checked }))} />
+              {t.active}
+            </label>
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+            <button type="button" className="admin-action-btn" onClick={handleSave} disabled={saving}>
+              {saving ? <Loader2 size={13} className="cm-spin" /> : null} {t.save}
+            </button>
+            <button type="button" className="admin-ghost-btn" onClick={() => setShowForm(false)}>{t.cancel}</button>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 32 }}><Loader2 size={20} className="cm-spin" /></div>
+      ) : events.length === 0 ? (
+        <EmptyText text={t.empty} />
+      ) : (
+        <div className="admin-events-list">
+          {events.map(ev => (
+            <article key={ev.id} className={`admin-event-row${ev.active ? '' : ' inactive'}`}>
+              <span className="admin-event-emoji">{ev.reward_emoji}</span>
+              <div className="admin-event-body">
+                <strong>{ev.title}</strong>
+                {ev.description && <p>{ev.description}</p>}
+                <small>{ev.start_date} ~ {ev.end_date}</small>
+              </div>
+              <span className={`admin-event-badge ${ev.active ? 'active' : 'inactive'}`}>{ev.active ? t.active : t.inactive}</span>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button type="button" className="admin-ghost-btn" onClick={() => startEdit(ev)}>{isKo ? '수정' : 'Sửa'}</button>
+                <button type="button" className="admin-delete-btn" onClick={() => handleDelete(ev.id)}><Trash2 size={13} /></button>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </ContentPanel>
+  );
 }

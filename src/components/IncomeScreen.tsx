@@ -34,7 +34,7 @@ import confetti from 'canvas-confetti';
 import { calculateShiftPay, formatKrw } from '../lib/salary';
 import type { Expense, RateState, Shift, VenueColors } from '../lib/types';
 import { DateWheelModal } from './shared/DateWheelModal';
-import { getVenueColor, shiftMonth } from '../utils/helpers';
+import { getVenueColor, shiftMonth, formatHoursCompact } from '../utils/helpers';
 
 type AppLang = 'vi' | 'ko';
 type IncomeTab = 'overview' | 'expenses' | 'workplaces';
@@ -165,7 +165,7 @@ export function IncomeScreen({
     goalDone: 'Bạn đã vượt mục tiêu tháng này.',
     incomeTabs: 'Mục thu nhập',
     weeklyRhythm: 'Nhịp làm việc tuần này',
-    weeklyIncome: 'Thu theo ngày trong tuần',
+    weeklyIncome: 'Thu nhập theo ngày trong tuần',
     monthOverview: 'Tổng quan tháng',
     monthIncome: (days: number) => `Thu nhập ${days} ngày`,
     prevMonth: 'Tháng trước',
@@ -175,7 +175,7 @@ export function IncomeScreen({
     bestHours: 'Kỷ lục giờ làm',
     bestDay: 'Ngày làm nhiều nhất',
     expenseManage: 'Quản lý chi tiêu',
-    expenseRecords: 'Khoản đã ghi',
+    expenseRecords: 'Khoản đã chi',
     addExpense: 'Thêm chi tiêu',
     category: 'Hạng mục',
     amount: 'Số tiền',
@@ -399,7 +399,7 @@ export function IncomeScreen({
       const end = new Date(start);
       end.setDate(start.getDate() + 6);
       const startStr = dateToIso(start);
-      const endStr   = dateToIso(end);
+      const endStr = dateToIso(end);
       const total = shifts
         .filter(s => s.date >= startStr && s.date <= endStr)
         .reduce((sum, s) => sum + calculateShiftPay(s).total, 0);
@@ -416,7 +416,7 @@ export function IncomeScreen({
   // Compact money label for bars
   const fmtBar = (val: number) => {
     if (val >= 1_000_000) return `${(val / 1_000_000).toFixed(1)}M`;
-    if (val >= 1_000)     return `${Math.round(val / 1000)}K`;
+    if (val >= 1_000) return `${Math.round(val / 1000)}K`;
     return val > 0 ? val.toString() : '';
   };
 
@@ -491,7 +491,7 @@ export function IncomeScreen({
           </article>
           <article>
             <span>{ui.totalHours}</span>
-            <strong>{monthlyHours.toFixed(1)}h</strong>
+            <strong>{formatHoursCompact(monthlyHours)}</strong>
           </article>
         </div>
       </section>
@@ -502,7 +502,16 @@ export function IncomeScreen({
             <span>{ui.monthlyGoal}</span>
             {isEditingTarget ? (
               <div className="income-target-edit">
-                <input type="number" value={tempTarget} onChange={(event) => setTempTarget(event.target.value)} autoFocus />
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={tempTarget ? Number(tempTarget).toLocaleString('en-US') : ''}
+                  onChange={(event) => {
+                    const val = event.target.value.replace(/\D/g, '');
+                    setTempTarget(val);
+                  }}
+                  autoFocus
+                />
                 <button type="button" onClick={handleSaveTarget} aria-label={ui.saveGoal}>
                   <Check size={18} />
                 </button>
@@ -524,11 +533,10 @@ export function IncomeScreen({
         ) : (
           <div className={`income-goal-achieved${showCelebration ? ' burst' : ''}`}>
             <div className="iga-particles" aria-hidden="true">
-              {['🎉','⭐','✨','🎊','💫','🌟','🎈','🏆'].map((e, i) => (
+              {['🎉', '⭐', '✨', '🎊', '💫', '🌟', '🎈', '🏆'].map((e, i) => (
                 <span key={i} className={`iga-p iga-p${i}`}>{e}</span>
               ))}
             </div>
-            <Sparkles size={16} />
             <span>{ui.goalDone}</span>
           </div>
         )}
@@ -579,8 +587,8 @@ export function IncomeScreen({
                     {chartView === 'day'
                       ? ui.monthIncome(chartDaysInMonth)
                       : chartView === 'week'
-                      ? (isKo ? '주간 수입 흐름' : 'Thu nhập theo tuần')
-                      : (isKo ? '월별 수입 흐름' : 'Thu nhập theo tháng')}
+                        ? (isKo ? '주간 수입 흐름' : 'Thu nhập theo tuần')
+                        : (isKo ? '월별 수입 흐름' : 'Thu nhập theo tháng')}
                   </h2>
                   {/* Always rendered — visibility:hidden keeps header height stable when not in day mode */}
                   <span className={`income-month-caption${chartView !== 'day' ? ' income-month-caption--ghost' : ''}`}>
@@ -686,7 +694,7 @@ export function IncomeScreen({
               <article>
                 <Clock size={20} />
                 <span>{ui.bestHours}</span>
-                <strong>{maxHoursInDay.toFixed(1)}h</strong>
+                <strong>{formatHoursCompact(maxHoursInDay)}</strong>
               </article>
               <article className="gold">
                 <Trophy size={20} />
@@ -743,10 +751,14 @@ export function IncomeScreen({
                 <label>
                   <span>{ui.amount}</span>
                   <input
-                    type="number"
-                    value={expenseForm.amount || ''}
+                    type="text"
+                    inputMode="numeric"
+                    value={expenseForm.amount ? expenseForm.amount.toLocaleString('en-US') : ''}
                     placeholder="0"
-                    onChange={(event) => setExpenseForm({ ...expenseForm, amount: Number(event.target.value) })}
+                    onChange={(event) => {
+                      const val = event.target.value.replace(/\D/g, '');
+                      setExpenseForm({ ...expenseForm, amount: val ? Number(val) : 0 });
+                    }}
                   />
                 </label>
                 <label>
@@ -785,7 +797,7 @@ export function IncomeScreen({
                       </div>
                       <div>
                         <strong>{expense.note || categoryLabels[expense.category]}</strong>
-                        <span>{categoryLabels[expense.category]} • {new Date(expense.date).getDate()}/{new Date(expense.date).getMonth() + 1}</span>
+                        <span>{categoryLabels[expense.category]} · {new Date(expense.date).getDate()}/{new Date(expense.date).getMonth() + 1}</span>
                       </div>
                       <div className="income-expense-amount">
                         <b>{formatMoney(expense.amount)}</b>
@@ -823,7 +835,7 @@ export function IncomeScreen({
                     <span className="income-venue-dot" style={{ background: getVenueColor(workplace.label, venueColors) }} />
                     <div>
                       <strong>{workplace.label}</strong>
-                      <small>{workplace.count} {ui.shifts} • {workplace.hours.toFixed(1)}h • {workplace.share.toFixed(0)}%</small>
+                      <small>{workplace.count} {ui.shifts} · {formatHoursCompact(workplace.hours)} · {workplace.share.toFixed(0)}%</small>
                       <div className="income-workplace-track">
                         <span style={{ width: `${Math.min(workplace.share, 100)}%`, background: getVenueColor(workplace.label, venueColors) }} />
                       </div>

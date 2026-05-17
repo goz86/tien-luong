@@ -5,6 +5,7 @@ export type CommunityReactionType = 'like' | 'dislike';
 export interface CommunityPost {
   id: string;
   user_id: string;
+  guest_session_id?: string | null;  // để phân biệt tác giả guest
   category: CommunityCategory;
   title: string;
   content: string;
@@ -14,6 +15,7 @@ export interface CommunityPost {
   dislikes_count: number;
   comments_count: number;
   views_count: number;
+  image_urls?: string[];             // tối đa 2 ảnh đính kèm
   created_at: string;
 }
 
@@ -22,6 +24,8 @@ export interface CommunityComment {
   post_id: string;
   parent_id: string | null;
   user_id: string;
+  guest_session_id?: string | null;  // để phân biệt từng guest khác nhau
+  expires_at?: string | null;        // chỉ có với guest comment (3h)
   content: string;
   is_anonymous: boolean;
   display_name: string;
@@ -32,7 +36,8 @@ export interface CommunityComment {
 
 export interface CommunityNotification {
   id: string;
-  recipient_id: string;
+  recipient_id: string | null;
+  recipient_guest_session_id?: string | null;
   actor_id: string | null;
   post_id: string | null;
   comment_id: string | null;

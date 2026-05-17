@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent, type TouchEvent } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from 'react';
 import {
   ArrowLeft,
   Bell,
@@ -6,10 +6,12 @@ import {
   BookmarkCheck,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   ChevronUp,
   Eye,
   Flame,
+  ImagePlus,
   Loader2,
   MapPin,
   MessageCircle,
@@ -18,18 +20,21 @@ import {
   Plus,
   Search,
   Send,
+  Share2,
   ShieldCheck,
   Star,
   ThumbsDown,
   ThumbsUp,
   Trash2,
   User,
+  UserMinus,
   Users,
   X,
   MessageSquare,
   Navigation,
 } from 'lucide-react';
-import { motion, AnimatePresence, useDragControls } from 'framer-motion';
+import { motion, AnimatePresence, animate, useDragControls, useMotionValue } from 'framer-motion';
+import { useKakaoPostcodePopup, type Address as KakaoPostcodeAddress } from 'react-daum-postcode';
 import type { Session } from '@supabase/supabase-js';
 import type { CompanionProfile } from '../lib/types';
 import { supabase } from '../lib/supabase';
@@ -47,13 +52,33 @@ import {
   createCommunityNotification,
   createCommunityPost,
   deleteCommunityPost,
+  guestBumpPostReaction,
   incrementPostView,
+  blockCommunityUser,
+  loadCommunityComments,
   loadCommunityState,
+  loadBlockedUserIds,
+  reportCommunityContent,
   toggleCommentLike as persistCommentLike,
   toggleCommunityBookmark,
   togglePostReaction,
   updateCommunityPost,
 } from '../lib/communityStore';
+import {
+  getGuestSessionId,
+  guestExpiresAt,
+  addGuestContent,
+  upsertGuestPendingLike,
+  upsertGuestPendingBookmark,
+  getGuestPendingLikes,
+  getGuestPendingBookmarks,
+  getGuestLikedIds,
+  getGuestDislikedIds,
+  getGuestBookmarkedIds,
+  toggleGuestReaction,
+  toggleGuestBookmark,
+} from '../lib/guestSession';
+import { GuestExpiryTicker } from './shared/GuestExpiryTicker';
 
 type CommunityView = 'feed' | 'detail';
 type CategoryFilter = CommunityCategory | 'all';
@@ -63,6 +88,19 @@ type AppLang = 'vi' | 'ko';
 
 const LOCAL_COMMUNITY_KEY = 'duhoc-mate-community-local';
 const CHAT_READ_STATE_KEY = 'duhoc-mate-chat-read-state';
+const COMMUNITY_LOAD_TIMEOUT_MS = 24000;
+const FLOATING_SEARCH_TIMEOUT_MS = 6500;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  let timer: number | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer) window.clearTimeout(timer);
+  });
+}
 
 function getChatReadState(userId: string): Record<string, string> {
   try {
@@ -91,6 +129,7 @@ const boardTabs: Array<{ id: BoardMode; icon: any }> = [
 
 type ReviewCategory = 'all' | 'work' | 'housing' | 'food' | 'service' | 'other';
 type ReviewVoteType = 'up' | 'down';
+type ReviewSortMode = 'trusted' | 'newest' | 'rating';
 
 const REVIEW_CATS: Record<Exclude<ReviewCategory, 'all'>, { label: string; color: string; bg: string }> = {
   work: { label: 'Việc làm', color: '#2563eb', bg: '#dbeafe' },
@@ -134,16 +173,13 @@ interface PlaceReviewVote {
   vote_type: ReviewVoteType;
 }
 
-interface NominatimResult {
-  place_id: number;
-  display_name: string;
-  lat: string;
-  lon: string;
-}
-
 const SEOUL_CENTER: [number, number] = [37.5665, 126.978];
-const REVIEW_ADMIN_EMAILS = new Set(['michintashop@gmail.com']);
+const REVIEW_ADMIN_EMAILS = new Set(['duhocmate@gmail.com']);
 const NAVER_MAP_CLIENT_ID = import.meta.env.VITE_NAVER_MAP_CLIENT_ID as string | undefined;
+const KAKAO_POSTCODE_SCRIPT_URL = 'https://t1.kakaocdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js';
+const REVIEW_SHEET_EXPANDED_Y = 86;
+const REVIEW_SHEET_COLLAPSED_MIN_Y = 210;
+const REVIEW_SHEET_COLLAPSED_PEEK = 232;
 
 declare global {
   interface Window {
@@ -163,6 +199,13 @@ type ReviewPlaceGroup = {
   lng: number;
   name: string;
   reviews: PlaceReview[];
+};
+
+type ReviewMapMarkerGroup = ReviewPlaceGroup & {
+  markerType: 'place' | 'cluster';
+  label: string;
+  count: number;
+  clusterLevel?: 'province' | 'district';
 };
 
 type ReviewMapHandle = {
@@ -226,6 +269,21 @@ function buildReviewMarkerHtml(reviews: PlaceReview[], isSelected: boolean) {
   </div>`;
 }
 
+function buildReviewClusterMarkerHtml(group: ReviewMapMarkerGroup) {
+  const label = escapeHtml(group.label);
+  const targetZoom = group.clusterLevel === 'province' ? 11 : 14;
+
+  return `<div
+    class="rv-cluster-marker rv-cluster-marker--${group.clusterLevel || 'district'}"
+    data-cluster-lat="${group.lat}"
+    data-cluster-lng="${group.lng}"
+    data-cluster-zoom="${targetZoom}"
+  >
+    <span>${label}</span>
+    <strong>${group.count}</strong>
+  </div>`;
+}
+
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, '&amp;')
@@ -233,6 +291,357 @@ function escapeHtml(value: string) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+function normalizeReviewPlaceKey(group: ReviewPlaceGroup) {
+  const name = (group.name || group.reviews[0]?.place_name || '').trim().toLowerCase();
+  return `${group.lat.toFixed(4)}_${group.lng.toFixed(4)}_${name}`;
+}
+
+function getRegionParts(review: PlaceReview) {
+  const raw = `${review.place_address || ''}, ${review.place_name || ''}`;
+  return raw
+    .split(/[,\n]/)
+    .flatMap((part) => part.split(/\s+/))
+    .map((part) => part.trim())
+    .filter((part) => part && part !== '대한민국' && !/^\d/.test(part));
+}
+
+function buildKakaoAddress(data: KakaoPostcodeAddress) {
+  const baseAddress = data.userSelectedType === 'J'
+    ? data.jibunAddress || data.autoJibunAddress || data.address
+    : data.roadAddress || data.autoRoadAddress || data.address;
+  let extraAddress = '';
+
+  if (data.userSelectedType === 'R' || data.addressType === 'R') {
+    if (data.bname) extraAddress += data.bname;
+    if (data.buildingName) {
+      extraAddress += extraAddress ? `, ${data.buildingName}` : data.buildingName;
+    }
+  }
+
+  const fullAddress = extraAddress ? `${baseAddress} (${extraAddress})` : baseAddress;
+  const displayAddress = data.zonecode ? `${fullAddress}, ${data.zonecode}, 대한민국` : `${fullAddress}, 대한민국`;
+  const placeName = data.buildingName || data.roadname || data.bname || data.sigungu || data.sido || fullAddress;
+
+  return { fullAddress, displayAddress, placeName };
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function getFloatingPlaceTitle(result: any) {
+  if (result?.title) return String(result.title);
+  const nameKo = result?.namedetails?.name || result?.namedetails?.['name:ko'] || '';
+  const nameEn = result?.namedetails?.['name:en'] || '';
+  if (nameKo && nameEn && nameKo !== nameEn) return `${nameKo} (${nameEn})`;
+  if (nameKo) return nameKo;
+  return String(result?.name || result?.display_name || '').split(',')[0].trim();
+}
+
+function getFloatingPlaceAddress(result: any) {
+  if (result?.formattedAddress) return String(result.formattedAddress);
+  const displayName = String(result?.display_name || '').trim();
+  const title = getFloatingPlaceTitle(result);
+  if (!displayName) return title;
+  return displayName.replace(new RegExp(`^${escapeRegExp(title)}\\s*,\\s*`, 'i'), '').trim() || displayName;
+}
+
+// Map English city/province names that Nominatim may return → Korean equivalents
+const EN_CITY_TO_KO: [RegExp, string][] = [
+  [/\bSeoul\b/g, '서울'],
+  [/\bBusan\b/g, '부산'],
+  [/\bDaegu\b/g, '대구'],
+  [/\bIncheon\b/g, '인천'],
+  [/\bGwangju\b/g, '광주'],
+  [/\bDaejeon\b/g, '대전'],
+  [/\bUlsan\b/g, '울산'],
+  [/\bSejong\b/g, '세종'],
+  [/\bJeju-do\b/g, '제주도'],
+  [/\bJeju\b/g, '제주'],
+  [/\bGyeonggi-do\b/g, '경기도'],
+  [/\bGyeonggi\b/g, '경기'],
+  [/\bGangwon-do\b/g, '강원도'],
+  [/\bGangwon\b/g, '강원'],
+  [/\bNorth Gyeongsang\b/g, '경상북도'],
+  [/\bSouth Gyeongsang\b/g, '경상남도'],
+  [/\bNorth Chungcheong\b/g, '충청북도'],
+  [/\bSouth Chungcheong\b/g, '충청남도'],
+  [/\bNorth Jeolla\b/g, '전라북도'],
+  [/\bSouth Jeolla\b/g, '전라남도'],
+];
+
+function compactKoreanAddress(address: string) {
+  // Replace English city/province names with Korean equivalents first
+  let result = address;
+  for (const [pattern, replacement] of EN_CITY_TO_KO) {
+    result = result.replace(pattern, replacement);
+  }
+  return result
+    .replace(/^대한민국\s+/, '')
+    .replace(/^서울특별시\s+/, '서울 ')
+    .replace(/^부산광역시\s+/, '부산 ')
+    .replace(/^대구광역시\s+/, '대구 ')
+    .replace(/^인천광역시\s+/, '인천 ')
+    .replace(/^광주광역시\s+/, '광주 ')
+    .replace(/^대전광역시\s+/, '대전 ')
+    .replace(/^울산광역시\s+/, '울산 ')
+    .replace(/^세종특별자치시\s+/, '세종 ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function buildKoreanAddressTitle(address: string) {
+  const compact = compactKoreanAddress(address);
+  const parts = compact.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return parts.slice(-2).join(' ');
+  return compact;
+}
+
+function extractKoreanAddressTail(query: string) {
+  const match = query.match(/([가-힣]+(?:동|읍|면|리|가))\s*([0-9]+(?:-[0-9]+)?)/);
+  return match ? `${match[1]} ${match[2]}` : '';
+}
+
+function formatOsmKoreanAddress(result: any) {
+  const address = result?.address || {};
+  const city = address.city || address.state || address.province || '';
+  const district = address.borough || address.city_district || address.county || '';
+  const town = address.suburb || address.town || address.village || address.neighbourhood || '';
+  const road = address.road || address.pedestrian || '';
+  const houseNumber = address.house_number || '';
+  const postcode = address.postcode || '';
+  const parts = [city, district, town, road, houseNumber].filter(Boolean);
+  const formatted = compactKoreanAddress(parts.join(' '));
+  const title = [road || town || district, houseNumber || postcode].filter(Boolean).join(' ');
+  return {
+    title: title || buildKoreanAddressTitle(formatted || String(result?.display_name || '')),
+    formattedAddress: formatted || String(result?.display_name || ''),
+  };
+}
+
+function getLocalKoreanSearchResults(query: string) {
+  const normalized = query.trim().toLowerCase();
+  const candidates = [
+    {
+      keywords: ['seoul', '서울', '서울시', '서울특별시'],
+      title: '서울',
+      formattedAddress: '서울특별시',
+      lat: 37.5665,
+      lon: 126.978,
+    },
+    {
+      keywords: ['gangnam', '강남', '강남구'],
+      title: '강남구',
+      formattedAddress: '서울 강남구',
+      lat: 37.5172,
+      lon: 127.0473,
+    },
+    {
+      keywords: ['nowon', '노원', '노원구'],
+      title: '노원구',
+      formattedAddress: '서울 노원구',
+      lat: 37.6542,
+      lon: 127.0568,
+    },
+  ];
+
+  return candidates
+    .filter((item) => item.keywords.some((keyword) => normalized.includes(keyword)))
+    .map((item) => ({
+      source: 'local',
+      title: item.title,
+      formattedAddress: item.formattedAddress,
+      display_name: item.formattedAddress,
+      addressEn: '',
+      lat: String(item.lat),
+      lon: String(item.lon),
+    }));
+}
+
+async function searchNaverAddressResults(query: string) {
+  let results: any[] = [];
+
+  // 1. Try Naver Geocoding (exact addresses)
+  try {
+    const maps = await Promise.race([
+      loadNaverMapsSdk(),
+      new Promise<null>((_, reject) => setTimeout(() => reject(new Error('SDK timeout')), 4000)),
+    ]);
+
+    if (maps?.Service?.geocode) {
+      const naverResults = await new Promise<any[]>((resolve) => {
+        maps.Service.geocode({ query }, (status: unknown, response: any) => {
+          const rows = (response?.v2?.addresses ?? []) as Array<{
+            x?: string;
+            y?: string;
+            roadAddress?: string;
+            jibunAddress?: string;
+            englishAddress?: string;
+          }>;
+
+          if (status !== maps.Service.Status.OK && status !== 'OK' && rows.length === 0) {
+            resolve([]);
+            return;
+          }
+
+          resolve(rows.slice(0, 5).map((row) => {
+            const rawAddress = row.jibunAddress || row.roadAddress || row.englishAddress || query;
+            const formattedAddress = compactKoreanAddress(rawAddress);
+            return {
+              source: 'naver',
+              title: buildKoreanAddressTitle(rawAddress),
+              formattedAddress,
+              display_name: formattedAddress,
+              addressEn: row.englishAddress || '',
+              lat: row.y,
+              lon: row.x,
+            };
+          }).filter((row) => Number.isFinite(Number(row.lat)) && Number.isFinite(Number(row.lon))));
+        });
+      });
+      results.push(...naverResults);
+    }
+  } catch {
+    // Naver SDK failed or timed out
+  }
+
+  // 2. Fallback to Nominatim OSM if we have fewer than 3 results (finds place names)
+  if (results.length < 3) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+      // addressdetails=1 → trả về object address có thể format KakaoMap style
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&countrycodes=vn,kr&addressdetails=1`,
+        { signal: controller.signal }
+      );
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        const nominatimResults = await response.json();
+        const osmResults = nominatimResults
+          .slice(0, 5)
+          .map((item: any) => {
+            // Format kiểu KakaoMap: "서울 성동구 왕십리로 222"
+            const { title: fmtTitle, formattedAddress: fmtAddr } = formatOsmKoreanAddress(item);
+            const placeName = item.name || fmtTitle;
+            // Tên địa điểm + địa chỉ rút gọn (bỏ dấu phẩy, bỏ quốc gia)
+            const compactAddr = compactKoreanAddress(
+              fmtAddr
+                .replace(/,\s*/g, ' ')           // bỏ dấu phẩy
+                .replace(/대한민국.*$/, '')         // bỏ "대한민국" trở đi
+                .replace(/\s+/g, ' ')
+                .trim()
+            );
+            return {
+              source: 'nominatim',
+              title: placeName,
+              formattedAddress: compactAddr || placeName,
+              display_name: item.display_name,
+              addressEn: String(item.display_name || ''),
+              lat: String(item.lat),
+              lon: String(item.lon),
+            };
+          })
+          .filter((row: any) => {
+            const lat = Number(row.lat);
+            const lon = Number(row.lon);
+            return Number.isFinite(lat) && Number.isFinite(lon);
+          });
+
+        // Merge, avoiding duplicates by address
+        const addressSet = new Set(results.map((r: any) => r.formattedAddress));
+        results.push(...osmResults.filter((r: any) => !addressSet.has(r.formattedAddress)));
+      }
+    } catch (err) {
+      // Nominatim failed, return what we have from Naver
+      console.debug('Nominatim fallback failed:', err instanceof Error ? err.message : err);
+    }
+  }
+
+  return results.slice(0, 5);
+}
+
+function compactProvinceLabel(value: string) {
+  return value
+    .replace(/특별자치도$/, '')
+    .replace(/특별자치시$/, '')
+    .replace(/특별시$/, '')
+    .replace(/광역시$/, '')
+    .replace(/자치도$/, '')
+    .replace(/도$/, '')
+    .replace(/시$/, '');
+}
+
+function getReviewRegionLabel(review: PlaceReview, level: 'province' | 'district') {
+  const parts = getRegionParts(review);
+  const province = parts.find((part) => /(특별시|광역시|특별자치시|특별자치도|자치도|도|시)$/.test(part));
+
+  if (level === 'province') {
+    return province ? compactProvinceLabel(province) : compactProvinceLabel(parts[0] || review.place_name || '기타');
+  }
+
+  const district = parts.find((part) => /(구|군|시)$/.test(part) && part !== province);
+  return district || province || parts[0] || review.place_name || '기타';
+}
+
+function buildReviewMapMarkerGroups(groups: ReviewPlaceGroup[], zoom: number): ReviewMapMarkerGroup[] {
+  if (zoom >= 14) {
+    return groups.map((group) => ({
+      ...group,
+      markerType: 'place',
+      label: group.reviews[0]?.title || group.name,
+      count: group.reviews.length,
+    }));
+  }
+
+  const clusterLevel: 'province' | 'district' = zoom >= 10 ? 'district' : 'province';
+  const clusters = new Map<string, {
+    latTotal: number;
+    lngTotal: number;
+    places: Set<string>;
+    reviews: PlaceReview[];
+    label: string;
+  }>();
+
+  groups.forEach((group) => {
+    const firstReview = group.reviews[0];
+    if (!firstReview) return;
+    const label = getReviewRegionLabel(firstReview, clusterLevel);
+    const key = `${clusterLevel}:${label}`;
+    const existing = clusters.get(key) || {
+      latTotal: 0,
+      lngTotal: 0,
+      places: new Set<string>(),
+      reviews: [],
+      label,
+    };
+    const placeKey = normalizeReviewPlaceKey(group);
+    if (!existing.places.has(placeKey)) {
+      existing.latTotal += group.lat;
+      existing.lngTotal += group.lng;
+      existing.places.add(placeKey);
+    }
+    existing.reviews.push(...group.reviews);
+    clusters.set(key, existing);
+  });
+
+  return [...clusters.entries()].map(([key, cluster]) => {
+    const count = Math.max(cluster.places.size, 1);
+    return {
+      lat: cluster.latTotal / count,
+      lng: cluster.lngTotal / count,
+      name: cluster.label,
+      reviews: cluster.reviews,
+      markerType: 'cluster',
+      clusterLevel,
+      label: cluster.label,
+      count,
+    };
+  });
 }
 
 function detachNaverMarker(marker: any) {
@@ -258,21 +667,7 @@ const NaverReviewMap = forwardRef<ReviewMapHandle, {
   const userMarkerRef = useRef<any>(null);
   const hasFitOnce = useRef(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const handleMarkerDomClick = (event: MouseEvent) => {
-      const target = event.target as HTMLElement | null;
-      const marker = target?.closest?.('.rv-title-marker') as HTMLElement | null;
-      const reviewId = marker?.dataset.reviewId;
-      if (!reviewId) return;
-      event.preventDefault();
-      event.stopPropagation();
-      onMarkerClick(reviewId);
-    };
-
-    document.addEventListener('click', handleMarkerDomClick, true);
-    return () => document.removeEventListener('click', handleMarkerDomClick, true);
-  }, [onMarkerClick]);
+  const [zoomLevel, setZoomLevel] = useState(12);
 
   const pushBounds = useCallback(() => {
     const maps = mapsRef.current;
@@ -290,6 +685,46 @@ const NaverReviewMap = forwardRef<ReviewMapHandle, {
     });
   }, [onBoundsChange]);
 
+  const syncZoomLevel = useCallback(() => {
+    const nextZoom = Number(mapRef.current?.getZoom?.() || 12);
+    setZoomLevel((current) => (current === nextZoom ? current : nextZoom));
+  }, []);
+
+  useEffect(() => {
+    const handleMarkerDomClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      const cluster = target?.closest?.('.rv-cluster-marker') as HTMLElement | null;
+      if (cluster) {
+        const maps = mapsRef.current;
+        const map = mapRef.current;
+        const lat = Number(cluster.dataset.clusterLat);
+        const lng = Number(cluster.dataset.clusterLng);
+        const targetZoom = Number(cluster.dataset.clusterZoom || 14);
+        if (maps && map && Number.isFinite(lat) && Number.isFinite(lng)) {
+          event.preventDefault();
+          event.stopPropagation();
+          map.setCenter(new maps.LatLng(lat, lng));
+          map.setZoom(Math.max(Number(map.getZoom?.() || 12) + 1, targetZoom));
+          window.setTimeout(() => {
+            syncZoomLevel();
+            pushBounds();
+          }, 180);
+        }
+        return;
+      }
+
+      const marker = target?.closest?.('.rv-title-marker') as HTMLElement | null;
+      const reviewId = marker?.dataset.reviewId;
+      if (!reviewId) return;
+      event.preventDefault();
+      event.stopPropagation();
+      onMarkerClick(reviewId);
+    };
+
+    document.addEventListener('click', handleMarkerDomClick, true);
+    return () => document.removeEventListener('click', handleMarkerDomClick, true);
+  }, [onMarkerClick, pushBounds, syncZoomLevel]);
+
   useEffect(() => {
     let disposed = false;
 
@@ -306,9 +741,16 @@ const NaverReviewMap = forwardRef<ReviewMapHandle, {
           mapDataControl: false,
         });
         mapRef.current = map;
+        setZoomLevel(Number(map.getZoom?.() || 12));
         listenersRef.current = [
-          maps.Event.addListener(map, 'idle', pushBounds),
-          maps.Event.addListener(map, 'zoom_changed', pushBounds),
+          maps.Event.addListener(map, 'idle', () => {
+            syncZoomLevel();
+            pushBounds();
+          }),
+          maps.Event.addListener(map, 'zoom_changed', () => {
+            syncZoomLevel();
+            pushBounds();
+          }),
         ];
         window.setTimeout(pushBounds, 150);
         window.setTimeout(() => {
@@ -339,7 +781,7 @@ const NaverReviewMap = forwardRef<ReviewMapHandle, {
       markersRef.current = [];
       mapRef.current = null;
     };
-  }, [pushBounds]);
+  }, [pushBounds, syncZoomLevel]);
 
   useImperativeHandle(ref, () => ({
     setView(center, zoom) {
@@ -370,15 +812,17 @@ const NaverReviewMap = forwardRef<ReviewMapHandle, {
     if (!maps || !map) return;
 
     markersRef.current.forEach(detachNaverMarker);
-    markersRef.current = groups.map((group) => {
+    const markerGroups = buildReviewMapMarkerGroups(groups, zoomLevel);
+    markersRef.current = markerGroups.map((group) => {
+      const isCluster = group.markerType === 'cluster';
       const isSelected = group.reviews.some((review) => review.id === selectedReviewId);
       const marker = new maps.Marker({
         position: new maps.LatLng(group.lat, group.lng),
         map,
         icon: {
-          content: buildReviewMarkerHtml(group.reviews, isSelected),
-          size: new maps.Size(172, 54),
-          anchor: new maps.Point(86, 50),
+          content: isCluster ? buildReviewClusterMarkerHtml(group) : buildReviewMarkerHtml(group.reviews, isSelected),
+          size: isCluster ? new maps.Size(98, 62) : new maps.Size(172, 54),
+          anchor: isCluster ? new maps.Point(49, 31) : new maps.Point(86, 50),
         },
       });
       return marker;
@@ -398,7 +842,7 @@ const NaverReviewMap = forwardRef<ReviewMapHandle, {
     } else {
       window.setTimeout(pushBounds, 80);
     }
-  }, [groups, selectedReviewId, onMarkerClick, pushBounds]);
+  }, [groups, selectedReviewId, onMarkerClick, pushBounds, zoomLevel]);
 
   useEffect(() => {
     const maps = mapsRef.current;
@@ -529,10 +973,14 @@ function isOnlineNow(lastSeenAt?: string | null, fallback?: boolean) {
   return Number.isFinite(timestamp) && Date.now() - timestamp <= ONLINE_WINDOW_MS;
 }
 
-function readLocalCommunity(): LocalCommunitySnapshot | null {
+function communityLocalKey(ownerId?: string | null) {
+  return `${LOCAL_COMMUNITY_KEY}:${ownerId || 'guest'}`;
+}
+
+function readLocalCommunity(ownerId?: string | null): LocalCommunitySnapshot | null {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = window.localStorage.getItem(LOCAL_COMMUNITY_KEY);
+    const raw = window.localStorage.getItem(communityLocalKey(ownerId));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<LocalCommunitySnapshot>;
     if (!Array.isArray(parsed.posts) || !Array.isArray(parsed.comments)) return null;
@@ -549,9 +997,9 @@ function readLocalCommunity(): LocalCommunitySnapshot | null {
   }
 }
 
-function writeLocalCommunity(snapshot: LocalCommunitySnapshot) {
+function writeLocalCommunity(ownerId: string | null | undefined, snapshot: LocalCommunitySnapshot) {
   if (typeof window === 'undefined') return;
-  window.localStorage.setItem(LOCAL_COMMUNITY_KEY, JSON.stringify(snapshot));
+  window.localStorage.setItem(communityLocalKey(ownerId), JSON.stringify(snapshot));
 }
 
 export function CommunityScreen({
@@ -567,6 +1015,7 @@ export function CommunityScreen({
   targetPostId,
   onTargetPostConsumed,
   lang = 'vi',
+  isAdmin = false,
 }: {
   companions: CompanionProfile[];
   requested: string[];
@@ -580,6 +1029,7 @@ export function CommunityScreen({
   targetPostId?: string | null;
   onTargetPostConsumed?: () => void;
   lang?: AppLang;
+  isAdmin?: boolean;
 }) {
   const isKo = lang === 'ko';
   const ui = isKo ? {
@@ -652,6 +1102,10 @@ export function CommunityScreen({
   const [newTitle, setNewTitle] = useState('');
   const [newContent, setNewContent] = useState('');
   const [newCategory, setNewCategory] = useState<CommunityCategory>('free');
+  const [newImages, setNewImages] = useState<File[]>([]);
+  const [existingImageUrls, setExistingImageUrls] = useState<string[]>([]);
+  const [isUploadingImages, setIsUploadingImages] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [feedFilter, setFeedFilter] = useState<FeedFilter>('all');
   const [newComment, setNewComment] = useState('');
   const [replyTo, setReplyTo] = useState<string | null>(null);
@@ -659,25 +1113,73 @@ export function CommunityScreen({
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
-  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
-  const [dislikedPosts, setDislikedPosts] = useState<Set<string>>(new Set());
-  const [bookmarkedPosts, setBookmarkedPosts] = useState<Set<string>>(new Set());
+  // Guest: khởi tạo từ localStorage ngay lập tức để like/bookmark hiện đúng khi load
+  const [likedPosts, setLikedPosts] = useState<Set<string>>(() =>
+    !session ? getGuestLikedIds() : new Set()
+  );
+  const [dislikedPosts, setDislikedPosts] = useState<Set<string>>(() =>
+    !session ? getGuestDislikedIds() : new Set()
+  );
+  const [bookmarkedPosts, setBookmarkedPosts] = useState<Set<string>>(() =>
+    !session ? getGuestBookmarkedIds() : new Set()
+  );
   const [likedComments, setLikedComments] = useState<Set<string>>(new Set());
+  const [postReactionBusy, setPostReactionBusy] = useState<Set<string>>(new Set());
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const [showBlockConfirm, setShowBlockConfirm] = useState<string | null>(null);
+  const [showReportConfirm, setShowReportConfirm] = useState<{ type: 'post' | 'comment' | 'review' | 'profile' | 'chat'; targetId: string | null; targetUserId?: string | null } | null>(null);
+  const [reportedIds, setReportedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [syncMessage, setSyncMessage] = useState('Đang làm mới');
   const [isLocalMode, setIsLocalMode] = useState(true);
   const [viewProfile, setViewProfile] = useState<CompanionProfile | null>(null);
+  const [lightbox, setLightbox] = useState<{ urls: string[]; index: number } | null>(null);
+  const lightboxTouchStartX = useRef<number | null>(null);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [activeChatPartner, setActiveChatPartner] = useState<CompanionProfile | null>(null);
   const [friendFilter, setFriendFilter] = useState<'discovery' | 'chats' | 'unread'>('discovery');
   const [friendActionId, setFriendActionId] = useState<string | null>(null);
   const [optimisticFriendIds, setOptimisticFriendIds] = useState<Set<string>>(new Set());
   const [recentChats, setRecentChats] = useState<any[]>([]);
+  // Profiles của các đối tác chat — dùng khi companions chưa load hoặc không có trong store
+  const [chatPartnerProfiles, setChatPartnerProfiles] = useState<Map<string, CompanionProfile>>(new Map());
+  const [blockedUserIds, setBlockedUserIds] = useState<Set<string>>(new Set());
   const commentInputRef = useRef<HTMLInputElement>(null);
+  // Cache profile theo user_id để tránh fetch nhiều lần
+  const profileCacheRef = useRef<Map<string, CompanionProfile>>(new Map());
+  // Theo dõi những partnerId chat đã fetch profile — tránh loop
+  const fetchedChatPartnerIds = useRef<Set<string>>(new Set());
 
   const currentUserId = session?.user.id ?? '';
   const displayName = session ? (profile?.displayName?.trim() || session.user.email?.split('@')[0] || 'Du học sinh') : 'Du học sinh';
+
+  useEffect(() => {
+    if (!currentUserId) {
+      setBlockedUserIds(new Set());
+      return;
+    }
+    let alive = true;
+    loadBlockedUserIds(currentUserId)
+      .then((ids) => {
+        if (alive) setBlockedUserIds(new Set(ids));
+      })
+      .catch((error) => console.warn('Unable to load blocked users:', error));
+    return () => {
+      alive = false;
+    };
+  }, [currentUserId]);
+
+  // Keyboard nav cho lightbox
+  useEffect(() => {
+    if (!lightbox) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight') setLightbox((lb) => lb && lb.index < lb.urls.length - 1 ? { ...lb, index: lb.index + 1 } : lb);
+      if (e.key === 'ArrowLeft')  setLightbox((lb) => lb && lb.index > 0 ? { ...lb, index: lb.index - 1 } : lb);
+      if (e.key === 'Escape')     setLightbox(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [lightbox]);
 
   const isFriend = useCallback((id: string) => {
     if (!currentUserId) return false;
@@ -706,7 +1208,7 @@ export function CommunityScreen({
   }, [profile?.latitude, profile?.longitude]);
 
   const companionsWithDistance = useMemo(() => {
-    return companions.map((companion) => {
+    return companions.filter((companion) => !blockedUserIds.has(companion.id)).map((companion) => {
       const companionCoordsReady = validCoordinate(companion.latitude, companion.longitude);
       const computedDistance = currentCoords && companionCoordsReady
         ? distanceKm(currentCoords.lat, currentCoords.lng, companion.latitude!, companion.longitude!)
@@ -718,7 +1220,7 @@ export function CommunityScreen({
         isOnline: isOnlineNow(companion.lastSeenAt, companion.isOnline),
       };
     });
-  }, [companions, currentCoords]);
+  }, [blockedUserIds, companions, currentCoords]);
 
   const nearbyCompanions = useMemo(() => {
     return companionsWithDistance
@@ -732,18 +1234,33 @@ export function CommunityScreen({
   useEffect(() => {
     let alive = true;
     setLoading(true);
+    setLikedPosts(new Set());
+    setDislikedPosts(new Set());
+    setBookmarkedPosts(new Set());
+    setLikedComments(new Set());
+    setNotifications([]);
+    setRecentChats([]);
 
-    loadCommunityState(currentUserId || undefined)
+    loadCommunityState(currentUserId || undefined, currentUserId ? undefined : getGuestSessionId())
       .then((state) => {
         if (!alive) return;
-        const local = readLocalCommunity();
+        const local = readLocalCommunity(currentUserId || null);
         const useLocalSnapshot = state.source !== 'supabase' && local && local.posts.length > 0;
 
         setPosts(useLocalSnapshot ? local.posts : state.posts);
         setComments(useLocalSnapshot ? local.comments : state.comments);
-        setLikedPosts(new Set(useLocalSnapshot ? local.likedPostIds : state.likedPostIds));
-        setDislikedPosts(new Set(useLocalSnapshot ? local.dislikedPostIds : state.dislikedPostIds));
-        setBookmarkedPosts(new Set(useLocalSnapshot ? local.bookmarkedPostIds : state.bookmarkedPostIds));
+
+        // Guest: dùng thẳng từ localStorage (đã được setState ngay khi mount)
+        // User đăng nhập: dùng data từ Supabase
+        if (!currentUserId) {
+          setLikedPosts(getGuestLikedIds());
+          setDislikedPosts(getGuestDislikedIds());
+          setBookmarkedPosts(getGuestBookmarkedIds());
+        } else {
+          setLikedPosts(new Set(useLocalSnapshot ? local.likedPostIds    : state.likedPostIds));
+          setDislikedPosts(new Set(useLocalSnapshot ? local.dislikedPostIds : state.dislikedPostIds));
+          setBookmarkedPosts(new Set(useLocalSnapshot ? local.bookmarkedPostIds : state.bookmarkedPostIds));
+        }
         setLikedComments(new Set(useLocalSnapshot ? local.likedCommentIds : state.likedCommentIds));
         setNotifications(state.notifications);
         setIsLocalMode(state.source !== 'supabase');
@@ -758,7 +1275,7 @@ export function CommunityScreen({
       .catch((error) => {
         console.error(error);
         if (!alive) return;
-        const local = readLocalCommunity();
+        const local = readLocalCommunity(currentUserId || null);
         if (local) {
           setPosts(local.posts);
           setComments(local.comments);
@@ -858,6 +1375,7 @@ export function CommunityScreen({
             };
             setComments((prev) => {
               if (prev.some(c => c.id === newComment.id)) return prev;
+              bumpVisiblePostCommentCount(newComment.post_id, 1);
               return [...prev, newComment];
             });
           } else if (payload.eventType === 'UPDATE') {
@@ -868,7 +1386,12 @@ export function CommunityScreen({
               likes_count: Number(row.likes_count ?? c.likes_count),
             } : c));
           } else if (payload.eventType === 'DELETE') {
-            setComments((prev) => prev.filter(c => c.id !== payload.old.id));
+            const oldRow = payload.old as any;
+            setComments((prev) => {
+              const existed = prev.some(c => c.id === oldRow.id);
+              if (existed && oldRow.post_id) bumpVisiblePostCommentCount(oldRow.post_id, -1);
+              return prev.filter(c => c.id !== oldRow.id);
+            });
           }
         }
       )
@@ -881,6 +1404,167 @@ export function CommunityScreen({
       supabase?.removeChannel(commentsChannel);
     };
   }, []);
+
+  useEffect(() => {
+    if (!supabase || !currentUserId) return;
+
+    const applyReactionRow = (row: any, remove = false) => {
+      const postId = row?.post_id as string | null | undefined;
+      const commentId = row?.comment_id as string | null | undefined;
+      const isLike = row?.is_like !== false;
+
+      if (postId) {
+        setLikedPosts((current) => {
+          const next = new Set(current);
+          if (remove || !isLike) next.delete(postId);
+          else next.add(postId);
+          return next;
+        });
+        setDislikedPosts((current) => {
+          const next = new Set(current);
+          if (remove || isLike) next.delete(postId);
+          else next.add(postId);
+          return next;
+        });
+      }
+
+      if (commentId) {
+        setLikedComments((current) => {
+          const next = new Set(current);
+          if (remove) next.delete(commentId);
+          else next.add(commentId);
+          return next;
+        });
+      }
+    };
+
+    const reactionsChannel = supabase
+      .channel(`community-reactions:${currentUserId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'community_likes', filter: `user_id=eq.${currentUserId}` },
+        (payload) => {
+          if (payload.eventType === 'DELETE') {
+            applyReactionRow(payload.old, true);
+          } else {
+            applyReactionRow(payload.new, false);
+          }
+        },
+      )
+      .subscribe();
+
+    const bookmarksChannel = supabase
+      .channel(`community-bookmarks:${currentUserId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'community_bookmarks', filter: `user_id=eq.${currentUserId}` },
+        (payload) => {
+          const row = (payload.eventType === 'DELETE' ? payload.old : payload.new) as any;
+          const postId = row?.post_id as string | undefined;
+          if (!postId) return;
+
+          setBookmarkedPosts((current) => {
+            const next = new Set(current);
+            if (payload.eventType === 'DELETE') next.delete(postId);
+            else next.add(postId);
+            return next;
+          });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase?.removeChannel(reactionsChannel);
+      void supabase?.removeChannel(bookmarksChannel);
+    };
+  }, [currentUserId]);
+
+  // Realtime: nhận thông báo mới (cho user đăng nhập và khách)
+  useEffect(() => {
+    if (!supabase) return;
+
+    const channelsToClean: ReturnType<typeof supabase.channel>[] = [];
+
+    if (currentUserId) {
+      // User đã đăng nhập: lắng nghe theo recipient_id
+      const notifChannel = supabase
+        .channel(`community-notifications:${currentUserId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'community_notifications',
+            filter: `recipient_id=eq.${currentUserId}`,
+          },
+          (payload) => {
+            const row = payload.new as any;
+            setNotifications((current) => {
+              // Tránh trùng lặp
+              if (current.some((n) => n.id === row.id)) return current;
+              const newNotif: CommunityNotification = {
+                id: row.id,
+                recipient_id: row.recipient_id ?? null,
+                recipient_guest_session_id: row.recipient_guest_session_id ?? null,
+                actor_id: row.actor_id ?? null,
+                post_id: row.post_id ?? null,
+                comment_id: row.comment_id ?? null,
+                type: (row.type ?? 'system') as CommunityNotification['type'],
+                title: row.title ?? 'Thông báo',
+                body: row.body ?? '',
+                is_read: false,
+                created_at: row.created_at ?? new Date().toISOString(),
+              };
+              return [newNotif, ...current];
+            });
+          },
+        )
+        .subscribe();
+      channelsToClean.push(notifChannel);
+    } else {
+      // Khách: lắng nghe theo recipient_guest_session_id
+      const guestId = getGuestSessionId();
+      if (guestId) {
+        const guestNotifChannel = supabase
+          .channel(`community-notifications-guest:${guestId}`)
+          .on(
+            'postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'community_notifications',
+              filter: `recipient_guest_session_id=eq.${guestId}`,
+            },
+            (payload) => {
+              const row = payload.new as any;
+              setNotifications((current) => {
+                if (current.some((n) => n.id === row.id)) return current;
+                const newNotif: CommunityNotification = {
+                  id: row.id,
+                  recipient_id: row.recipient_id ?? null,
+                  recipient_guest_session_id: row.recipient_guest_session_id ?? null,
+                  actor_id: row.actor_id ?? null,
+                  post_id: row.post_id ?? null,
+                  comment_id: row.comment_id ?? null,
+                  type: (row.type ?? 'system') as CommunityNotification['type'],
+                  title: row.title ?? 'Thông báo',
+                  body: row.body ?? '',
+                  is_read: false,
+                  created_at: row.created_at ?? new Date().toISOString(),
+                };
+                return [newNotif, ...current];
+              });
+            },
+          )
+          .subscribe();
+        channelsToClean.push(guestNotifChannel);
+      }
+    }
+
+    return () => {
+      channelsToClean.forEach((ch) => void supabase?.removeChannel(ch));
+    };
+  }, [currentUserId]);
 
   const fetchRecentChats = useCallback(async () => {
     if (!supabase || !currentUserId) return;
@@ -915,6 +1599,35 @@ export function CommunityScreen({
         }
       });
       setRecentChats(Array.from(chatsMap.values()));
+
+      // Fetch profiles for chat partners not yet fetched (use ref to avoid dep loop)
+      const partnerIds = Array.from(chatsMap.keys());
+      const missingIds = partnerIds.filter(id => !fetchedChatPartnerIds.current.has(id));
+      if (missingIds.length > 0) {
+        missingIds.forEach(id => fetchedChatPartnerIds.current.add(id));
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, display_name, school, region, note, tags, avatar_url, last_seen_at')
+          .in('id', missingIds);
+        if (profiles && profiles.length > 0) {
+          setChatPartnerProfiles(prev => {
+            const next = new Map(prev);
+            profiles.forEach((row: any) => {
+              next.set(row.id, {
+                id: row.id,
+                displayName: row.display_name || 'Người dùng',
+                school: row.school || '',
+                region: row.region || '',
+                focus: row.note || '',
+                avatarUrl: row.avatar_url || null,
+                tags: Array.isArray(row.tags) ? row.tags : [],
+                lastSeenAt: row.last_seen_at || null,
+              });
+            });
+            return next;
+          });
+        }
+      }
     }
   }, [currentUserId]);
 
@@ -959,6 +1672,94 @@ export function CommunityScreen({
     return true;
   }, [session]);
 
+  const reportTarget = useCallback((
+    targetType: 'post' | 'comment' | 'review' | 'profile' | 'chat',
+    targetId: string | null,
+    targetUserId?: string | null,
+  ) => {
+    if (!requireLogin()) return;
+    setShowReportConfirm({ type: targetType, targetId, targetUserId });
+  }, [requireLogin]);
+
+  const handleConfirmReport = useCallback(async () => {
+    if (!showReportConfirm) return;
+    const { type, targetId, targetUserId } = showReportConfirm;
+    setShowReportConfirm(null);
+    try {
+      await reportCommunityContent({
+        targetType: type,
+        targetId,
+        targetUserId,
+        reason: 'user_report',
+        details: 'Reported from in-app safety action.',
+      });
+      if (targetId) setReportedIds((prev) => new Set(prev).add(targetId));
+      setSyncMessage('✅ Đã gửi báo cáo – chúng tôi sẽ xem xét sớm');
+      setTimeout(() => setSyncMessage('Đang trực tuyến'), 4000);
+    } catch (error) {
+      console.error(error);
+      setSyncMessage('❌ Gửi báo cáo thất bại, thử lại sau');
+      setTimeout(() => setSyncMessage('Đang trực tuyến'), 3000);
+    }
+  }, [showReportConfirm]);
+
+  const blockTargetUser = useCallback(async (targetUserId?: string | null) => {
+    if (!targetUserId || targetUserId === currentUserId) return;
+    if (!requireLogin()) return;
+    try {
+      await blockCommunityUser(targetUserId);
+      setBlockedUserIds((current) => new Set(current).add(targetUserId));
+      setPosts((current) => current.filter((post) => post.user_id !== targetUserId));
+      setComments((current) => current.filter((comment) => comment.user_id !== targetUserId));
+      if (selectedPost?.user_id === targetUserId) goBack();
+      setSyncMessage('Đang trực tuyến');
+    } catch (error) {
+      console.error(error);
+      setSyncMessage('Đang trực tuyến');
+    }
+  }, [currentUserId, isKo, requireLogin, selectedPost]);
+
+  // Mở profile của user theo userId — tìm trong cache → companions → fetch DB
+  const openUserProfile = useCallback(async (userId: string) => {
+    if (!userId || !isUuid(userId) || userId === currentUserId) return;
+
+    // 1. Có trong cache rồi → hiện ngay
+    if (profileCacheRef.current.has(userId)) {
+      setViewProfile(profileCacheRef.current.get(userId)!);
+      return;
+    }
+
+    // 2. Có trong danh sách companions đã load
+    const cached = companionsWithDistance.find((p) => p.id === userId);
+    if (cached) {
+      profileCacheRef.current.set(userId, cached);
+      setViewProfile(cached);
+      return;
+    }
+
+    // 3. Fetch từ Supabase
+    if (!supabase) return;
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, display_name, school, region, note, tags, avatar_url, last_seen_at')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (!data) return;
+    const prof: CompanionProfile = {
+      id: data.id,
+      displayName: data.display_name || 'Người dùng',
+      school: data.school || '',
+      region: data.region || '',
+      focus: data.note || '',
+      avatarUrl: data.avatar_url || null,
+      tags: Array.isArray(data.tags) ? data.tags : [],
+      lastSeenAt: data.last_seen_at || null,
+    };
+    profileCacheRef.current.set(userId, prof);
+    setViewProfile(prof);
+  }, [currentUserId, companionsWithDistance]);
+
   const handleFriendAction = useCallback(async (id: string) => {
     if (!requireLogin() || friendActionId) return;
     const accepting = hasIncomingRequest(id);
@@ -968,9 +1769,7 @@ export function CommunityScreen({
       if (accepting) {
         setOptimisticFriendIds((current) => new Set(current).add(id));
       }
-      setSyncMessage(accepting
-        ? (isKo ? '친구 요청을 수락했습니다.' : 'Đã chấp nhận lời mời kết bạn.')
-        : (isKo ? '친구 요청을 보냈습니다.' : 'Đã gửi lời mời kết bạn.'));
+      setSyncMessage('Đang trực tuyến');
     } catch (error) {
       console.error(error);
       setOptimisticFriendIds((current) => {
@@ -978,9 +1777,7 @@ export function CommunityScreen({
         next.delete(id);
         return next;
       });
-      setSyncMessage(accepting
-        ? (isKo ? '친구 요청을 수락하지 못했습니다. Supabase 패치를 확인해주세요.' : 'Chưa chấp nhận được. Hãy chạy lại patch Supabase cho bạn bè.')
-        : (isKo ? '친구 요청을 보내지 못했습니다.' : 'Chưa gửi được lời mời kết bạn.'));
+      setSyncMessage('Đang trực tuyến');
     } finally {
       setFriendActionId(null);
     }
@@ -988,7 +1785,7 @@ export function CommunityScreen({
 
   useEffect(() => {
     if (loading || !isLocalMode) return;
-    writeLocalCommunity({
+    writeLocalCommunity(currentUserId || null, {
       posts,
       comments,
       likedPostIds: [...likedPosts],
@@ -996,7 +1793,7 @@ export function CommunityScreen({
       bookmarkedPostIds: [...bookmarkedPosts],
       likedCommentIds: [...likedComments],
     });
-  }, [bookmarkedPosts, comments, dislikedPosts, isLocalMode, likedComments, likedPosts, loading, posts]);
+  }, [bookmarkedPosts, comments, currentUserId, dislikedPosts, isLocalMode, likedComments, likedPosts, loading, posts]);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -1019,6 +1816,7 @@ export function CommunityScreen({
 
   const filteredPosts = useMemo(() => {
     return posts.filter((post) => {
+      if (post.user_id && blockedUserIds.has(post.user_id)) return false;
       if (activeCategory !== 'all' && post.category !== activeCategory) return false;
       if (feedFilter === 'mine' && post.user_id !== currentUserId) return false;
       if (feedFilter === 'saved' && !bookmarkedPosts.has(post.id)) return false;
@@ -1030,31 +1828,34 @@ export function CommunityScreen({
 
       return true;
     });
-  }, [activeCategory, bookmarkedPosts, currentUserId, feedFilter, posts, searchQuery]);
+  }, [activeCategory, blockedUserIds, bookmarkedPosts, currentUserId, feedFilter, posts, searchQuery]);
 
   const postCommentCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     comments.forEach(c => {
       counts[c.post_id] = (counts[c.post_id] || 0) + 1;
     });
+    posts.forEach((post) => {
+      counts[post.id] = Math.max(counts[post.id] || 0, post.comments_count || 0);
+    });
     return counts;
-  }, [comments]);
+  }, [comments, posts]);
 
   const hotPosts = useMemo(
-    () => [...posts].sort((a, b) => {
+    () => [...posts].filter((post) => !post.user_id || !blockedUserIds.has(post.user_id)).sort((a, b) => {
       const aCount = postCommentCounts[a.id] || 0;
       const bCount = postCommentCounts[b.id] || 0;
       return (b.likes_count + bCount) - (a.likes_count + aCount);
     }).slice(0, 2),
-    [posts, postCommentCounts]
+    [blockedUserIds, posts, postCommentCounts]
   );
   const trendingPost = useMemo(
-    () => [...posts].sort((a, b) => {
+    () => [...posts].filter((post) => !post.user_id || !blockedUserIds.has(post.user_id)).sort((a, b) => {
       const aCount = postCommentCounts[a.id] || 0;
       const bCount = postCommentCounts[b.id] || 0;
       return (bCount + b.views_count) - (aCount + a.views_count);
     })[0],
-    [posts, postCommentCounts]
+    [blockedUserIds, posts, postCommentCounts]
   );
   const postComments = selectedPost ? comments.filter((comment) => comment.post_id === selectedPost.id) : [];
   const rootComments = postComments.filter((comment) => !comment.parent_id);
@@ -1062,6 +1863,20 @@ export function CommunityScreen({
   function updatePost(postId: string, updater: (post: CommunityPost) => CommunityPost) {
     setPosts((current) => current.map((post) => (post.id === postId ? updater(post) : post)));
     setSelectedPost((current) => (current?.id === postId ? updater(current) : current));
+  }
+
+  function syncPostCommentCount(postId: string, count: number) {
+    updatePost(postId, (post) => ({
+      ...post,
+      comments_count: Math.max(0, count),
+    }));
+  }
+
+  function bumpVisiblePostCommentCount(postId: string, delta: number) {
+    updatePost(postId, (post) => ({
+      ...post,
+      comments_count: Math.max(0, (post.comments_count || 0) + delta),
+    }));
   }
 
   function closeComposer() {
@@ -1073,12 +1888,112 @@ export function CommunityScreen({
     setNewContent('');
     setNewCategory('free');
     setIsAnonymous(true);
+    setNewImages([]);
   }
 
   function openComposer() {
-    if (!requireLogin()) return;
+    // Guest được phép mở composer — nội dung sẽ tự xoá sau 3h
     setIsWritingPost(true);
     setEditingPostId(null);
+  }
+
+  /** Xử lý chọn ảnh từ thư viện, tối đa 2 ảnh */
+  function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    setNewImages((prev) => [...prev, ...files].slice(0, 2));
+    e.target.value = '';
+  }
+
+  function removeImage(index: number) {
+    setNewImages((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  /**
+   * Nén ảnh bằng Canvas trước khi upload:
+   * - Resize cạnh dài xuống tối đa 1280px (giữ tỷ lệ)
+   * - Xuất JPEG chất lượng 80%
+   * - Kết quả thường < 300KB cho ảnh điện thoại thông thường
+   */
+  function compressPostImage(file: File): Promise<Blob> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        let { width, height } = img;
+        const MAX = 1280;
+        if (width > MAX || height > MAX) {
+          if (width >= height) {
+            height = Math.round((height * MAX) / width);
+            width = MAX;
+          } else {
+            width = Math.round((width * MAX) / height);
+            height = MAX;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { reject(new Error('No 2d context')); return; }
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob(
+          (blob) => (blob ? resolve(blob) : reject(new Error('toBlob failed'))),
+          'image/jpeg',
+          0.80,
+        );
+      };
+      img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error('Image load failed')); };
+      img.src = objectUrl;
+    });
+  }
+
+  /** Upload ảnh lên Supabase Storage (sau khi nén), trả về mảng public URL */
+  async function uploadPostImages(files: File[]): Promise<string[]> {
+    if (!supabase || files.length === 0) return [];
+    const urls: string[] = [];
+    const folder = crypto.randomUUID();
+    for (const file of files.slice(0, 2)) {
+      try {
+        const compressed = await compressPostImage(file);
+        const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
+        const path = `posts/${folder}/${filename}`;
+        const { error: uploadError } = await supabase.storage
+          .from('community-images')
+          .upload(path, compressed, { contentType: 'image/jpeg', cacheControl: '3600', upsert: false });
+        if (uploadError) {
+          console.error('[uploadPostImages] Storage upload error:', uploadError.message);
+        } else {
+          const { data } = supabase.storage.from('community-images').getPublicUrl(path);
+          urls.push(data.publicUrl);
+        }
+      } catch (err) {
+        console.error('[uploadPostImages] Unexpected error:', err);
+      }
+    }
+    return urls;
+  }
+
+  /** Chia sẻ bài viết qua Web Share API hoặc clipboard */
+  async function handleSharePost(post: CommunityPost) {
+    // URL deep-link trực tiếp vào bài viết
+    const shareUrl = `${window.location.origin}?post=${post.id}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: post.title, url: shareUrl });
+      } catch {
+        // người dùng huỷ — không làm gì
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        setSyncMessage('✅ Đã sao chép link bài viết!');
+        setTimeout(() => setSyncMessage('Đang trực tuyến'), 3000);
+      } catch {
+        // ignore
+      }
+    }
   }
 
 
@@ -1089,10 +2004,20 @@ export function CommunityScreen({
     setSelectedPost(nextPost);
     setView('detail');
     setReplyTo(null);
+    setLightbox(null);
     history.pushState({ communityView: 'detail' }, '');
 
     if (isUuid(post.id)) {
       void incrementPostView(post.id).catch((error) => console.error(error));
+      void loadCommunityComments(post.id)
+        .then((nextComments) => {
+          setComments((current) => [
+            ...current.filter((comment) => comment.post_id !== post.id),
+            ...nextComments,
+          ]);
+          syncPostCommentCount(post.id, nextComments.length);
+        })
+        .catch((error) => console.error(error));
     }
   }
 
@@ -1102,7 +2027,7 @@ export function CommunityScreen({
     const targetPost = posts.find((post) => post.id === targetPostId);
     if (!targetPost) {
       setBoardMode('feed');
-      setSyncMessage(isKo ? '게시글을 찾을 수 없습니다.' : 'Không tìm thấy bài viết này.');
+      setSyncMessage('Đang trực tuyến');
       onTargetPostConsumed?.();
       return;
     }
@@ -1133,7 +2058,7 @@ export function CommunityScreen({
         await deleteCommunityPost(postId);
       } catch (error) {
         console.error(error);
-        setSyncMessage('Chưa xóa được trên Supabase. Vui lòng thử lại.');
+        setSyncMessage('Đang trực tuyến');
         return;
       }
     }
@@ -1144,11 +2069,16 @@ export function CommunityScreen({
   }
 
   async function handlePostReaction(postId: string, reaction: 'like' | 'dislike') {
-    if (!requireLogin()) return;
+    if (postReactionBusy.has(postId)) return;
+
     const hadLike = likedPosts.has(postId);
     const hadDislike = dislikedPosts.has(postId);
     const nextLikes = new Set(likedPosts);
     const nextDislikes = new Set(dislikedPosts);
+    const previousLikes = new Set(likedPosts);
+    const previousDislikes = new Set(dislikedPosts);
+    const previousPost = posts.find((post) => post.id === postId);
+    const previousSelectedPost = selectedPost?.id === postId ? selectedPost : null;
     let likeDelta = 0;
     let dislikeDelta = 0;
 
@@ -1178,6 +2108,7 @@ export function CommunityScreen({
 
     setLikedPosts(nextLikes);
     setDislikedPosts(nextDislikes);
+    setPostReactionBusy((current) => new Set(current).add(postId));
     updatePost(postId, (post) => ({
       ...post,
       likes_count: Math.max(post.likes_count + likeDelta, 0),
@@ -1185,32 +2116,60 @@ export function CommunityScreen({
     }));
 
     if (!currentUserId || !isUuid(postId)) {
-      setSyncMessage('Tương tác đang lưu tạm trên máy');
+      // Guest: cập nhật localStorage + bump counter thật trong Supabase
+      const { liked: savedLiked, disliked: savedDisliked } = toggleGuestReaction(postId, reaction);
+      setLikedPosts(savedLiked);
+      setDislikedPosts(savedDisliked);
+      upsertGuestPendingLike(postId, savedLiked.has(postId) ? 'like' : savedDisliked.has(postId) ? 'dislike' : null);
+      // Bump likes_count / dislikes_count thật trong DB (không cần user_id)
+      void guestBumpPostReaction(postId, likeDelta, dislikeDelta);
+      setPostReactionBusy((current) => { const s = new Set(current); s.delete(postId); return s; });
       return;
     }
 
     try {
       await togglePostReaction(currentUserId, postId, reaction);
-      const targetPost = posts.find((post) => post.id === postId);
-      if (reaction === 'like' && !hadLike && targetPost?.user_id && targetPost.user_id !== currentUserId) {
-        await createCommunityNotification({
-          recipientId: targetPost.user_id,
-          actorId: currentUserId,
-          postId,
-          type: 'like',
-          title: 'Có lượt thích mới',
-          body: `${isAnonymous ? 'Ẩn danh' : displayName} đã thích "${targetPost.title}".`,
-        });
+      if (reaction === 'like' && !hadLike) {
+        if (previousPost?.user_id && previousPost.user_id !== currentUserId) {
+          // Tác giả đã đăng nhập
+          await createCommunityNotification({
+            recipientId: previousPost.user_id,
+            actorId: currentUserId,
+            postId,
+            type: 'like',
+            title: 'Có lượt thích mới',
+            body: `${displayName} đã thích bài "${previousPost.title}".`,
+          });
+        } else if (!previousPost?.user_id && previousPost?.guest_session_id) {
+          // Tác giả là khách
+          await createCommunityNotification({
+            recipientGuestSessionId: previousPost.guest_session_id,
+            actorId: currentUserId,
+            postId,
+            type: 'like',
+            title: 'Có lượt thích mới',
+            body: `${displayName} đã thích bài "${previousPost.title}".`,
+          });
+        }
       }
-      setSyncMessage('Đã lưu tương tác vào Supabase');
+      setSyncMessage('Đang trực tuyến');
     } catch (error) {
       console.error(error);
-      setSyncMessage('Chưa lưu được tương tác. Kiểm tra kết nối Supabase.');
+      setLikedPosts(previousLikes);
+      setDislikedPosts(previousDislikes);
+      if (previousPost) setPosts((current) => current.map((post) => (post.id === postId ? previousPost : post)));
+      if (previousSelectedPost) setSelectedPost(previousSelectedPost);
+      setSyncMessage('Đang trực tuyến');
+    } finally {
+      setPostReactionBusy((current) => {
+        const next = new Set(current);
+        next.delete(postId);
+        return next;
+      });
     }
   }
 
   async function handleBookmark(postId: string) {
-    if (!requireLogin()) return;
     const next = new Set(bookmarkedPosts);
     const wasSaved = next.has(postId);
     if (wasSaved) next.delete(postId);
@@ -1218,21 +2177,24 @@ export function CommunityScreen({
     setBookmarkedPosts(next);
 
     if (!currentUserId || !isUuid(postId)) {
-      setSyncMessage('Bài lưu đang được giữ tạm trên máy');
+      // Guest: lưu thẳng vào localStorage
+      const nowBookmarked = toggleGuestBookmark(postId);
+      setBookmarkedPosts(getGuestBookmarkedIds());
+      upsertGuestPendingBookmark(postId, nowBookmarked);
+      setSyncMessage('Đang trực tuyến');
       return;
     }
 
     try {
       await toggleCommunityBookmark(currentUserId, postId);
-      setSyncMessage(wasSaved ? 'Đã bỏ lưu bài viết' : 'Đã lưu bài viết vào Supabase');
+      setSyncMessage('Đang trực tuyến');
     } catch (error) {
       console.error(error);
-      setSyncMessage('Chưa lưu được bookmark. Vui lòng thử lại.');
+      setSyncMessage('Đang trực tuyến');
     }
   }
 
   async function handleCommentLike(commentId: string) {
-    if (!requireLogin()) return;
     const next = new Set(likedComments);
     const hadLiked = next.has(commentId);
     if (hadLiked) next.delete(commentId);
@@ -1249,22 +2211,55 @@ export function CommunityScreen({
 
     try {
       await persistCommentLike(currentUserId, commentId);
+
+      // Gửi thông báo cho chủ bình luận khi bị like (không phải unlike)
+      if (!hadLiked) {
+        const targetComment = postComments.find((c) => c.id === commentId);
+        if (targetComment?.user_id && targetComment.user_id !== currentUserId) {
+          // Chủ bình luận đã đăng nhập
+          await createCommunityNotification({
+            recipientId: targetComment.user_id,
+            actorId: currentUserId,
+            postId: targetComment.post_id,
+            commentId,
+            type: 'like',
+            title: 'Có lượt thích mới',
+            body: `${isAnonymous ? 'Ẩn danh' : displayName} đã thích bình luận của bạn.`,
+          });
+        } else if (!targetComment?.user_id && targetComment?.guest_session_id) {
+          // Chủ bình luận là khách
+          await createCommunityNotification({
+            recipientGuestSessionId: targetComment.guest_session_id,
+            actorId: currentUserId,
+            postId: targetComment.post_id,
+            commentId,
+            type: 'like',
+            title: 'Có lượt thích mới',
+            body: `${isAnonymous ? 'Ẩn danh' : displayName} đã thích bình luận của bạn.`,
+          });
+        }
+      }
     } catch (error) {
       console.error(error);
-      setSyncMessage('Chưa lưu được like bình luận.');
+      setSyncMessage('Đang trực tuyến');
     }
   }
 
   async function addComment() {
-    if (!requireLogin()) return;
     if (!newComment.trim() || !selectedPost) return;
 
+    const isGuest = !currentUserId;
+    const guestSessionId = isGuest ? getGuestSessionId() : undefined;
+    const expiresAt = isGuest ? guestExpiresAt() : undefined;
     const commentDisplayName = isAnonymous ? 'Ẩn danh' : displayName;
+
     const baseComment: CommunityComment = {
       id: crypto.randomUUID(),
       post_id: selectedPost.id,
       parent_id: replyTo,
-      user_id: currentUserId || 'local-user',
+      user_id: currentUserId || 'guest',
+      guest_session_id: guestSessionId ?? null,
+      expires_at: expiresAt ?? null,
       content: newComment.trim(),
       is_anonymous: isAnonymous,
       display_name: commentDisplayName,
@@ -1273,11 +2268,20 @@ export function CommunityScreen({
       created_at: new Date().toISOString(),
     };
 
-    const canPersist = Boolean(currentUserId && isUuid(selectedPost.id));
+    const canPersist = Boolean(!isGuest && isUuid(selectedPost.id));
     let savedComment = baseComment;
 
     if (canPersist) {
       try {
+        // Nếu là reply: notify chủ comment gốc; nếu là comment mới: notify chủ post
+        const parentComment = replyTo ? postComments.find((c) => c.id === replyTo) : null;
+        // Dùng isUuid() để loại bỏ giá trị rỗng '' (guest posts normalize user_id = '')
+        const rawRecipientUid = parentComment?.user_id ?? selectedPost.user_id ?? null;
+        const notifyRecipientUserId = (rawRecipientUid && isUuid(rawRecipientUid)) ? rawRecipientUid : null;
+        const notifyRecipientGuestId = !notifyRecipientUserId
+          ? (parentComment?.guest_session_id ?? selectedPost.guest_session_id ?? null)
+          : null;
+
         savedComment = await createCommunityComment({
           postId: selectedPost.id,
           parentId: replyTo,
@@ -1286,16 +2290,52 @@ export function CommunityScreen({
           isAnonymous,
           displayName: commentDisplayName,
           isAuthor: selectedPost.user_id === currentUserId,
-          recipientId: selectedPost.user_id,
+          recipientId: notifyRecipientUserId ?? undefined,
+          recipientGuestSessionId: notifyRecipientGuestId ?? undefined,
           postTitle: selectedPost.title,
         });
-        setSyncMessage('Đã lưu bình luận');
+        setSyncMessage('Đang trực tuyến');
       } catch (error) {
         console.error(error);
-        setSyncMessage('Chưa gửi được bình luận. Đang giữ tạm trên máy.');
+        setSyncMessage('Đang trực tuyến');
+      }
+    } else if (isGuest && isUuid(selectedPost.id)) {
+      // Guest: gửi lên Supabase với expires_at
+      try {
+        // Tìm recipient: chủ post hoặc chủ comment gốc (có thể là user hoặc guest)
+        const parentComment = replyTo ? postComments.find((c) => c.id === replyTo) : null;
+        // Dùng isUuid() để loại bỏ giá trị rỗng '' (guest posts normalize user_id = '')
+        const rawRecipientUid = parentComment?.user_id ?? selectedPost.user_id ?? null;
+        const notifyRecipientUserId = (rawRecipientUid && isUuid(rawRecipientUid)) ? rawRecipientUid : null;
+        const notifyRecipientGuestId = !notifyRecipientUserId
+          ? (parentComment?.guest_session_id ?? selectedPost.guest_session_id ?? null)
+          : null;
+
+        savedComment = await createCommunityComment({
+          postId: selectedPost.id,
+          parentId: replyTo,
+          userId: null,
+          guestSessionId,
+          expiresAt,
+          content: baseComment.content,
+          isAnonymous: true,
+          displayName: 'Khách',
+          isAuthor: false,
+          recipientId: notifyRecipientUserId ?? undefined,
+          recipientGuestSessionId: (notifyRecipientGuestId && notifyRecipientGuestId !== guestSessionId) ? notifyRecipientGuestId : undefined,
+          postTitle: selectedPost.title,
+        });
+        if (expiresAt) {
+          addGuestContent({ id: savedComment.id, type: 'comment', expiresAt, postId: selectedPost.id });
+        }
+        setSyncMessage('Đang trực tuyến');
+      } catch (error) {
+        console.error(error);
+        setSyncMessage('Đang trực tuyến');
+        return;
       }
     } else {
-      setSyncMessage('Bình luận đang lưu tạm. Đăng nhập để đồng bộ dữ liệu.');
+      setSyncMessage('Đang trực tuyến');
     }
 
     setComments((current) => [...current, savedComment]);
@@ -1305,16 +2345,29 @@ export function CommunityScreen({
   }
 
   async function addPost() {
-    if (!requireLogin()) return;
     if (!newTitle.trim() || !newContent.trim()) return;
 
-    const postDisplayName = isAnonymous ? 'Ẩn danh' : displayName;
+    const isGuest = !currentUserId;
+    const guestSessionId = isGuest ? getGuestSessionId() : undefined;
+    const expiresAt = isGuest ? guestExpiresAt() : undefined;
+    const postDisplayName = isAnonymous ? 'Ẩn danh' : (isGuest ? 'Khách' : displayName);
+
+    // Upload ảnh trước nếu có; khi đang sửa bài thì giữ lại URL cũ nếu không chọn ảnh mới
+    let imageUrls: string[] = editingPostId ? [...existingImageUrls] : [];
+    if (newImages.length > 0) {
+      setIsUploadingImages(true);
+      const uploaded = await uploadPostImages(newImages);
+      setIsUploadingImages(false);
+      imageUrls = [...imageUrls, ...uploaded];
+    }
+
     const draft = {
       category: newCategory,
       title: newTitle.trim(),
       content: newContent.trim(),
-      isAnonymous,
+      isAnonymous: isGuest ? true : isAnonymous,
       displayName: postDisplayName,
+      imageUrls,
     };
 
     if (editingPostId) {
@@ -1325,44 +2378,60 @@ export function CommunityScreen({
         content: draft.content,
         is_anonymous: draft.isAnonymous,
         display_name: draft.displayName,
+        image_urls: imageUrls,
       });
 
       if (currentUserId && isUuid(editingPostId)) {
         try {
           const saved = await updateCommunityPost(editingPostId, draft);
           updatePost(editingPostId, () => saved);
-          setSyncMessage('Đã cập nhật bài viết ');
+          setSyncMessage('Đang trực tuyến');
         } catch (error) {
           console.error(error);
           updatePost(editingPostId, nextPost);
-          setSyncMessage('Chưa cập nhật được , đang giữ bản sửa tạm.');
+          setSyncMessage('Đang trực tuyến');
         }
       } else {
         updatePost(editingPostId, nextPost);
-        setSyncMessage('Bản sửa đang lưu tạm trên máy');
+        setSyncMessage('Đang trực tuyến');
       }
-    } else if (currentUserId) {
+    } else if (!isGuest) {
+      // Người dùng đã đăng nhập
       try {
         const saved = await createCommunityPost({ ...draft, userId: currentUserId });
         setPosts((current) => [saved, ...current]);
         setIsLocalMode(false);
-        setSyncMessage('Bài viết đã được lưu');
+        setSyncMessage('Đang trực tuyến');
       } catch (error) {
         console.error(error);
         const localPost = makeLocalPost(draft);
         setPosts((current) => [localPost, ...current]);
         setIsLocalMode(true);
-        setSyncMessage('Chưa lưu được dữ liệu, bài viết đang lưu tạm trên máy.');
+        setSyncMessage('Đang trực tuyến');
       }
     } else {
-      const localPost = makeLocalPost(draft);
-      setPosts((current) => [localPost, ...current]);
-      setSyncMessage('Bài viết đang lưu tạm. Đăng nhập để đồng bộ Supabasedữ liệu.');
+      // Guest: gửi lên Supabase với expires_at 3h
+      try {
+        const saved = await createCommunityPost({
+          ...draft,
+          userId: null,
+          guestSessionId,
+          expiresAt,
+        });
+        addGuestContent({ id: saved.id, type: 'post', expiresAt: expiresAt! });
+        setPosts((current) => [saved, ...current]);
+        setSyncMessage('Đang trực tuyến');
+      } catch (error) {
+        console.error(error);
+        setSyncMessage('Đang trực tuyến');
+      }
     }
 
     setIsWritingPost(false);
     setIsWritingReview(false);
     setEditingPostId(null);
+    setNewImages([]);
+    setExistingImageUrls([]);
   }
 
   function makeLocalPost(draft: Omit<Parameters<typeof createCommunityPost>[0], 'userId'>): CommunityPost {
@@ -1389,6 +2458,8 @@ export function CommunityScreen({
     setNewContent(post.content);
     setNewCategory(post.category);
     setIsAnonymous(post.is_anonymous);
+    setExistingImageUrls(post.image_urls || []);
+    setNewImages([]);
     openComposer();
   }
 
@@ -1403,10 +2474,12 @@ export function CommunityScreen({
         : recentChats
           .filter(c => friendFilter === 'chats' || (friendFilter === 'unread' && c.unreadCount > 0))
           .map(c => {
-            const profile = companionsWithDistance.find(p => p.id === c.partnerId);
-            return profile ? { ...profile, lastMessage: c.lastMessage, unreadCount: c.unreadCount, isMe: c.isMe } : null;
-          })
-          .filter(Boolean) as (CompanionProfile & { lastMessage: string, unreadCount: number, isMe: boolean })[];
+            // Ưu tiên companions đã load từ store, fallback sang chatPartnerProfiles đã fetch riêng
+            const profile = companionsWithDistance.find(p => p.id === c.partnerId)
+              ?? chatPartnerProfiles.get(c.partnerId)
+              ?? { id: c.partnerId, displayName: 'Người dùng', school: '', region: '', focus: '', tags: [], availability: '', lastSeenAt: null };
+            return { ...profile, lastMessage: c.lastMessage, unreadCount: c.unreadCount, isMe: c.isMe };
+          }) as (CompanionProfile & { lastMessage: string, unreadCount: number, isMe: boolean })[];
       const emptyMessage = friendFilter === 'unread'
         ? ui.noUnread
         : friendFilter === 'discovery'
@@ -1488,9 +2561,11 @@ export function CommunityScreen({
                       event.stopPropagation();
                       setViewProfile(friend);
                     }}
-                    style={{ cursor: 'pointer' }}
+                    style={{ cursor: 'pointer', overflow: 'hidden', padding: 0 }}
                   >
-                    {avatarLetter}
+                    {friend.avatarUrl ? (
+                      <img src={friend.avatarUrl} alt={friend.displayName} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+                    ) : avatarLetter}
                   </div>
                   <div className="community-friend-main">
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -1531,9 +2606,9 @@ export function CommunityScreen({
                         <div className="community-nearby-meta">
                           <span className={`community-presence-dot ${friendOnline ? 'online' : ''}`} />
                           <span>{friendOnline ? ui.online : friend.lastSeenAt ? ui.activeAgo(timeAgo(friend.lastSeenAt)) : ui.noOnline}</span>
-                          {friendDistance != null ? <span>• {formatDistance(friendDistance)}</span> : null}
+                          {friendDistance != null ? <span>· {formatDistance(friendDistance)}</span> : null}
                         </div>
-                        <span>{friend.school} • {friend.region}</span>
+                        <span>{friend.school} · {friend.region}</span>
                         <p>{friend.focus}</p>
                         <div className="community-chip-row">
                           {friend.tags.slice(0, 3).map((tag) => <span key={tag}>{tag}</span>)}
@@ -1590,6 +2665,10 @@ export function CommunityScreen({
           displayName={displayName}
           isWriting={isWritingReview}
           setIsWriting={setIsWritingReview}
+          blockedUserIds={blockedUserIds}
+          onReport={reportTarget}
+          onBlockUser={blockTargetUser}
+          onLoginClick={() => setShowLoginPrompt(true)}
           lang={lang}
         />
       );
@@ -1616,7 +2695,7 @@ export function CommunityScreen({
             <p className="cm-trending-preview">{shortText(trendingPost.content, 110)}</p>
             <div className="cm-trending-footer">
               <span className="cm-time">
-                <strong>{trendingPost.display_name}</strong> • {timeAgo(trendingPost.created_at)}
+                <strong>{trendingPost.display_name}</strong> · {timeAgo(trendingPost.created_at)}
               </span>
               <div className="cm-post-stats">
                 <span><ThumbsUp size={14} /> {trendingPost.likes_count}</span>
@@ -1650,7 +2729,7 @@ export function CommunityScreen({
           {loading ? (
             <div className="cm-empty-state">
               <Loader2 size={26} className="cm-spin" />
-                <p>{ui.loadingPosts}</p>
+              <p>{ui.loadingPosts}</p>
             </div>
           ) : filteredPosts.length ? (
             filteredPosts.map((post) => (
@@ -1661,11 +2740,23 @@ export function CommunityScreen({
                 >
                   {ui.categories[post.category]}
                 </span>
-                <h3 className="cm-post-title">{post.title}</h3>
-                <p className="cm-post-preview">{shortText(post.content, 90)}</p>
+                <div className={`cm-post-card-inner ${post.image_urls && post.image_urls.length > 0 ? 'has-thumb' : ''}`}>
+                  <div className="cm-post-card-text">
+                    <h3 className="cm-post-title">{post.title}</h3>
+                    <p className="cm-post-preview">{shortText(post.content, post.image_urls && post.image_urls.length > 0 ? 60 : 90)}</p>
+                  </div>
+                  {post.image_urls && post.image_urls.length > 0 && (
+                    <div className="cm-post-card-thumb">
+                      <img src={post.image_urls[0]} alt="" />
+                      {post.image_urls.length > 1 && (
+                        <span className="cm-post-card-thumb-count">+{post.image_urls.length - 1}</span>
+                      )}
+                    </div>
+                  )}
+                </div>
                 <div className="cm-post-footer">
                   <span className="cm-time">
-                    <strong>{post.display_name}</strong> • {timeAgo(post.created_at)}
+                    <strong>{post.display_name}</strong> · {timeAgo(post.created_at)}
                   </span>
                   <div className="cm-post-stats">
                     <span><ThumbsUp size={14} /> {post.likes_count}</span>
@@ -1747,6 +2838,14 @@ export function CommunityScreen({
           )}
         </header>
 
+        {/* Guest expiry ticker — chỉ hiện khi khách đã đăng nội dung */}
+        {!session && (
+          <GuestExpiryTicker
+            lang={lang}
+            onLoginClick={() => setShowLoginPrompt(true)}
+          />
+        )}
+
         <div className="cm-sync-strip">
           <span className={isLocalMode ? 'local' : 'live'} />
           {syncMessage}
@@ -1774,7 +2873,7 @@ export function CommunityScreen({
           <button
             type="button"
             className="cm-write-bar-btn"
-            onClick={boardMode === 'reviews' ? () => { if (requireLogin()) setIsWritingReview(true); } : openComposer}
+            onClick={boardMode === 'reviews' ? () => setIsWritingReview(true) : openComposer}
           >
             <Plus size={18} />
             {boardMode === 'reviews' ? ui.writeReview : ui.writePost}
@@ -1786,6 +2885,8 @@ export function CommunityScreen({
 
         {isWritingPost ? renderComposer() : null}
         {showDeleteConfirm ? renderDeleteConfirm() : null}
+        {showBlockConfirm ? renderBlockConfirm() : null}
+        {showReportConfirm ? renderReportConfirm() : null}
         {viewProfile ? renderProfileModal() : null}
         {showLoginPrompt ? renderLoginPrompt() : null}
         {activeChatPartner && session && (
@@ -1807,19 +2908,24 @@ export function CommunityScreen({
   if (view === 'detail' && selectedPost) {
     const category = CATEGORIES[selectedPost.category];
 
+    // Dùng guest_session_id (nếu có) hoặc user_id để phân biệt người dùng ẩn danh
+    // Tránh trường hợp nhiều guest khác nhau đều có user_id=null → cùng tên
     const anonMap = new Map<string, string>();
     let anonCounter = 1;
     postComments.forEach((c) => {
-      if (c.user_id === selectedPost.user_id) {
-        anonMap.set(c.user_id, 'Ẩn danh (Tác giả)');
-      } else if (!anonMap.has(c.user_id)) {
-        anonMap.set(c.user_id, `Ẩn danh ${anonCounter++}`);
+      const key = c.guest_session_id ?? c.user_id ?? `unknown-${c.id}`;
+      const postAuthorKey = selectedPost.guest_session_id ?? selectedPost.user_id ?? '';
+      if (key === postAuthorKey && postAuthorKey !== '') {
+        anonMap.set(key, 'Ẩn danh (Tác giả)');
+      } else if (!anonMap.has(key)) {
+        anonMap.set(key, `Ẩn danh ${anonCounter++}`);
       }
     });
 
     const getDisplayName = (c: CommunityComment) => {
       if (!c.is_anonymous) return c.display_name;
-      return anonMap.get(c.user_id) || 'Ẩn danh';
+      const key = c.guest_session_id ?? c.user_id ?? `unknown-${c.id}`;
+      return anonMap.get(key) || 'Ẩn danh';
     };
 
     return (
@@ -1845,16 +2951,54 @@ export function CommunityScreen({
                 </button>
               </>
             ) : (
-              <button type="button" className="cm-icon-btn" aria-label="Tùy chọn">
-                <MoreHorizontal size={22} />
-              </button>
+              <>
+                <button
+                  type="button"
+                  className={`cm-icon-btn${reportedIds.has(selectedPost.id) ? ' cm-reported-btn' : ''}`}
+                  onClick={() => !reportedIds.has(selectedPost.id) && void reportTarget('post', selectedPost.id, selectedPost.user_id)}
+                  aria-label={isKo ? '신고' : 'Báo cáo'}
+                  title={reportedIds.has(selectedPost.id) ? (isKo ? '이미 신고됨' : 'Đã báo cáo') : (isKo ? '신고' : 'Báo cáo vi phạm')}
+                >
+                  <ShieldCheck size={19} />
+                </button>
+                {selectedPost.user_id ? (
+                  <button
+                    type="button"
+                    className="cm-icon-btn"
+                    onClick={() => setShowBlockConfirm(selectedPost.user_id)}
+                    aria-label={isKo ? '차단' : 'Chặn người dùng'}
+                    title={isKo ? '이 사용자 차단' : 'Chặn người dùng này'}
+                  >
+                    <UserMinus size={19} />
+                  </button>
+                ) : null}
+                {/* Admin: xóa bài vi phạm — icon X nhỏ đỏ cạnh nút báo cáo */}
+                {isAdmin && selectedPost.user_id !== currentUserId && (
+                  <button
+                    type="button"
+                    className="cm-icon-btn cm-admin-delete-icon"
+                    onClick={() => setShowDeleteConfirm(selectedPost.id)}
+                    aria-label="Admin: Xóa bài vi phạm"
+                    title="Admin: Xóa bài vi phạm"
+                  >
+                    <X size={20} />
+                  </button>
+                )}
+              </>
             )}
           </div>
         </header>
 
         <div className="cm-detail-body">
           <div className="cm-detail-meta">
-            <strong>
+            <strong
+              className={selectedPost.user_id && !selectedPost.is_anonymous ? 'cm-clickable-author' : ''}
+              onClick={() => {
+                if (selectedPost.user_id && !selectedPost.is_anonymous) {
+                  void openUserProfile(selectedPost.user_id);
+                }
+              }}
+            >
               <User size={14} /> {selectedPost.display_name}
             </strong>
             <span>{new Date(selectedPost.created_at).toLocaleDateString('vi-VN')}</span>
@@ -1869,10 +3013,28 @@ export function CommunityScreen({
             ))}
           </div>
 
+          {/* Ảnh đính kèm bài viết */}
+          {selectedPost.image_urls && selectedPost.image_urls.length > 0 && (
+            <div className={`cm-detail-imgs cm-detail-imgs--${selectedPost.image_urls.length}`}>
+              {selectedPost.image_urls.map((url, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  className="cm-detail-img-link"
+                  onClick={() => setLightbox({ urls: selectedPost.image_urls!, index: i })}
+                  aria-label={`Xem ảnh ${i + 1}`}
+                >
+                  <img src={url} alt={`Ảnh ${i + 1}`} className="cm-detail-img" />
+                </button>
+              ))}
+            </div>
+          )}
+
           <div className="cm-action-bar">
             <button
               type="button"
               className={`cm-action-btn ${likedPosts.has(selectedPost.id) ? 'active' : ''}`}
+              disabled={postReactionBusy.has(selectedPost.id)}
               onClick={() => void handlePostReaction(selectedPost.id, 'like')}
             >
               <ThumbsUp size={16} /> {selectedPost.likes_count}
@@ -1880,6 +3042,7 @@ export function CommunityScreen({
             <button
               type="button"
               className={`cm-action-btn ${dislikedPosts.has(selectedPost.id) ? 'active dislike' : ''}`}
+              disabled={postReactionBusy.has(selectedPost.id)}
               onClick={() => void handlePostReaction(selectedPost.id, 'dislike')}
             >
               <ThumbsDown size={16} /> {selectedPost.dislikes_count}
@@ -1890,6 +3053,13 @@ export function CommunityScreen({
               onClick={() => void handleBookmark(selectedPost.id)}
             >
               <Bookmark size={16} /> {isKo ? '저장' : 'Lưu'}
+            </button>
+            <button
+              type="button"
+              className="cm-action-btn share"
+              onClick={() => void handleSharePost(selectedPost)}
+            >
+              <Share2 size={16} /> {isKo ? '공유' : 'Chia sẻ'}
             </button>
           </div>
 
@@ -1904,7 +3074,8 @@ export function CommunityScreen({
               rootComments.map((comment) => {
                 const replies = getReplies(comment.id);
                 return (
-                  <div key={comment.id} className="cm-comment-thread">
+                  <div key={comment.id} className="cm-comment-branch">
+                    {/* Root comment */}
                     <CommentItem
                       comment={{ ...comment, display_name: getDisplayName(comment) }}
                       liked={likedComments.has(comment.id)}
@@ -1913,24 +3084,36 @@ export function CommunityScreen({
                         setReplyTo(comment.id);
                         commentInputRef.current?.focus();
                       }}
+                      onViewProfile={
+                        (!comment.is_anonymous && comment.user_id && isUuid(comment.user_id))
+                          ? () => void openUserProfile(comment.user_id)
+                          : undefined
+                      }
                     />
 
-                    {replies.map((reply) => (
-                      <div key={reply.id} className="cm-comment cm-reply">
-                        <div className="cm-reply-indicator">↳</div>
-                        <div className="cm-reply-body">
-                          <CommentItem
-                            comment={{ ...reply, display_name: getDisplayName(reply) }}
-                            liked={likedComments.has(reply.id)}
-                            onLike={() => void handleCommentLike(reply.id)}
-                            onReply={() => {
-                              setReplyTo(comment.id);
-                              commentInputRef.current?.focus();
-                            }}
-                          />
-                        </div>
+                    {/* Reply thread – vertical track + L-shape elbows */}
+                    {replies.length > 0 && (
+                      <div className="cm-reply-thread-list">
+                        {replies.map((reply) => (
+                          <div key={reply.id} className="cm-reply-thread-item">
+                            <CommentItem
+                              comment={{ ...reply, display_name: getDisplayName(reply) }}
+                              liked={likedComments.has(reply.id)}
+                              onLike={() => void handleCommentLike(reply.id)}
+                              onReply={() => {
+                                setReplyTo(comment.id);
+                                commentInputRef.current?.focus();
+                              }}
+                              onViewProfile={
+                                (!reply.is_anonymous && reply.user_id && isUuid(reply.user_id))
+                                  ? () => void openUserProfile(reply.user_id)
+                                  : undefined
+                              }
+                            />
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    )}
                   </div>
                 );
               })
@@ -1979,7 +3162,11 @@ export function CommunityScreen({
 
         {isWritingPost ? renderComposer() : null}
         {showDeleteConfirm ? renderDeleteConfirm() : null}
+        {showBlockConfirm ? renderBlockConfirm() : null}
+        {showReportConfirm ? renderReportConfirm() : null}
+        {viewProfile ? renderProfileModal() : null}
         {showLoginPrompt ? renderLoginPrompt() : null}
+        {lightbox ? renderLightbox() : null}
         {activeChatPartner && session && (
           <ChatView
             session={session}
@@ -2010,9 +3197,9 @@ export function CommunityScreen({
             type="button"
             className="cm-write-fs-submit"
             onClick={() => void addPost()}
-            disabled={!newTitle.trim() || !newContent.trim()}
+            disabled={!newTitle.trim() || !newContent.trim() || isUploadingImages}
           >
-            {isKo ? '등록' : 'Đăng'}
+            {isUploadingImages ? <Loader2 size={16} className="cm-spin" /> : (isKo ? '등록' : 'Đăng')}
           </button>
         </header>
 
@@ -2049,21 +3236,188 @@ export function CommunityScreen({
             maxLength={2000}
           />
 
+          {/* Image preview strip */}
+          {newImages.length > 0 && (
+            <div className="cm-write-fs-img-strip">
+              {newImages.map((file, i) => {
+                const url = URL.createObjectURL(file);
+                return (
+                  <div key={i} className="cm-write-fs-img-thumb">
+                    <img src={url} alt="" />
+                    <button
+                      type="button"
+                      className="cm-write-fs-img-remove"
+                      onClick={() => removeImage(i)}
+                      aria-label="Xóa ảnh"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           <div className="cm-write-fs-footer">
+            <div className="cm-write-fs-footer-left">
+              {/* Nút chọn ảnh — ẩn nếu đã đủ 2 ảnh */}
+              {newImages.length < 2 && (
+                <button
+                  type="button"
+                  className="cm-write-fs-img-btn"
+                  onClick={() => fileInputRef.current?.click()}
+                  title={isKo ? '사진 첨부' : 'Đính kèm ảnh'}
+                >
+                  <ImagePlus size={18} />
+                  <span>{newImages.length === 0 ? (isKo ? '사진' : 'Ảnh') : `1/2`}</span>
+                </button>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                style={{ display: 'none' }}
+                onChange={handleImageChange}
+              />
+
+              <button
+                type="button"
+                className={`cm-write-fs-anon-toggle ${isAnonymous ? 'active' : ''}`}
+                onClick={() => setIsAnonymous((value) => !value)}
+              >
+                <span className="cm-write-fs-switch" />
+                <span className="cm-write-fs-anon-label">
+                  <span className="cm-write-fs-anon-title">
+                    {isAnonymous ? <><ShieldCheck size={14} /> {isKo ? '익명' : 'Ẩn danh'}</> : <><User size={14} /> {displayName}</>}
+                  </span>
+                </span>
+              </button>
+            </div>
+            <span className="cm-write-fs-count">{newContent.length}/2000</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function renderLightbox() {
+    if (!lightbox) return null;
+    const { urls, index } = lightbox;
+    const hasPrev = index > 0;
+    const hasNext = index < urls.length - 1;
+    const navBtnStyle: React.CSSProperties = {
+      position: 'absolute', top: '50%', transform: 'translateY(-50%)',
+      background: 'rgba(255,255,255,0.15)', border: 'none',
+      borderRadius: '50%', width: 44, height: 44,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      color: '#fff', cursor: 'pointer', zIndex: 1,
+      backdropFilter: 'blur(4px)',
+      transition: 'background 0.15s',
+    };
+    return (
+      <div
+        style={{
+          position: 'fixed', inset: 0, zIndex: 9500,
+          background: 'rgba(0,0,0,0.92)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'zoom-out',
+        }}
+        onClick={() => setLightbox(null)}
+        onTouchStart={(e) => { lightboxTouchStartX.current = e.touches[0].clientX; }}
+        onTouchEnd={(e) => {
+          if (lightboxTouchStartX.current === null) return;
+          const dx = e.changedTouches[0].clientX - lightboxTouchStartX.current;
+          lightboxTouchStartX.current = null;
+          if (dx < -50 && hasNext) setLightbox({ urls, index: index + 1 });
+          if (dx >  50 && hasPrev) setLightbox({ urls, index: index - 1 });
+        }}
+      >
+        {/* Nút đóng */}
+        <button
+          type="button"
+          aria-label="Đóng"
+          style={{ position: 'absolute', top: 16, right: 16, background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: '50%', width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', cursor: 'pointer' }}
+          onClick={() => setLightbox(null)}
+        >
+          <X size={20} />
+        </button>
+
+        {/* Mũi tên trái (chỉ hiện khi > 1 ảnh) */}
+        {urls.length > 1 && (
+          <button
+            type="button"
+            aria-label="Ảnh trước"
+            style={{ ...navBtnStyle, left: 12, opacity: hasPrev ? 1 : 0.25, pointerEvents: hasPrev ? 'auto' : 'none' }}
+            onClick={(e) => { e.stopPropagation(); setLightbox({ urls, index: index - 1 }); }}
+          >
+            <ChevronLeft size={24} />
+          </button>
+        )}
+
+        {/* Ảnh hiện tại */}
+        <img
+          key={urls[index]}
+          src={urls[index]}
+          alt={`Ảnh ${index + 1}`}
+          style={{ maxWidth: '90vw', maxHeight: '85vh', objectFit: 'contain', borderRadius: 8, boxShadow: '0 8px 48px rgba(0,0,0,0.6)', userSelect: 'none' }}
+          onClick={(e) => e.stopPropagation()}
+          draggable={false}
+        />
+
+        {/* Mũi tên phải */}
+        {urls.length > 1 && (
+          <button
+            type="button"
+            aria-label="Ảnh tiếp"
+            style={{ ...navBtnStyle, right: 12, opacity: hasNext ? 1 : 0.25, pointerEvents: hasNext ? 'auto' : 'none' }}
+            onClick={(e) => { e.stopPropagation(); setLightbox({ urls, index: index + 1 }); }}
+          >
+            <ChevronRight size={24} />
+          </button>
+        )}
+
+        {/* Dots chỉ số ảnh */}
+        {urls.length > 1 && (
+          <div
+            style={{ position: 'absolute', bottom: 20, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 8 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {urls.map((_, i) => (
+              <button
+                key={i}
+                type="button"
+                aria-label={`Ảnh ${i + 1}`}
+                onClick={(e) => { e.stopPropagation(); setLightbox({ urls, index: i }); }}
+                style={{ width: i === index ? 20 : 8, height: 8, borderRadius: 4, border: 'none', background: i === index ? '#fff' : 'rgba(255,255,255,0.4)', padding: 0, cursor: 'pointer', transition: 'all 0.2s' }}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function renderBlockConfirm() {
+    return (
+      <div className="custom-confirm-overlay" onClick={() => setShowBlockConfirm(null)}>
+        <div className="custom-confirm-card" onClick={(e) => e.stopPropagation()}>
+          <h3>{isKo ? '사용자 차단' : 'Chặn người dùng'}</h3>
+          <p>{isKo ? '이 사용자의 게시글과 댓글이 더 이상 표시되지 않습니다.' : 'Bài viết và bình luận của người này sẽ bị ẩn khỏi trang của bạn. Bạn có chắc không?'}</p>
+          <div className="custom-confirm-actions">
+            <button type="button" className="custom-confirm-cancel" onClick={() => setShowBlockConfirm(null)}>
+              {isKo ? '취소' : 'Huỷ'}
+            </button>
             <button
               type="button"
-              className={`cm-write-fs-anon-toggle ${isAnonymous ? 'active' : ''}`}
-              onClick={() => setIsAnonymous((value) => !value)}
+              className="custom-confirm-ok"
+              onClick={() => {
+                void blockTargetUser(showBlockConfirm);
+                setShowBlockConfirm(null);
+              }}
             >
-              <span className="cm-write-fs-switch" />
-              <span className="cm-write-fs-anon-label">
-                <span className="cm-write-fs-anon-title">
-                  {isAnonymous ? <><ShieldCheck size={14} /> {isKo ? '익명으로 등록' : 'Đăng ẩn danh'}</> : <><User size={14} /> {displayName}</>}
-                </span>
-                {isAnonymous ? <span className="cm-write-fs-anon-subtitle">{isKo ? '내 정보가 공개되지 않습니다' : 'Danh tính của bạn được giữ kín'}</span> : null}
-              </span>
+              {isKo ? '차단' : 'Chặn'}
             </button>
-            <span className="cm-write-fs-count">{newContent.length}/2000</span>
           </div>
         </div>
       </div>
@@ -2085,28 +3439,79 @@ export function CommunityScreen({
     );
   }
 
+  function renderReportConfirm() {
+    if (!showReportConfirm) return null;
+    const typeLabel: Record<string, string> = {
+      post: 'bài viết',
+      comment: 'bình luận',
+      review: 'đánh giá',
+      profile: 'người dùng',
+      chat: 'tin nhắn',
+    };
+    const label = typeLabel[showReportConfirm.type] ?? 'nội dung';
+    return (
+      <div className="custom-confirm-overlay" onClick={() => setShowReportConfirm(null)}>
+        <div className="custom-confirm-card" onClick={(event) => event.stopPropagation()}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <ShieldCheck size={22} color="#f59e0b" />
+            <h3 style={{ margin: 0 }}>{isKo ? '신고 확인' : 'Xác nhận báo cáo'}</h3>
+          </div>
+          <p style={{ color: '#475569', fontSize: 14, lineHeight: 1.6, margin: '0 0 4px' }}>
+            {isKo
+              ? '이 콘텐츠를 신고하시겠습니까? 검토 후 조치하겠습니다.'
+              : `Bạn có muốn báo cáo ${label} này không? Chúng tôi sẽ xem xét và xử lý sớm nhất có thể.`}
+          </p>
+          <p style={{ color: '#94a3b8', fontSize: 12, margin: '0 0 16px' }}>
+            {isKo ? '허위 신고는 제재될 수 있습니다.' : 'Báo cáo sai sự thật có thể bị hạn chế tài khoản.'}
+          </p>
+          <div className="custom-confirm-actions">
+            <button type="button" className="confirm-btn-cancel" onClick={() => setShowReportConfirm(null)}>
+              {isKo ? '취소' : 'Hủy'}
+            </button>
+            <button
+              type="button"
+              className="confirm-btn-delete"
+              style={{ background: '#f59e0b', borderColor: '#f59e0b' }}
+              onClick={() => void handleConfirmReport()}
+            >
+              {isKo ? '신고하기' : 'Báo cáo'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   function renderProfileModal() {
     if (!viewProfile) return null;
     const nameParts = viewProfile.displayName.trim().split(' ');
     const avatarLetter = (nameParts[nameParts.length - 1] || 'U').slice(0, 1).toUpperCase();
 
     return (
-      <div className="custom-confirm-overlay" onClick={() => setViewProfile(null)}>
+      <div className="custom-confirm-overlay" style={{ zIndex: 9000 }} onClick={() => setViewProfile(null)}>
         <div className="custom-confirm-card" onClick={e => e.stopPropagation()} style={{ width: '90%', maxWidth: '400px', padding: '24px', textAlign: 'center', position: 'relative' }}>
           <button type="button" onClick={() => setViewProfile(null)} style={{ position: 'absolute', top: 16, right: 16, background: 'none', border: 'none', cursor: 'pointer' }}>
             <X size={20} color="#64748b" />
           </button>
 
-          <div style={{ width: 80, height: 80, borderRadius: 40, background: 'linear-gradient(135deg, #2752ff, #2146d9)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, fontWeight: 700, margin: '0 auto 16px' }}>
-            {avatarLetter}
-          </div>
+          {viewProfile.avatarUrl ? (
+            <img
+              src={viewProfile.avatarUrl}
+              alt={viewProfile.displayName}
+              style={{ width: 80, height: 80, borderRadius: 40, objectFit: 'cover', margin: '0 auto 16px', display: 'block', border: '3px solid rgba(39,82,255,0.15)' }}
+            />
+          ) : (
+            <div style={{ width: 80, height: 80, borderRadius: 40, background: 'linear-gradient(135deg, #2752ff, #2146d9)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, fontWeight: 700, margin: '0 auto 16px' }}>
+              {avatarLetter}
+            </div>
+          )}
 
           <h2 style={{ margin: '0 0 8px', color: '#0f172a', fontSize: 22 }}>
             {viewProfile.displayName}
           </h2>
 
           <p style={{ margin: '0 0 16px', color: '#64748b', fontSize: 14 }}>
-            {viewProfile.school} • {viewProfile.region}
+            {viewProfile.school} · {viewProfile.region}
           </p>
 
           <p style={{ margin: '0 0 20px', color: '#334155', fontSize: 15, lineHeight: 1.5 }}>
@@ -2161,6 +3566,23 @@ export function CommunityScreen({
               )}
             </button>
           )}
+          <div className="cm-profile-safety-actions">
+            <button
+              type="button"
+              onClick={() => void reportTarget('profile', viewProfile.id, viewProfile.id)}
+            >
+              {isKo ? '신고' : 'Báo cáo'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void blockTargetUser(viewProfile.id);
+                setViewProfile(null);
+              }}
+            >
+              {isKo ? '차단' : 'Chặn'}
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -2213,12 +3635,20 @@ function ReviewBoard({
   displayName,
   isWriting,
   setIsWriting,
+  blockedUserIds,
+  onReport,
+  onBlockUser,
+  onLoginClick,
   lang = 'vi'
 }: {
   session: Session | null;
   displayName: string;
   isWriting: boolean;
   setIsWriting: (v: boolean) => void;
+  blockedUserIds: Set<string>;
+  onReport: (targetType: 'post' | 'comment' | 'review' | 'profile' | 'chat', targetId: string | null, targetUserId?: string | null) => void | Promise<void>;
+  onBlockUser: (targetUserId?: string | null) => void | Promise<void>;
+  onLoginClick?: () => void;
   lang?: AppLang;
 }) {
   const isKo = lang === 'ko';
@@ -2244,11 +3674,16 @@ function ReviewBoard({
     deleteConfirm: '이 리뷰를 삭제할까요?',
     deleteSuccess: '리뷰를 삭제했습니다.',
     deleteError: '리뷰를 삭제하지 못했습니다. Supabase 권한 패치를 실행해주세요.',
+    report: '신고',
+    block: '차단',
+    sortTrusted: '신뢰순',
+    sortNewest: '최신순',
+    sortRating: '별점순',
   } : {
     categories: {
       work: 'Việc làm',
       housing: 'Nhà ở',
-      food: 'Ẩm thực',
+      food: 'Quán ăn',
       service: 'Dịch vụ',
       other: 'Khác',
     } as Record<Exclude<ReviewCategory, 'all'>, string>,
@@ -2266,12 +3701,20 @@ function ReviewBoard({
     deleteConfirm: 'Xoá review này nhé?',
     deleteSuccess: 'Đã xoá review.',
     deleteError: 'Chưa xoá được review. Hãy chạy patch quyền Supabase.',
+    report: 'Báo cáo',
+    block: 'Chặn',
+    sortTrusted: 'Uy tín cao',
+    sortNewest: 'Mới nhất',
+    sortRating: 'Điểm vote nhiều',
   };
   const [reviews, setReviews] = useState<PlaceReview[]>([]);
   const [reviewVotes, setReviewVotes] = useState<Record<string, ReviewVoteType>>({});
   const [reviewNotice, setReviewNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [catFilter, setCatFilter] = useState<ReviewCategory>('all');
+  const [sortMode, setSortMode] = useState<ReviewSortMode>('trusted');
+  const [activeSafetyReviewId, setActiveSafetyReviewId] = useState<string | null>(null);
+  const openKakaoPostcode = useKakaoPostcodePopup(KAKAO_POSTCODE_SCRIPT_URL);
   const currentUserId = session?.user.id ?? null;
   const isReviewAdmin = REVIEW_ADMIN_EMAILS.has((session?.user.email ?? '').toLowerCase());
   const [deletingReviewId, setDeletingReviewId] = useState<string | null>(null);
@@ -2295,9 +3738,11 @@ function ReviewBoard({
 
   // Write form state
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<NominatimResult[]>([]);
   const [searching, setSearching] = useState(false);
-  const [selectedPlace, setSelectedPlace] = useState<{ name: string; address: string; lat: number; lng: number } | null>(null);
+  const [selectedPlace, setSelectedPlace] = useState<{ name: string; address: string; addressEn?: string; lat: number; lng: number } | null>(null);
+  const [addressSuggestions, setAddressSuggestions] = useState<Array<{ title: string; formattedAddress: string; addressEn?: string; lat: string; lon: string }>>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [fetchingSuggestions, setFetchingSuggestions] = useState(false);
   const [writeCat, setWriteCat] = useState<Exclude<ReviewCategory, 'all'>>('food');
   const [writeRating, setWriteRating] = useState(0);
   const [writeTitle, setWriteTitle] = useState('');
@@ -2307,7 +3752,43 @@ function ReviewBoard({
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [isAnon, setIsAnon] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+
+  // Address autocomplete: debounced search as user types
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (q.length < 2) {
+      setAddressSuggestions([]);
+      setShowSuggestions(false);
+      setFetchingSuggestions(false);
+      return;
+    }
+    setFetchingSuggestions(true);
+    const timer = setTimeout(() => {
+      searchNaverAddressResults(q).then((results) => {
+        setAddressSuggestions(results);
+        setShowSuggestions(results.length > 0);
+        setFetchingSuggestions(false);
+      }).catch(() => {
+        setAddressSuggestions([]);
+        setShowSuggestions(false);
+        setFetchingSuggestions(false);
+      });
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const handleSelectSuggestion = useCallback((s: { title: string; formattedAddress: string; addressEn?: string; lat: string; lon: string }) => {
+    setSelectedPlace({
+      name: s.formattedAddress,   // Korean compact address (stored as place_name)
+      address: s.formattedAddress, // Korean compact address (stored as place_address)
+      addressEn: s.addressEn || '', // English address (display only)
+      lat: Number(s.lat),
+      lng: Number(s.lon),
+    });
+    setSearchQuery('');
+    setAddressSuggestions([]);
+    setShowSuggestions(false);
+  }, []);
 
   // Image compression utility
   const compressImage = (file: File): Promise<Blob> => {
@@ -2353,7 +3834,7 @@ function ReviewBoard({
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
-    
+
     // Limit to 3 images
     const totalCount = selectedImages.length + files.length;
     if (totalCount > 3) {
@@ -2394,13 +3875,38 @@ function ReviewBoard({
   // Fetch reviews
   useEffect(() => {
     if (!supabase) { setLoading(false); return; }
-    supabase.from('place_reviews')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        if (data) setReviews(data as PlaceReview[]);
-        setLoading(false);
+    let cancelled = false;
+    setLoading(true);
+
+    withTimeout(
+      supabase.from('place_reviews')
+        .select('id,user_id,display_name,is_anonymous,place_name,place_address,place_lat,place_lng,category,title,content,rating,helpful_count,upvotes_count,downvotes_count,images,created_at')
+        .order('created_at', { ascending: false })
+        .limit(120) as unknown as Promise<{ data: PlaceReview[] | null; error: unknown }>,
+      COMMUNITY_LOAD_TIMEOUT_MS,
+      'Place reviews load timed out',
+    )
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          console.warn('Unable to load place reviews:', error);
+          setReviews([]);
+          return;
+        }
+        setReviews(data ?? []);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.warn('Unable to load place reviews:', error);
+        setReviews([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -2491,40 +3997,70 @@ function ReviewBoard({
     };
   }, [currentUserId]);
 
-  // Nominatim search with debounce
-  const searchPlaces = useCallback((q: string) => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (!q.trim()) { setSearchResults([]); setSearching(false); return; }
-    setSearching(true);
-    debounceRef.current = setTimeout(async () => {
-      try {
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&countrycodes=kr&limit=5&addressdetails=1`,
-          { headers: { 'Accept-Language': 'ko,vi,en' } }
-        );
-        const data: NominatimResult[] = await res.json();
-        setSearchResults(data);
-      } catch { setSearchResults([]); }
-      setSearching(false);
-    }, 500);
+  const geocodeKoreanAddress = useCallback(async (address: string) => {
+    try {
+      const maps = await loadNaverMapsSdk();
+      return await new Promise<{ lat: number; lng: number } | null>((resolve) => {
+        if (!maps?.Service?.geocode) {
+          resolve(null);
+          return;
+        }
+
+        maps.Service.geocode({ query: address }, (status: any, response: any) => {
+          if (status !== maps.Service.Status.OK) {
+            resolve(null);
+            return;
+          }
+
+          const result = response?.v2?.addresses?.[0];
+          const lat = Number(result?.y);
+          const lng = Number(result?.x);
+          resolve(Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null);
+        });
+      });
+    } catch (error) {
+      console.warn('Unable to geocode Kakao postcode address:', error);
+      return null;
+    }
   }, []);
 
-  const handleSearchChange = (val: string) => {
-    setSearchQuery(val);
-    searchPlaces(val);
-  };
+  const handleAddressComplete = useCallback(async (data: KakaoPostcodeAddress) => {
+    const address = buildKakaoAddress(data);
+    setSearching(true);
+    setSearchQuery(address.fullAddress);
 
-  const selectPlace = (result: NominatimResult) => {
-    const parts = result.display_name.split(',');
+    const coords = await geocodeKoreanAddress(address.fullAddress);
+    setSearching(false);
+
+    if (!coords) {
+      showReviewNotice(isKo
+        ? '주소 좌표를 찾지 못했습니다. 다른 주소로 다시 선택해주세요.'
+        : 'Chưa lấy được tọa độ địa chỉ. Bạn chọn lại địa chỉ khác nhé.');
+      return;
+    }
+
     setSelectedPlace({
-      name: parts[0]?.trim() || result.display_name,
-      address: result.display_name,
-      lat: parseFloat(result.lat),
-      lng: parseFloat(result.lon),
+      name: address.placeName,
+      address: address.displayAddress,
+      lat: coords.lat,
+      lng: coords.lng,
     });
     setSearchQuery('');
-    setSearchResults([]);
-  };
+  }, [geocodeKoreanAddress, isKo, showReviewNotice]);
+
+  const openAddressSearch = useCallback(() => {
+    void openKakaoPostcode({
+      defaultQuery: searchQuery,
+      popupTitle: isKo ? '주소 검색' : 'Tìm kiếm địa chỉ',
+      onComplete: (data) => void handleAddressComplete(data),
+      onError: (error) => {
+        console.error('Kakao postcode failed:', error);
+        showReviewNotice(isKo
+          ? '주소 검색창을 열지 못했습니다. 잠시 후 다시 시도해주세요.'
+          : 'Chưa mở được cửa sổ tìm địa chỉ. Bạn thử lại sau nhé.');
+      },
+    });
+  }, [handleAddressComplete, isKo, openKakaoPostcode, searchQuery, showReviewNotice]);
 
   const handleReviewReaction = async (reviewId: string, type: 'up' | 'down') => {
     if (!session || !supabase) {
@@ -2613,49 +4149,70 @@ function ReviewBoard({
   };
 
   const handleSubmitReview = async () => {
-    if (!supabase || !session || !selectedPlace || !writeTitle.trim() || !writeContent.trim() || writeRating === 0) return;
+    if (!supabase || !selectedPlace || !writeTitle.trim() || !writeContent.trim() || writeRating === 0) return;
+
+    const isGuest = !session;
+
+    // Guest: không upload ảnh được (cần auth cho Storage), show notice
+    if (isGuest && selectedImages.length > 0) {
+      showReviewNotice(isKo
+        ? '로그인 없이는 이미지를 업로드할 수 없습니다.'
+        : 'Khách chưa đăng nhập không thể tải ảnh lên. Đăng nhập để thêm ảnh!');
+      return;
+    }
+
     setSubmitting(true);
-    
     const imageUrls: string[] = [];
 
-    // 1. Upload images to Storage
-    for (const file of selectedImages) {
-      const safeName = file.name.replace(/[^\w.-]+/g, '-').toLowerCase();
-      const fileName = `${session.user.id}/${crypto.randomUUID()}-${safeName || 'review.jpg'}`;
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('review-images')
-        .upload(fileName, file);
-
-      if (uploadError) {
-        console.error('Review image upload failed:', uploadError);
-        setSubmitting(false);
-        showReviewNotice(reviewUi.imageUploadError);
-        return;
-      }
-
-      if (!uploadError && uploadData) {
-        const { data: { publicUrl } } = supabase.storage
+    // 1. Upload images to Storage (chỉ khi đã đăng nhập)
+    if (!isGuest) {
+      for (const file of selectedImages) {
+        const safeName = file.name.replace(/[^\w.-]+/g, '-').toLowerCase();
+        const fileName = `${session!.user.id}/${crypto.randomUUID()}-${safeName || 'review.jpg'}`;
+        const { data: uploadData, error: uploadError } = await supabase.storage
           .from('review-images')
-          .getPublicUrl(fileName);
-        imageUrls.push(publicUrl);
+          .upload(fileName, file);
+
+        if (uploadError) {
+          console.error('Review image upload failed:', uploadError);
+          setSubmitting(false);
+          showReviewNotice(reviewUi.imageUploadError);
+          return;
+        }
+
+        if (!uploadError && uploadData) {
+          const { data: { publicUrl } } = supabase.storage
+            .from('review-images')
+            .getPublicUrl(fileName);
+          imageUrls.push(publicUrl);
+        }
       }
     }
 
     // 2. Insert to DB
-    const { data, error } = await supabase.from('place_reviews').insert({
-      user_id: session.user.id,
-      display_name: isAnon ? 'Ẩn danh' : displayName,
-      is_anonymous: isAnon,
-      place_name: selectedPlace.name,
+    const guestSessionId = isGuest ? getGuestSessionId() : undefined;
+    const expiresAt = isGuest ? guestExpiresAt(6) : undefined; // 6h cho review
+
+    // Chỉ include guest_session_id / expires_at khi thực sự có giá trị
+    // → tránh lỗi "column does not exist" khi migration chưa được chạy
+    const insertPayload: Record<string, unknown> = {
+      user_id:      isGuest ? null : session!.user.id,
+      display_name: isGuest ? 'Khách' : (isAnon ? 'Ẩn danh' : displayName),
+      is_anonymous: isGuest ? true : isAnon,
+      place_name:   selectedPlace.name,
       place_address: selectedPlace.address,
-      place_lat: selectedPlace.lat,
-      place_lng: selectedPlace.lng,
-      category: writeCat,
-      title: writeTitle.trim(),
-      content: writeContent.trim(),
-      rating: writeRating,
-      images: imageUrls,
-    }).select().single();
+      place_lat:    selectedPlace.lat,
+      place_lng:    selectedPlace.lng,
+      category:     writeCat,
+      title:        writeTitle.trim(),
+      content:      writeContent.trim(),
+      rating:       writeRating,
+      images:       imageUrls,
+    };
+    if (guestSessionId) insertPayload.guest_session_id = guestSessionId;
+    if (expiresAt)      insertPayload.expires_at = expiresAt;
+
+    const { data, error } = await supabase.from('place_reviews').insert(insertPayload).select().single();
 
     setSubmitting(false);
     if (!error && data) {
@@ -2665,10 +4222,20 @@ function ReviewBoard({
         ...savedReview,
         images: savedImages.length > 0 ? savedReview.images : imageUrls,
       }, ...prev]);
+      if (isGuest && expiresAt) {
+        addGuestContent({ id: savedReview.id, type: 'post', expiresAt });
+        showReviewNotice(isKo
+          ? '리뷰가 등록되었습니다. 6시간 후 자동 삭제됩니다.'
+          : 'Review đã đăng! Sẽ tự xoá sau 6 giờ — đăng nhập để lưu mãi mãi.');
+      }
       closeWriter();
     } else if (error) {
-      console.error('Submit error:', error);
-      showReviewNotice(reviewUi.submitError);
+      console.error('Submit review error:', error);
+      // Hiện lý do lỗi cụ thể để người dùng biết
+      const hint = (error as { message?: string }).message
+        ? `(${(error as { message: string }).message.slice(0, 80)})`
+        : '';
+      showReviewNotice(`${reviewUi.submitError} ${hint}`.trim());
     }
   };
 
@@ -2687,7 +4254,7 @@ function ReviewBoard({
 
 
   const filtered = useMemo(() => {
-    let result = reviews;
+    let result = reviews.filter((review) => !review.user_id || !blockedUserIds.has(review.user_id));
 
     // 1. Filter by category
     if (catFilter !== 'all') {
@@ -2702,8 +4269,17 @@ function ReviewBoard({
       });
     }
 
-    // 3. Smart Sort by popularity (Upvotes - Downvotes)
+    // 3. Smart sort by trust, recency, or rating.
     return [...result].sort((a, b) => {
+      if (sortMode === 'newest') {
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      }
+
+      if (sortMode === 'rating') {
+        const ratingDiff = (Number(b.rating) || 0) - (Number(a.rating) || 0);
+        if (ratingDiff !== 0) return ratingDiff;
+      }
+
       const scoreA = (a.upvotes_count || 0) - (a.downvotes_count || 0);
       const scoreB = (b.upvotes_count || 0) - (b.downvotes_count || 0);
       if (scoreA !== scoreB) return scoreB - scoreA;
@@ -2712,7 +4288,7 @@ function ReviewBoard({
       if (ratingA !== ratingB) return ratingB - ratingA;
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
-  }, [reviews, catFilter, mapBounds]);
+  }, [blockedUserIds, reviews, catFilter, mapBounds, sortMode]);
 
   const avgRating = reviews.length ? (reviews.reduce((s, r) => s + Number(r.rating), 0) / reviews.length).toFixed(1) : '0';
 
@@ -2720,107 +4296,331 @@ function ReviewBoard({
   const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null);
   const [floatingSearch, setFloatingSearch] = useState('');
   const [floatingResults, setFloatingResults] = useState<any[]>([]);
+  const [floatingSelectedAddress, setFloatingSelectedAddress] = useState('');
+  const [floatingSearchDone, setFloatingSearchDone] = useState(false);
   const [isSearchingMap, setIsSearchingMap] = useState(false);
   const [userPos, setUserPos] = useState<[number, number] | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const reviewRefs = useRef<Map<string, HTMLElement>>(new Map());
-  const sheetContentRef = useRef<HTMLDivElement | null>(null);
-  const sheetTouchRef = useRef<{
-    startY: number;
-    startTime: number;
-    startScrollTop: number;
-    interactive: boolean;
-  } | null>(null);
-  const suppressSheetClickRef = useRef(false);
-  const mapRef = useRef<ReviewMapHandle | null>(null);
-  const dragControls = useDragControls();
-  const startSheetDrag = useCallback((event: PointerEvent) => {
-    const target = event.target as HTMLElement;
-    if (target.closest('button, input, textarea, select, a, img, .rv-sheet-content')) return;
-    dragControls.start(event);
-  }, [dragControls]);
+  const skipNextFloatingSearchRef = useRef(false);
+  const wasImagePreviewClosedViaBack = useRef(false);
 
-  const handleSheetTouchStart = useCallback((event: TouchEvent<HTMLElement>) => {
-    if (event.touches.length !== 1) return;
-    const target = event.target as HTMLElement;
-    const content = target.closest('.rv-sheet-content') as HTMLElement | null;
-    sheetTouchRef.current = {
-      startY: event.touches[0].clientY,
-      startTime: performance.now(),
-      startScrollTop: content?.scrollTop ?? sheetContentRef.current?.scrollTop ?? 0,
-      interactive: Boolean(target.closest('input, textarea, select, a, img')),
-    };
-  }, []);
-
-  const handleSheetTouchMove = useCallback((event: TouchEvent<HTMLElement>) => {
-    const touch = sheetTouchRef.current;
-    if (!touch || touch.interactive || event.touches.length !== 1) return;
-    const deltaY = event.touches[0].clientY - touch.startY;
-    const currentScrollTop = sheetContentRef.current?.scrollTop ?? 0;
-
-    if (sheetExpanded && deltaY > 8 && touch.startScrollTop <= 2 && currentScrollTop <= 2) {
-      event.preventDefault();
-    }
-  }, [sheetExpanded]);
-
-  const handleSheetTouchEnd = useCallback((event: TouchEvent<HTMLElement>) => {
-    const touch = sheetTouchRef.current;
-    if (!touch || touch.interactive) {
-      sheetTouchRef.current = null;
+  // Handle physical back button for image preview
+  useEffect(() => {
+    if (!previewImage) {
+      wasImagePreviewClosedViaBack.current = false;
       return;
     }
 
-    const changedTouch = event.changedTouches[0];
-    const deltaY = changedTouch ? changedTouch.clientY - touch.startY : 0;
-    const elapsed = Math.max(performance.now() - touch.startTime, 1);
-    const velocity = Math.abs(deltaY) / elapsed;
-    const shouldMove = Math.abs(deltaY) > 36 || velocity > 0.45;
+    const handlePopState = () => {
+      wasImagePreviewClosedViaBack.current = true;
+      setPreviewImage(null);
+    };
 
-    if (shouldMove) {
-      suppressSheetClickRef.current = true;
-      window.setTimeout(() => { suppressSheetClickRef.current = false; }, 0);
-      if (deltaY < 0) {
-        setSheetExpanded(true);
-      } else if (touch.startScrollTop <= 2) {
-        setSheetExpanded(false);
+    window.history.pushState({ type: 'previewImage' }, '');
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      if (!wasImagePreviewClosedViaBack.current && window.history.state?.type === 'previewImage') {
+        window.history.back();
       }
-    }
+    };
+  }, [previewImage]);
+  const sheetRef = useRef<HTMLDivElement | null>(null);
+  const sheetContentRef = useRef<HTMLDivElement | null>(null);
+  const sheetContentDragRef = useRef<{
+    pointerId: number;
+    startY: number;
+    startX: number;
+    originY: number;
+    startTime: number;
+    startScrollTop: number;
+    active: boolean;
+  } | null>(null);
+  const mapRef = useRef<ReviewMapHandle | null>(null);
+  const dragControls = useDragControls();
+  const sheetY = useMotionValue(520);
+  const [sheetBounds, setSheetBounds] = useState({ expanded: REVIEW_SHEET_EXPANDED_Y, collapsed: 520 });
 
-    sheetTouchRef.current = null;
+  const measureSheetBounds = useCallback(() => {
+    const sheetHeight = sheetRef.current?.offsetHeight || 0;
+    if (!sheetHeight) return;
+    const nextBounds = {
+      expanded: REVIEW_SHEET_EXPANDED_Y,
+      collapsed: Math.max(REVIEW_SHEET_COLLAPSED_MIN_Y, sheetHeight - REVIEW_SHEET_COLLAPSED_PEEK),
+    };
+
+    setSheetBounds((current) => {
+      if (current.expanded === nextBounds.expanded && current.collapsed === nextBounds.collapsed) {
+        return current;
+      }
+      return nextBounds;
+    });
   }, []);
 
-  const handleSheetClickCapture = useCallback((event: ReactMouseEvent<HTMLElement>) => {
-    if (!suppressSheetClickRef.current) return;
+  useEffect(() => {
+    measureSheetBounds();
+    const target = sheetRef.current;
+    const observer = typeof ResizeObserver !== 'undefined' && target
+      ? new ResizeObserver(measureSheetBounds)
+      : null;
+    observer?.observe(target!);
+    window.addEventListener('resize', measureSheetBounds);
+
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', measureSheetBounds);
+    };
+  }, [measureSheetBounds]);
+
+  useEffect(() => {
+    const controls = animate(sheetY, sheetExpanded ? sheetBounds.expanded : sheetBounds.collapsed, {
+      type: 'tween',
+      duration: 0.18,
+      ease: [0.22, 1, 0.36, 1],
+    });
+
+    return () => controls.stop();
+  }, [sheetBounds, sheetExpanded, sheetY]);
+
+  const startSheetDrag = useCallback((event: PointerEvent) => {
+    const target = event.target as HTMLElement;
+    if (target.closest('button, input, textarea, select, a, img')) return;
+    const content = target.closest('.rv-sheet-content') as HTMLElement | null;
+    if (content) return;
+    dragControls.start(event);
+  }, [dragControls]);
+
+  const snapSheet = useCallback((expanded: boolean) => {
+    setSheetExpanded(expanded);
+    animate(sheetY, expanded ? sheetBounds.expanded : sheetBounds.collapsed, {
+      type: 'tween',
+      duration: 0.18,
+      ease: [0.22, 1, 0.36, 1],
+    });
+  }, [sheetBounds, sheetY]);
+
+  const handleSheetContentPointerDown = useCallback((event: PointerEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement;
+    const isSheetNearExpanded = sheetY.get() <= sheetBounds.expanded + 90;
+    if ((!sheetExpanded && !isSheetNearExpanded) || target.closest('button, input, textarea, select, a, img')) return;
+
+    sheetContentDragRef.current = {
+      pointerId: event.pointerId,
+      startY: event.clientY,
+      startX: event.clientX,
+      originY: sheetY.get(),
+      startTime: performance.now(),
+      startScrollTop: event.currentTarget.scrollTop,
+      active: false,
+    };
+  }, [sheetBounds.expanded, sheetExpanded, sheetY]);
+
+  const handleSheetContentPointerMove = useCallback((event: PointerEvent<HTMLDivElement>) => {
+    const drag = sheetContentDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+
+    const deltaY = event.clientY - drag.startY;
+    const deltaX = event.clientX - drag.startX;
+
+    if (!drag.active) {
+      // Use startScrollTop (captured at pointerDown) NOT current scrollTop,
+      // because the browser may have micro-scrolled a few px before this event fires.
+      // Also allow a generous tolerance (≤8px) so minor scroll drift doesn't block drag.
+      const scrolledDown = drag.startScrollTop > 8;
+
+      if (deltaY <= 8 || Math.abs(deltaY) <= Math.abs(deltaX) || scrolledDown) {
+        return;
+      }
+      drag.startY = event.clientY;
+      drag.originY = sheetY.get();
+      drag.startTime = performance.now();
+      drag.active = true;
+      event.currentTarget.classList.add('is-sheet-dragging');
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+    }
+
     event.preventDefault();
     event.stopPropagation();
-    suppressSheetClickRef.current = false;
+    event.currentTarget.scrollTop = 0;
+    const travel = sheetBounds.collapsed - sheetBounds.expanded;
+    const dampedDelta = deltaY > 0 ? deltaY * 0.72 : deltaY * 0.38;
+    const nextY = Math.min(sheetBounds.collapsed, Math.max(sheetBounds.expanded, drag.originY + Math.min(dampedDelta, travel)));
+    sheetY.set(nextY);
+  }, [sheetBounds, sheetY]);
+
+  const finishSheetContentDrag = useCallback((event: PointerEvent<HTMLDivElement>) => {
+    const drag = sheetContentDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+
+    const deltaY = event.clientY - drag.startY;
+    const elapsed = Math.max(performance.now() - drag.startTime, 1);
+    const velocity = deltaY / elapsed;
+    const midpoint = sheetBounds.expanded + ((sheetBounds.collapsed - sheetBounds.expanded) * 0.42);
+    const shouldCollapse = drag.active && (sheetY.get() > midpoint || deltaY > 120 || velocity > 0.9);
+
+    if (drag.active) {
+      snapSheet(!shouldCollapse);
+      event.currentTarget.classList.remove('is-sheet-dragging');
+      event.currentTarget.releasePointerCapture?.(event.pointerId);
+    }
+    sheetContentDragRef.current = null;
+  }, [sheetBounds, sheetY, snapSheet]);
+
+  // Stable refs so touch handlers always see the latest values without re-registering
+  const touchSheetBoundsRef = useRef(sheetBounds);
+  const touchSnapSheetRef = useRef(snapSheet);
+  useEffect(() => { touchSheetBoundsRef.current = sheetBounds; }, [sheetBounds]);
+  useEffect(() => { touchSnapSheetRef.current = snapSheet; }, [snapSheet]);
+
+  // Mobile touch handler (non-passive) — fixes drag on real devices/emulation.
+  // On touch devices touch-action:pan-y causes the browser to commit to native scroll
+  // before pointer events fire, making event.preventDefault() ineffective.
+  // Native touch listeners registered with { passive: false } can still preventDefault.
+  useEffect(() => {
+    const content = sheetContentRef.current;
+    if (!content) return;
+
+    let touchStartY = 0;
+    let touchStartScrollTop = 0;
+    let touchOriginY = 0;
+    let touchDragging = false;
+
+    const onTouchStart = (e: TouchEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('button, input, textarea, select, a')) return;
+      touchStartY = e.touches[0].clientY;
+      touchStartScrollTop = content.scrollTop;
+      touchOriginY = sheetY.get();
+      touchDragging = false;
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      const deltaY = e.touches[0].clientY - touchStartY;
+
+      if (!touchDragging) {
+        // Only intercept clear downward drag when content is at (or near) the top
+        if (deltaY > 8 && touchStartScrollTop <= 8) {
+          touchDragging = true;
+          sheetContentDragRef.current = null; // cancel pointer-event handler
+          content.classList.add('is-sheet-dragging');
+        } else {
+          return;
+        }
+      }
+
+      e.preventDefault(); // works because this listener is non-passive
+      const { expanded, collapsed } = touchSheetBoundsRef.current;
+      const travel = collapsed - expanded;
+      const nextY = Math.min(collapsed, Math.max(expanded, touchOriginY + Math.min(deltaY * 0.72, travel)));
+      sheetY.set(nextY);
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      if (!touchDragging) return;
+      touchDragging = false;
+      content.classList.remove('is-sheet-dragging');
+
+      const deltaY = e.changedTouches[0].clientY - touchStartY;
+      const { expanded, collapsed } = touchSheetBoundsRef.current;
+      const midpoint = expanded + ((collapsed - expanded) * 0.42);
+      const shouldCollapse = sheetY.get() > midpoint || deltaY > 120;
+      touchSnapSheetRef.current(!shouldCollapse);
+    };
+
+    content.addEventListener('touchstart', onTouchStart, { passive: true });
+    content.addEventListener('touchmove', onTouchMove, { passive: false });
+    content.addEventListener('touchend', onTouchEnd, { passive: true });
+    content.addEventListener('touchcancel', onTouchEnd, { passive: true });
+
+    return () => {
+      content.removeEventListener('touchstart', onTouchStart);
+      content.removeEventListener('touchmove', onTouchMove);
+      content.removeEventListener('touchend', onTouchEnd);
+      content.removeEventListener('touchcancel', onTouchEnd);
+    };
+    // sheetY, sheetContentDragRef are stable refs — safe to omit from deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Search logic for floating bar
   useEffect(() => {
-    if (floatingSearch.length < 1) {
-      setFloatingResults([]);
+    if (skipNextFloatingSearchRef.current) {
+      skipNextFloatingSearchRef.current = false;
+      setIsSearchingMap(false);
+      setFloatingSearchDone(false);
       return;
     }
+    const query = floatingSearch.trim();
+    if (query.length < 2) {
+      setFloatingResults([]);
+      setIsSearchingMap(false);
+      setFloatingSearchDone(false);
+      return;
+    }
+    const controller = new AbortController();
     const timer = setTimeout(async () => {
       setIsSearchingMap(true);
+      setFloatingSearchDone(false);
       try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(floatingSearch)}&addressdetails=1&namedetails=1&limit=5&countrycodes=kr`, {
-          headers: {
-            'Accept-Language': 'ko,en;q=0.9',
+        const localResults = getLocalKoreanSearchResults(query);
+        if (localResults.length > 0) {
+          setFloatingResults(localResults);
+          return;
+        }
+
+        const naverResults = await withTimeout(searchNaverAddressResults(query), FLOATING_SEARCH_TIMEOUT_MS, 'Naver search timed out');
+        if (naverResults.length > 0) {
+          setFloatingResults(naverResults);
+          return;
+        }
+
+        const abortTimer = window.setTimeout(() => controller.abort(), FLOATING_SEARCH_TIMEOUT_MS);
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&namedetails=1&limit=5&countrycodes=kr`, {
+            headers: {
+              'Accept-Language': 'ko,en;q=0.9',
+            },
+            signal: controller.signal,
+          });
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            const addressTail = extractKoreanAddressTail(query);
+            setFloatingResults(data.map((row) => {
+              const formatted = formatOsmKoreanAddress(row);
+              if (!addressTail) {
+                return { ...row, ...formatted };
+              }
+              const cityDistrict = compactKoreanAddress([
+                row?.address?.city || row?.address?.state || row?.address?.province || '',
+                row?.address?.borough || row?.address?.city_district || row?.address?.county || '',
+              ].filter(Boolean).join(' '));
+              return {
+                ...row,
+                title: addressTail,
+                formattedAddress: [cityDistrict, addressTail].filter(Boolean).join(' '),
+              };
+            }));
           }
-        });
-        const data = await res.json();
-        if (Array.isArray(data)) {
-          setFloatingResults(data);
+        } finally {
+          window.clearTimeout(abortTimer);
         }
       } catch (err) {
-        console.error('Search error:', err);
+        const isExpectedTimeout = err instanceof Error && err.message.toLowerCase().includes('timed out');
+        if (!(err instanceof DOMException && err.name === 'AbortError') && !isExpectedTimeout) {
+          console.error('Search error:', err);
+        }
+        setFloatingResults([]);
       } finally {
         setIsSearchingMap(false);
+        setFloatingSearchDone(true);
       }
     }, 500);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
   }, [floatingSearch]);
 
   const handleMyLocation = () => {
@@ -2839,7 +4639,9 @@ function ReviewBoard({
     const lat = parseFloat(res.lat);
     const lon = parseFloat(res.lon);
     mapRef.current?.setView([lat, lon], 16);
-    setFloatingSearch(res.display_name);
+    skipNextFloatingSearchRef.current = true;
+    setFloatingSearch(getFloatingPlaceTitle(res));
+    setFloatingSelectedAddress(getFloatingPlaceAddress(res));
     setFloatingResults([]);
   };
 
@@ -2868,9 +4670,6 @@ function ReviewBoard({
     });
     return Object.values(groups);
   }, [filtered]);
-  const collapsedSheetY = 'calc(100% - 178px)';
-  const expandedSheetY = '14px';
-
   const closeWriter = () => {
     setIsWriting(false);
     setSelectedPlace(null);
@@ -2879,8 +4678,17 @@ function ReviewBoard({
     setWriteTitle('');
     setWriteContent('');
     setSearchQuery('');
-    setSearchResults([]);
+    setAddressSuggestions([]);
+    setShowSuggestions(false);
     setIsAnon(false);
+    // Revoke blob URLs để tránh memory leak, rồi xoá ảnh khỏi state
+    setImagePreviews((prev) => {
+      prev.forEach((url) => URL.revokeObjectURL(url));
+      return [];
+    });
+    setSelectedImages([]);
+    setUploading(false);
+    setSubmitting(false);
   };
 
   return (
@@ -2899,6 +4707,11 @@ function ReviewBoard({
             </motion.div>
           ) : null}
         </AnimatePresence>
+        {/* Guest expiry ticker cho review */}
+        {!session && (
+          <GuestExpiryTicker lang={lang} onLoginClick={onLoginClick} />
+        )}
+
         {/* Floating Search Bar */}
         <div className="rv-floating-search">
           <div className="rv-search-inner">
@@ -2908,29 +4721,45 @@ function ReviewBoard({
               placeholder={reviewUi.searchPlaceholder}
               className="rv-search-input-field"
               value={floatingSearch}
-              onChange={e => setFloatingSearch(e.target.value)}
+              onChange={e => {
+                setFloatingSelectedAddress('');
+                setFloatingSearchDone(false);
+                setFloatingSearch(e.target.value);
+              }}
             />
             {isSearchingMap && <Loader2 size={16} className="cm-spin" color="#2752ff" />}
           </div>
+          {floatingSelectedAddress ? (
+            <div className="rv-floating-selected-address">
+              <MapPin size={13} />
+              <span>{floatingSelectedAddress}</span>
+            </div>
+          ) : null}
 
-          {floatingResults.length > 0 && (
+          {!isWriting && floatingResults.length > 0 ? (
             <div className="rv-floating-results">
               {floatingResults.map((res, i) => {
-                const nameKo = res.namedetails?.name || res.namedetails?.['name:ko'] || '';
-                const nameEn = res.namedetails?.['name:en'] || '';
-                const displayName = nameKo && nameEn && nameKo !== nameEn
-                  ? `${nameKo} (${nameEn})`
-                  : res.display_name;
+                const displayName = getFloatingPlaceTitle(res);
+                const address = getFloatingPlaceAddress(res);
 
                 return (
                   <div key={i} className="rv-floating-item" onClick={() => handleFloatingSelect(res)}>
                     <MapPin size={14} />
-                    <span>{displayName}</span>
+                    <span className="rv-floating-item-copy">
+                      <strong>{displayName}</strong>
+                      <small>{address}</small>
+                    </span>
                   </div>
                 );
               })}
             </div>
-          )}
+          ) : !isWriting && floatingSearchDone && floatingSearch.trim().length >= 2 && !isSearchingMap ? (
+            <div className="rv-floating-results rv-floating-results--empty">
+              <div className="rv-floating-empty">
+                {isKo ? '검색 결과가 없습니다.' : 'Không tìm thấy địa chỉ, thử từ khoá khác nhé.'}
+              </div>
+            </div>
+          ) : null}
         </div>
 
         {/* Map Background */}
@@ -2960,32 +4789,31 @@ function ReviewBoard({
 
         {/* Bottom Sheet Review List */}
         <motion.div
+          ref={sheetRef}
           className={`rv-bottom-sheet ${sheetExpanded ? 'is-expanded' : 'is-collapsed'}`}
-          initial={{ y: collapsedSheetY }}
-          animate={{ y: sheetExpanded ? expandedSheetY : collapsedSheetY }}
-          transition={{ type: 'spring', damping: 30, stiffness: 260, mass: 0.85 }}
+          style={{ y: sheetY }}
           drag="y"
           dragControls={dragControls}
           dragListener={false}
-          dragConstraints={sheetExpanded ? { top: 0, bottom: 360 } : { top: -360, bottom: 0 }}
+          dragConstraints={{ top: sheetBounds.expanded, bottom: sheetBounds.collapsed }}
           dragElastic={0}
           dragMomentum={false}
           onPointerDownCapture={startSheetDrag}
-          onTouchStart={handleSheetTouchStart}
-          onTouchMove={handleSheetTouchMove}
-          onTouchEnd={handleSheetTouchEnd}
-          onTouchCancel={() => { sheetTouchRef.current = null; }}
-          onClickCapture={handleSheetClickCapture}
           onDragEnd={(_, info) => {
-            const dragDistance = info.offset.y;
+            const currentY = sheetY.get();
+            const midpoint = sheetBounds.expanded + ((sheetBounds.collapsed - sheetBounds.expanded) * 0.52);
             const dragVelocity = info.velocity.y;
 
-            if (dragDistance < -34 || dragVelocity < -220) {
-              setSheetExpanded(true);
-            } else if (dragDistance > 34 || dragVelocity > 220) {
-              setSheetExpanded(false);
+            // Snap through our no-bounce tween so a hard pull cannot leave
+            // the sheet feeling like it fell past its resting point.
+            if (dragVelocity < -760) {
+              snapSheet(true);
+            } else if (dragVelocity > 720) {
+              snapSheet(false);
+            } else if (currentY < midpoint) {
+              snapSheet(true);
             } else {
-              setSheetExpanded((current) => current);
+              snapSheet(false);
             }
           }}
         >
@@ -3005,6 +4833,8 @@ function ReviewBoard({
                 onPointerDown={(event) => event.stopPropagation()}
                 onClick={(event) => {
                   event.stopPropagation();
+                  setFloatingResults([]);
+                  setFloatingSearchDone(false);
                   setIsWriting(true);
                 }}
               >
@@ -3036,9 +4866,32 @@ function ReviewBoard({
                 </button>
               ))}
             </div>
+            <div className="rv-sort-chips" onClick={e => e.stopPropagation()}>
+              {([
+                ['trusted', reviewUi.sortTrusted],
+                ['newest', reviewUi.sortNewest],
+                ['rating', reviewUi.sortRating],
+              ] as Array<[ReviewSortMode, string]>).map(([mode, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  className={sortMode === mode ? 'active' : ''}
+                  onClick={() => setSortMode(mode)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="rv-sheet-content" ref={sheetContentRef}>
+          <div
+            className="rv-sheet-content"
+            ref={sheetContentRef}
+            onPointerDown={handleSheetContentPointerDown}
+            onPointerMove={handleSheetContentPointerMove}
+            onPointerUp={finishSheetContentDrag}
+            onPointerCancel={finishSheetContentDrag}
+          >
             {loading ? (
               <div className="rv-sheet-loading">
                 <Loader2 size={24} className="cm-spin" />
@@ -3057,12 +4910,16 @@ function ReviewBoard({
                 const userVote = reviewVotes[review.id];
                 const imageUrls = normalizeReviewImages(review.images);
                 const canDeleteReview = review.user_id === currentUserId || isReviewAdmin;
+                const isSafetyMenuOpen = activeSafetyReviewId === review.id;
                 return (
                   <article
                     key={review.id}
-                    className={`rv-item-card ${isSelected ? 'selected' : ''}`}
+                    className={`rv-item-card ${imageUrls.length > 0 ? 'has-image' : ''} ${isSelected ? 'selected' : ''} ${isSafetyMenuOpen ? 'menu-open' : ''}`}
                     ref={el => { if (el) reviewRefs.current.set(review.id, el); }}
-                    onClick={() => setSelectedReviewId(review.id)}
+                    onClick={() => {
+                      setActiveSafetyReviewId(null);
+                      setSelectedReviewId(review.id);
+                    }}
                   >
                     <div className="rv-item-rank" style={{ background: isSelected ? '#2752ff' : '#94a3b8' }}>
                       {idx + 1}
@@ -3079,7 +4936,7 @@ function ReviewBoard({
                         <p className="rv-item-address">{review.place_address.split(',').slice(0, 2).join(', ')}</p>
                         <div className="rv-item-meta">
                           <span className="rv-item-author">{review.display_name}</span>
-                          <span className="rv-item-dot">•</span>
+                          <span className="rv-item-dot">·</span>
                           <span className="rv-item-time">{timeAgo(review.created_at)}</span>
                         </div>
                       </div>
@@ -3088,8 +4945,8 @@ function ReviewBoard({
                           ★ {Number(review.rating).toFixed(1)}
                         </div>
                         <div className="rv-item-votes">
-                          <button 
-                            type="button" 
+                          <button
+                            type="button"
                             className={`rv-vote-btn up ${userVote === 'up' ? 'active' : ''}`}
                             aria-pressed={userVote === 'up'}
                             onClick={(e) => { e.stopPropagation(); handleReviewReaction(review.id, 'up'); }}
@@ -3097,8 +4954,8 @@ function ReviewBoard({
                             <ChevronUp size={16} strokeWidth={2.8} />
                             <span>{review.upvotes_count || 0}</span>
                           </button>
-                          <button 
-                            type="button" 
+                          <button
+                            type="button"
                             className={`rv-vote-btn down ${userVote === 'down' ? 'active' : ''}`}
                             aria-pressed={userVote === 'down'}
                             onClick={(e) => { e.stopPropagation(); handleReviewReaction(review.id, 'down'); }}
@@ -3125,29 +4982,66 @@ function ReviewBoard({
                             )}
                           </button>
                         ) : null}
+                        {!canDeleteReview && review.user_id ? (
+                          <div className="rv-review-menu-wrap">
+                            <button
+                              type="button"
+                              className="rv-review-menu-trigger"
+                              aria-label={isKo ? '리뷰 메뉴' : 'Tùy chọn review'}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setActiveSafetyReviewId((current) => current === review.id ? null : review.id);
+                              }}
+                            >
+                              <MoreHorizontal size={16} />
+                            </button>
+                            {isSafetyMenuOpen ? (
+                              <div className="rv-review-menu" onClick={(event) => event.stopPropagation()}>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setActiveSafetyReviewId(null);
+                                    void onReport('review', review.id, review.user_id);
+                                  }}
+                                >
+                                  {reviewUi.report}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="danger"
+                                  onClick={() => {
+                                    setActiveSafetyReviewId(null);
+                                    void onBlockUser(review.user_id);
+                                  }}
+                                >
+                                  {reviewUi.block}
+                                </button>
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                     <div className="rv-item-body">
-                      <h5 className="rv-item-title">{review.title}</h5>
-                      <p className="rv-item-text">{shortText(review.content, 120)}</p>
-                      
-                      {imageUrls.length > 0 && (
-                        <div className="rv-review-images">
-                          {imageUrls.map((url, i) => (
-                            <button
-                              key={`${review.id}-image-${i}`}
-                              type="button"
-                              className="rv-review-image"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setPreviewImage(url);
-                              }}
-                            >
-                              <img src={url} alt={review.title} loading="lazy" />
-                            </button>
-                          ))}
+                      <div className={`rv-item-body-inner${imageUrls.length > 0 ? ' has-thumb' : ''}`}>
+                        <div className="rv-item-body-text">
+                          <h5 className="rv-item-title">{review.title}</h5>
+                          <p className="rv-item-text">{shortText(review.content, imageUrls.length > 0 ? 72 : 120)}</p>
                         </div>
-                      )}
+                        {imageUrls.length > 0 && (
+                          <button
+                            type="button"
+                            className="rv-item-thumb"
+                            onClick={(event) => { event.stopPropagation(); setPreviewImage(imageUrls[0]); }}
+                            aria-label="Xem ảnh"
+                          >
+                            <img src={imageUrls[0]} alt={review.title} loading="lazy" />
+                            {imageUrls.length > 1 && (
+                              <span className="rv-item-thumb-count">+{imageUrls.length - 1}</span>
+                            )}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </article>
                 );
@@ -3209,7 +5103,11 @@ function ReviewBoard({
                   <MapPin size={20} color="#2752ff" />
                   <div className="place-info">
                     <div className="place-name">{selectedPlace.name}</div>
-                    <div className="place-addr">{selectedPlace.address.split(',').slice(0, 3).join(', ')}</div>
+                    {selectedPlace.addressEn ? (
+                      <div className="place-addr place-addr--en">{selectedPlace.addressEn.split(',').slice(0, 4).join(',')}</div>
+                    ) : (
+                      <div className="place-addr">{selectedPlace.address}</div>
+                    )}
                   </div>
                   <button type="button" className="cm-icon-btn" onClick={() => setSelectedPlace(null)}>
                     <X size={16} />
@@ -3220,23 +5118,30 @@ function ReviewBoard({
                   <Search size={16} className="rv-search-icon" />
                   <input
                     className="rv-search-input"
-                    placeholder={isKo ? '한국 내 장소 검색...' : 'Tìm kiếm địa điểm tại Hàn Quốc...'}
+                    placeholder={isKo ? '주소를 검색해주세요' : 'Tìm kiếm địa chỉ tại Hàn Quốc...'}
                     value={searchQuery}
-                    onChange={e => handleSearchChange(e.target.value)}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                    onFocus={() => { if (addressSuggestions.length > 0) setShowSuggestions(true); }}
+                    autoComplete="off"
                   />
-                  {(searchResults.length > 0 || searching) && (
-                    <div className="rv-search-results">
-                      {searching ? (
-                        <div className="rv-search-loading">{isKo ? '검색 중...' : 'Đang tìm kiếm...'}</div>
-                      ) : (
-                        searchResults.map(result => (
-                          <div key={result.place_id} className="rv-search-item" onClick={() => selectPlace(result)}>
-                            <MapPin size={16} />
-                            <span>{result.display_name}</span>
+                  {fetchingSuggestions && <Loader2 size={15} className="cm-spin rv-suggest-spinner" />}
+                  {showSuggestions && addressSuggestions.length > 0 && (
+                    <ul className="rv-address-suggestions">
+                      {addressSuggestions.map((s, i) => (
+                        <li
+                          key={i}
+                          className="rv-address-suggestion-item"
+                          onMouseDown={() => handleSelectSuggestion(s)}
+                        >
+                          <MapPin size={14} className="rv-suggest-pin" />
+                          <div className="rv-suggest-texts">
+                            <span className="rv-suggest-title">{s.title}</span>
+                            <span className="rv-suggest-addr">{s.formattedAddress}</span>
                           </div>
-                        ))
-                      )}
-                    </div>
+                        </li>
+                      ))}
+                    </ul>
                   )}
                 </div>
               )}
@@ -3294,25 +5199,37 @@ function ReviewBoard({
               </div>
             </div>
 
-            {/* Images */}
+            {/* Images — KakaoTalk-style preview grid */}
             <div className="rv-write-section">
-              <label className="rv-write-label">{isKo ? '🖼️ 사진 (최대 3장)' : '🖼️ Hình ảnh (Tối đa 3)'}</label>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <label className="rv-write-label" style={{ margin: 0 }}>{isKo ? '🖼️ 사진 (최대 3장)' : '🖼️ Hình ảnh (Tối đa 3)'}</label>
+                <span style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>{imagePreviews.length}/3</span>
+              </div>
+              <div className="rv-image-upload-grid">
                 {imagePreviews.map((url, idx) => (
-                  <div key={idx} style={{ width: 80, height: 80, borderRadius: 12, overflow: 'hidden', position: 'relative', border: '1px solid #e2e8f0' }}>
-                    <img src={url} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <div key={idx} className="rv-img-thumb-wrap">
+                    <img src={url} alt={`Ảnh ${idx + 1}`} className="rv-img-thumb" />
                     <button
                       type="button"
-                      style={{ position: 'absolute', top: 4, right: 4, width: 20, height: 20, borderRadius: 10, background: 'rgba(0,0,0,0.5)', border: 'none', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                      className="rv-img-remove-btn"
                       onClick={() => removeImage(idx)}
+                      aria-label={isKo ? '삭제' : 'Xoá ảnh'}
                     >
-                      <X size={12} />
+                      <X size={13} />
                     </button>
+                    <span className="rv-img-order">{idx + 1}</span>
                   </div>
                 ))}
                 {imagePreviews.length < 3 && (
-                  <label style={{ width: 80, height: 80, borderRadius: 12, border: '2px dashed #e2e8f0', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#94a3b8' }}>
-                    {uploading ? <Loader2 size={20} className="cm-spin" /> : <Plus size={20} />}
+                  <label className="rv-img-add-btn">
+                    {uploading ? (
+                      <Loader2 size={24} className="cm-spin" style={{ color: '#2752ff' }} />
+                    ) : (
+                      <>
+                        <div className="rv-img-add-icon"><Plus size={24} strokeWidth={2} /></div>
+                        <span className="rv-img-add-text">{isKo ? '사진 추가' : 'Thêm ảnh'}</span>
+                      </>
+                    )}
                     <input type="file" accept="image/*" multiple onChange={handleImageSelect} style={{ display: 'none' }} />
                   </label>
                 )}
@@ -3341,21 +5258,65 @@ function ReviewBoard({
   );
 }
 
+function fmtCountdownHMS(ms: number): string {
+  if (ms <= 0) return '0:00:00';
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
 function CommentItem({
   comment,
   liked,
   onLike,
   onReply,
+  onViewProfile,
 }: {
   comment: CommunityComment;
   liked: boolean;
   onLike: () => void;
   onReply: () => void;
+  onViewProfile?: () => void;
 }) {
+  // Countdown timer cho guest comment có expires_at
+  const [remainingMs, setRemainingMs] = useState<number | null>(() => {
+    if (!comment.expires_at) return null;
+    return new Date(comment.expires_at).getTime() - Date.now();
+  });
+
+  useEffect(() => {
+    if (!comment.expires_at) return;
+    const tick = () => {
+      setRemainingMs(new Date(comment.expires_at!).getTime() - Date.now());
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [comment.expires_at]);
+
+  const showCountdown = remainingMs !== null && remainingMs > 0;
+  const totalMs = comment.expires_at && comment.created_at
+    ? new Date(comment.expires_at).getTime() - new Date(comment.created_at).getTime()
+    : 10_800_000; // 3h fallback
+  const progressPct = showCountdown
+    ? Math.max(0, Math.min(100, (remainingMs! / totalMs) * 100))
+    : 0;
+
   return (
     <div className="cm-comment">
       <div className="cm-comment-head">
-        <strong className={comment.is_author ? 'cm-comment-author' : ''}>{comment.display_name}</strong>
+        <strong
+          className={[
+            comment.is_author ? 'cm-comment-author' : '',
+            onViewProfile ? 'cm-clickable-author' : '',
+          ].filter(Boolean).join(' ')}
+          onClick={onViewProfile}
+          style={onViewProfile ? { cursor: 'pointer' } : undefined}
+        >
+          {comment.display_name}
+        </strong>
         <span className="cm-comment-time">{timeAgo(comment.created_at)}</span>
       </div>
       <p className="cm-comment-body">{comment.content}</p>
@@ -3365,6 +5326,17 @@ function CommentItem({
           <ThumbsUp size={13} /> {comment.likes_count}
         </button>
       </div>
+      {showCountdown && (
+        <div className="cm-comment-guest-countdown">
+          <div className="cm-comment-guest-bar-track">
+            <div
+              className="cm-comment-guest-bar-fill"
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
+          <span className="cm-comment-guest-label">⏱ xóa sau {fmtCountdownHMS(remainingMs!)}</span>
+        </div>
+      )}
     </div>
   );
 }
