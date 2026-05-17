@@ -2004,7 +2004,7 @@ export function CommunityScreen({
     setSelectedPost(nextPost);
     setView('detail');
     setReplyTo(null);
-    setPreviewImage(null);
+    setLightbox(null);
     history.pushState({ communityView: 'detail' }, '');
 
     if (isUuid(post.id)) {
