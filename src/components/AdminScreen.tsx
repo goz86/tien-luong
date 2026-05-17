@@ -158,6 +158,13 @@ type DailyVisit = {
   user_sessions: number;
 };
 
+type MonthlyVisit = {
+  month: string; // 'YYYY-MM'
+  total_sessions: number;
+  guest_sessions: number;
+  user_sessions: number;
+};
+
 type DashboardStats = {
   users: number;
   newUsersWeek: number;
@@ -444,6 +451,8 @@ export function AdminScreen({
   const [reportFilter, setReportFilter] = useState<ReportFilter>('pending');
   const [visitStats, setVisitStats] = useState<VisitStats | null>(null);
   const [dailyVisits, setDailyVisits] = useState<DailyVisit[]>([]);
+  const [monthlyVisits, setMonthlyVisits] = useState<MonthlyVisit[]>([]);
+  const [imgLightbox, setImgLightbox] = useState<{ urls: string[]; idx: number } | null>(null);
   // Styled confirm/prompt modal
   type ConfirmState = { message: string; resolve: (ok: boolean, reason: string) => void };
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
@@ -578,7 +587,7 @@ export function AdminScreen({
     // Visitor stats (non-critical — bỏ qua lỗi nếu bảng chưa tạo)
     const [visitStatsRes, dailyVisitsRes] = await Promise.all([
       supabase.rpc('admin_get_visit_stats'),
-      supabase.rpc('admin_get_daily_visits', { days_back: 14 }),
+      supabase.rpc('admin_get_daily_visits', { days_back: 180 }),
     ]);
     if (!visitStatsRes.error && visitStatsRes.data) {
       const row = Array.isArray(visitStatsRes.data) ? visitStatsRes.data[0] : visitStatsRes.data;
@@ -597,7 +606,33 @@ export function AdminScreen({
       }
     }
     if (!dailyVisitsRes.error && Array.isArray(dailyVisitsRes.data)) {
-      setDailyVisits((dailyVisitsRes.data as DailyVisit[]).slice(0, 14).reverse());
+      const rawVisits = dailyVisitsRes.data as DailyVisit[];
+      const today = new Date();
+
+      // Pad last 14 days for chart (fill missing days with 0)
+      const padded: DailyVisit[] = Array.from({ length: 14 }, (_, i) => {
+        const d = new Date(today);
+        d.setDate(d.getDate() - (13 - i));
+        const dayStr = d.toISOString().slice(0, 10);
+        return rawVisits.find(v => v.day === dayStr)
+          ?? { day: dayStr, total_sessions: 0, guest_sessions: 0, user_sessions: 0 };
+      });
+      setDailyVisits(padded);
+
+      // Group by month for monthly stats
+      const monthMap = new Map<string, MonthlyVisit>();
+      rawVisits.forEach(v => {
+        const month = v.day.slice(0, 7); // 'YYYY-MM'
+        const prev = monthMap.get(month) ?? { month, total_sessions: 0, guest_sessions: 0, user_sessions: 0 };
+        monthMap.set(month, {
+          month,
+          total_sessions: prev.total_sessions + (v.total_sessions || 0),
+          guest_sessions:  prev.guest_sessions  + (v.guest_sessions  || 0),
+          user_sessions:   prev.user_sessions   + (v.user_sessions   || 0),
+        });
+      });
+      const sortedMonths = Array.from(monthMap.values()).sort((a, b) => b.month.localeCompare(a.month));
+      setMonthlyVisits(sortedMonths);
     }
 
     const moderationMap = new Map<string, UserModeration>();
@@ -1218,26 +1253,68 @@ export function AdminScreen({
                 </span>
               </div>
 
-              {/* Mini bar chart — 14 ngày gần nhất */}
-              {dailyVisits.length > 0 ? (
-                <div className="admin-visit-chart" aria-label={isKo ? '14일 방문 추이' : 'Biểu đồ 14 ngày'}>
+              {/* Bar chart — 14 ngày gần nhất (luôn đủ 14 cột) */}
+              <div className="admin-visit-chart" aria-label={isKo ? '14일 방문 추이' : 'Biểu đồ 14 ngày'}>
+                {(() => {
+                  const todayStr = new Date().toISOString().slice(0, 10);
+                  const maxVal = Math.max(...dailyVisits.map(d => d.total_sessions), 1);
+                  return dailyVisits.map((d) => {
+                    const heightPct = Math.max(Math.round((d.total_sessions / maxVal) * 100), d.total_sessions > 0 ? 6 : 0);
+                    const guestPct  = d.total_sessions > 0
+                      ? Math.round((d.guest_sessions / d.total_sessions) * 100)
+                      : 0;
+                    const dateObj   = new Date(d.day + 'T00:00:00');
+                    const dayNum    = dateObj.getDate();
+                    const monthNum  = dateObj.getMonth() + 1;
+                    const isToday   = d.day === todayStr;
+                    const titleStr  = isKo
+                      ? `${monthNum}월 ${dayNum}일: ${d.total_sessions}회 (비회원 ${d.guest_sessions} · 회원 ${d.total_sessions - d.guest_sessions})`
+                      : `${dayNum}/${monthNum}: ${d.total_sessions} lượt (Khách ${d.guest_sessions} · TV ${d.total_sessions - d.guest_sessions})`;
+                    return (
+                      <div
+                        key={d.day}
+                        className={`admin-visit-bar-col${isToday ? ' is-today' : ''}`}
+                        title={titleStr}
+                      >
+                        <span className="admin-visit-bar-val">{d.total_sessions > 0 ? d.total_sessions : ''}</span>
+                        <div className="admin-visit-bar-col-inner" style={{ height: `${heightPct}%` }}>
+                          <div className="admin-visit-bar-col-guest" style={{ height: `${guestPct}%` }} />
+                        </div>
+                        <span className="admin-visit-bar-label">
+                          {isToday ? (isKo ? '오늘' : 'HN') : dayNum}
+                        </span>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+
+              {/* Monthly breakdown */}
+              {monthlyVisits.length > 0 ? (
+                <div className="admin-monthly-stats">
+                  <div className="admin-monthly-header">
+                    <span>{isKo ? '월별 통계' : 'Thống kê theo tháng'}</span>
+                  </div>
                   {(() => {
-                    const maxVal = Math.max(...dailyVisits.map(d => d.total_sessions), 1);
-                    return dailyVisits.map((d) => {
-                      const heightPct = Math.round((d.total_sessions / maxVal) * 100);
-                      const guestPct  = d.total_sessions > 0
-                        ? Math.round((d.guest_sessions / d.total_sessions) * 100)
-                        : 0;
-                      const dayLabel  = new Date(d.day).toLocaleDateString(
-                        lang === 'ko' ? 'ko-KR' : 'vi-VN',
-                        { month: 'numeric', day: 'numeric' }
-                      );
+                    const todayMonth = new Date().toISOString().slice(0, 7);
+                    const maxMonthTotal = Math.max(...monthlyVisits.map(m => m.total_sessions), 1);
+                    return monthlyVisits.slice(0, 6).map(m => {
+                      const [year, month] = m.month.split('-');
+                      const label = isKo
+                        ? `${year}년 ${parseInt(month)}월`
+                        : `Th.${parseInt(month)}/${year}`;
+                      const barPct = Math.round((m.total_sessions / maxMonthTotal) * 100);
+                      const isCurrentMonth = m.month === todayMonth;
                       return (
-                        <div key={d.day} className="admin-visit-bar-col" title={`${dayLabel}: ${d.total_sessions} (${isKo ? '비회원' : 'Khách'} ${d.guest_sessions})`}>
-                          <div className="admin-visit-bar-col-inner" style={{ height: `${heightPct}%` }}>
-                            <div className="admin-visit-bar-col-guest" style={{ height: `${guestPct}%` }} />
+                        <div key={m.month} className={`admin-monthly-row${isCurrentMonth ? ' is-current' : ''}`}>
+                          <span className="admin-monthly-label">{label}</span>
+                          <div className="admin-monthly-bar-track">
+                            <div className="admin-monthly-bar-fill" style={{ width: `${barPct}%` }} />
                           </div>
-                          <span className="admin-visit-bar-label">{dayLabel.split('/')[1] ?? dayLabel}</span>
+                          <strong className="admin-monthly-val">{m.total_sessions.toLocaleString()}</strong>
+                          <span className="admin-monthly-sub">
+                            {isKo ? '비' : 'K'}&nbsp;{m.guest_sessions}&nbsp;·&nbsp;{isKo ? '회' : 'TV'}&nbsp;{m.user_sessions}
+                          </span>
                         </div>
                       );
                     });
@@ -1346,6 +1423,7 @@ export function AdminScreen({
                     body={post.content}
                     badge={post.category}
                     images={post.image_urls}
+                    onImageClick={(urls, idx) => setImgLightbox({ urls, idx })}
                     actionLabel={ui.delete}
                     busy={busyId === `post-${post.id}`}
                     onAction={() => void deletePost(post)}
@@ -1529,15 +1607,28 @@ export function AdminScreen({
                     <span>{ui.formBody}</span>
                     <textarea value={announcementBody} onChange={(event) => setAnnouncementBody(event.target.value)} rows={4} maxLength={1000} />
                   </label>
-                  <label>
-                    <span>{ui.formSeverity}</span>
-                    <select value={announcementSeverity} onChange={(event) => setAnnouncementSeverity(event.target.value as AnnouncementSeverity)}>
-                      <option value="info">{isKo ? '정보' : 'Thông tin'}</option>
-                      <option value="success">{isKo ? '성공' : 'Thành công'}</option>
-                      <option value="warning">{isKo ? '경고' : 'Cảnh báo'}</option>
-                      <option value="danger">{isKo ? '위험' : 'Khẩn cấp'}</option>
-                    </select>
-                  </label>
+                  <div className="admin-severity-group">
+                    <span className="admin-severity-label">{ui.formSeverity}</span>
+                    <div className="admin-severity-options">
+                      {([
+                        { val: 'info',    label: isKo ? '정보'  : 'Thông tin', color: '#2752ff' },
+                        { val: 'success', label: isKo ? '성공'  : 'Thành công', color: '#16a34a' },
+                        { val: 'warning', label: isKo ? '경고'  : 'Cảnh báo',  color: '#d97706' },
+                        { val: 'danger',  label: isKo ? '위험'  : 'Khẩn cấp',  color: '#dc2626' },
+                      ] as { val: AnnouncementSeverity; label: string; color: string }[]).map(({ val, label, color }) => (
+                        <button
+                          key={val}
+                          type="button"
+                          className={`admin-severity-btn admin-severity-btn--${val}${announcementSeverity === val ? ' active' : ''}`}
+                          style={{ '--sev-color': color } as React.CSSProperties}
+                          onClick={() => setAnnouncementSeverity(val)}
+                        >
+                          <span className="admin-severity-dot" />
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <button type="submit" disabled={busyId === 'announcement' || !announcementTitle.trim() || !announcementBody.trim()}>
                     {busyId === 'announcement' ? <Loader2 size={16} className="cm-spin" /> : <Megaphone size={16} />}
                     {ui.publish}
@@ -1588,6 +1679,44 @@ export function AdminScreen({
       ) : null}
 
       </main>{/* /admin-main-content */}
+
+      {/* Image lightbox */}
+      {imgLightbox ? (
+        <div
+          className="admin-lightbox-overlay"
+          onClick={() => setImgLightbox(null)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <button
+            type="button"
+            className="admin-lightbox-close"
+            onClick={() => setImgLightbox(null)}
+            aria-label="Đóng"
+          >✕</button>
+          {imgLightbox.idx > 0 && (
+            <button
+              type="button"
+              className="admin-lightbox-nav admin-lightbox-prev"
+              onClick={e => { e.stopPropagation(); setImgLightbox(s => s ? { ...s, idx: s.idx - 1 } : s); }}
+            >‹</button>
+          )}
+          <img
+            src={imgLightbox.urls[imgLightbox.idx]}
+            alt=""
+            className="admin-lightbox-img"
+            onClick={e => e.stopPropagation()}
+          />
+          {imgLightbox.idx < imgLightbox.urls.length - 1 && (
+            <button
+              type="button"
+              className="admin-lightbox-nav admin-lightbox-next"
+              onClick={e => { e.stopPropagation(); setImgLightbox(s => s ? { ...s, idx: s.idx + 1 } : s); }}
+            >›</button>
+          )}
+          <span className="admin-lightbox-counter">{imgLightbox.idx + 1} / {imgLightbox.urls.length}</span>
+        </div>
+      ) : null}
 
       {/* Styled delete confirm modal */}
       {confirmState ? (
@@ -1699,6 +1828,7 @@ function ContentRow({
   body,
   badge,
   images,
+  onImageClick,
   actionLabel,
   busy,
   onAction,
@@ -1708,6 +1838,7 @@ function ContentRow({
   body: string;
   badge: string;
   images?: string[] | null;
+  onImageClick?: (urls: string[], idx: number) => void;
   actionLabel: string;
   busy: boolean;
   onAction: () => void;
@@ -1725,18 +1856,24 @@ function ContentRow({
         {hasImages && (
           <div className={`admin-post-thumbs admin-post-thumbs--${Math.min(images.length, 4)}`}>
             {images.slice(0, 4).map((url, i) => (
-              <img
+              <button
                 key={i}
-                src={url}
-                alt=""
-                className="admin-post-thumb"
-                loading="lazy"
-                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-              />
+                type="button"
+                className="admin-post-thumb-btn"
+                onClick={() => onImageClick?.(images, i)}
+              >
+                <img
+                  src={url}
+                  alt=""
+                  className="admin-post-thumb"
+                  loading="lazy"
+                  onError={(e) => { (e.currentTarget.parentElement as HTMLElement).style.display = 'none'; }}
+                />
+                {i === 3 && images.length > 4 && (
+                  <span className="admin-post-thumb-more">+{images.length - 4}</span>
+                )}
+              </button>
             ))}
-            {images.length > 4 && (
-              <span className="admin-post-thumb-more">+{images.length - 4}</span>
-            )}
           </div>
         )}
       </div>
