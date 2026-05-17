@@ -13,6 +13,7 @@ import {
   MessageSquare,
   Bookmark,
   Shield,
+  ShieldCheck,
   Bell,
   Globe,
   Info,
@@ -103,6 +104,7 @@ export function ProfileScreen({
   const [showPassword, setShowPassword] = useState(false);
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [showAuthInline, setShowAuthInline] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [schoolSuggestions, setSchoolSuggestions] = useState<School[]>([]);
   const [regionSuggestions, setRegionSuggestions] = useState<Region[]>([]);
   const [regRegionSuggestions, setRegRegionSuggestions] = useState<Region[]>([]);
@@ -394,7 +396,28 @@ export function ProfileScreen({
       {/* ===== HEADER / HERO SECTION (Only when logged in) ===== */}
       {session?.user.email ? (
         <>
-          <div className="pf-hero">
+          <div className="pf-hero" style={{ position: 'relative' }}>
+            {/* Top-right action buttons */}
+            <div className="pf-hero-actions">
+              {canOpenAdmin && (
+                <button
+                  type="button"
+                  className="pf-hero-action-btn pf-hero-action-btn--admin"
+                  onClick={() => { onOpenAdmin ? onOpenAdmin() : (window.location.hash = 'admin'); }}
+                  title={isKo ? '관리자 대시보드' : 'Dashboard admin'}
+                >
+                  <ShieldCheck size={17} />
+                </button>
+              )}
+              <button
+                type="button"
+                className="pf-hero-action-btn"
+                onClick={() => setShowSettings(true)}
+                title={isKo ? '설정' : 'Cài đặt'}
+              >
+                <Settings size={17} />
+              </button>
+            </div>
             <div className="pf-hero-bg" />
 
             <input
@@ -568,193 +591,214 @@ export function ProfileScreen({
 
         </>
       ) : (
-        /* ===== GUEST: Compact login banner ===== */
-        <div className="pf-guest-banner" onClick={() => setShowAuthInline(true)}>
-          <div className="pf-guest-banner-text">
-            <span className="pf-guest-banner-title">{isKo ? '로그인하고 데이터를 안전하게 보관하세요' : 'Đăng nhập để lưu dữ liệu an toàn'}</span>
-          </div>
+        /* ===== GUEST: Compact login banner + gear ===== */
+        <div style={{ position: 'relative' }}>
           <button
             type="button"
-            className="pf-guest-login-btn"
-            onClick={(e) => { e.stopPropagation(); setShowAuthInline(true); }}
+            className="pf-settings-gear-btn pf-settings-gear-btn--guest"
+            onClick={() => setShowSettings(true)}
+            title={isKo ? '설정' : 'Cài đặt'}
           >
-            {isKo ? '로그인' : 'Đăng nhập'}
+            <Settings size={18} />
           </button>
+          <div className="pf-guest-banner" onClick={() => setShowAuthInline(true)}>
+            <div className="pf-guest-banner-text">
+              <span className="pf-guest-banner-title">{isKo ? '로그인하고 데이터를 안전하게 보관하세요' : 'Đăng nhập để lưu dữ liệu an toàn'}</span>
+            </div>
+            <button
+              type="button"
+              className="pf-guest-login-btn"
+              onClick={(e) => { e.stopPropagation(); setShowAuthInline(true); }}
+            >
+              {isKo ? '로그인' : 'Đăng nhập'}
+            </button>
+          </div>
         </div>
       )}
 
-      {/* ===== SETTINGS SECTIONS — accessible to ALL users ===== */}
-      <div className="pf-settings-page">
+      {/* ===== SETTINGS BOTTOM SHEET ===== */}
+      {showSettings && (
+        <div className="pf-settings-sheet-overlay" onClick={() => setShowSettings(false)}>
+          <div className="pf-settings-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="pf-settings-sheet-handle" />
+            <div className="pf-settings-sheet-head">
+              <h3>{isKo ? '설정' : 'Cài đặt'}</h3>
+              <button type="button" onClick={() => setShowSettings(false)}><X size={20} /></button>
+            </div>
+            <div className="pf-settings-sheet-body">
 
-        {/* TÀI KHOẢN — chỉ khi đã đăng nhập */}
-        {session && (
-          <div className="pf-settings-group">
-            <div className="pf-settings-group-label">{isKo ? '계정' : 'TÀI KHOẢN'}</div>
-            <div className="pf-settings-card">
-              <div className="pf-setting-row mini pf-account-info-row">
-                <div className="pf-setting-icon"><LogIn size={16} /></div>
-                <span className="pf-account-email">{session.user.email}</span>
-                <button className="pf-pop-signout" onClick={handleSignOut} style={{ marginLeft: 'auto' }}>
-                  <LogOut size={14} /> {isKo ? '로그아웃' : 'Đăng xuất'}
-                </button>
-              </div>
-              <div className="pf-setting-divider" />
-              <button type="button" className="pf-setting-row mini" onClick={() => setIsEditing(!isEditing)}>
-                <div className="pf-setting-icon"><PenLine size={16} /></div>
-                <span>{isKo ? '프로필 수정' : 'Chỉnh sửa hồ sơ'}</span>
-                <ChevronRight size={16} style={{ marginLeft: 'auto', transition: 'transform 0.2s', transform: isEditing ? 'rotate(90deg)' : 'none' }} />
-              </button>
-              {isEditing && (
-                <div className="pf-edit-form compact" style={{ borderTop: '1px solid var(--border-light)', paddingTop: 12, marginTop: 4 }}>
-                  <div className="pf-pop-field">
-                    <span>{isKo ? '닉네임' : 'Tên hiển thị'}</span>
-                    <input className="pf-input" placeholder={isKo ? '닉네임 입력' : 'Nhập tên...'} value={profile.displayName} onChange={(e) => setProfile({ ...profile, displayName: e.target.value })} />
-                  </div>
-                  <div className="pf-pop-field" style={{ position: 'relative' }}>
-                    <span>{isKo ? '학교' : 'Trường học'}</span>
-                    <input className="pf-input" placeholder={isKo ? '학교 이름' : 'Tên trường...'} value={profile.school} onChange={(e) => handleSchoolChange(e.target.value)} />
-                    {schoolSuggestions.length > 0 && (
-                      <div className="pf-autocomplete-list">
-                        {schoolSuggestions.map((s, idx) => (
-                          <div key={idx} className="pf-autocomplete-item" onClick={() => selectSchool(s)}>
-                            <div className="pf-ac-en">{s.en}</div>
-                            <div className="pf-ac-ko">{s.ko}</div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div className="pf-pop-field" style={{ position: 'relative' }}>
-                    <span>{isKo ? '지역' : 'Khu vực'}</span>
-                    <input className="pf-input" placeholder={isKo ? '서울 노원구' : 'Ví dụ: Seoul Nowon-gu'} value={profile.region} onChange={(e) => handleRegionChange(e.target.value)} />
-                    {regionSuggestions.length > 0 && (
-                      <div className="pf-autocomplete-list">
-                        {regionSuggestions.map((r, idx) => (
-                          <div key={idx} className="pf-autocomplete-item" onClick={() => selectRegion(r)}>
-                            <div className="pf-ac-en">{r.en}</div>
-                            <div className="pf-ac-ko">{r.ko}</div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div className="pf-pop-field">
-                    <span>{isKo ? '소개' : 'Giới thiệu bản thân'}</span>
-                    <textarea className="pf-input pf-textarea" placeholder={isKo ? '자신을 소개해주세요' : 'Viết vài dòng giới thiệu...'} rows={2} value={profile.note || ''} onChange={(e) => setProfile({ ...profile, note: e.target.value })} />
-                  </div>
-                  <div className="pf-pop-field">
-                    <span>{isKo ? '관심사 (태그)' : 'Sở thích / Mục tiêu (Thẻ)'}</span>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px' }}>
-                      {profileTags.map(tag => {
-                        const isSelected = profile.tags?.includes(tag);
-                        return (
-                          <button key={tag} type="button"
-                            onClick={() => {
-                              const currentTags = profile.tags || [];
-                              const newTags = isSelected ? currentTags.filter(t => t !== tag) : [...currentTags, tag];
-                              if (newTags.length <= 4) setProfile({ ...profile, tags: newTags });
-                            }}
-                            style={{ padding: '6px 12px', borderRadius: '16px', border: `1px solid ${isSelected ? '#2752ff' : '#e2e8f0'}`, background: isSelected ? 'rgba(39,82,255,0.08)' : 'transparent', color: isSelected ? '#2752ff' : '#64748b', fontSize: '13px', fontWeight: 800, cursor: 'pointer', transition: 'all 0.2s' }}
-                          >{tag}</button>
-                        );
-                      })}
+              {/* TÀI KHOẢN — chỉ khi đã đăng nhập */}
+              {session && (
+                <div className="pf-settings-group">
+                  <div className="pf-settings-group-label">{isKo ? '계정' : 'TÀI KHOẢN'}</div>
+                  <div className="pf-settings-card">
+                    <div className="pf-setting-row mini pf-account-info-row">
+                      <div className="pf-setting-icon"><LogIn size={16} /></div>
+                      <span className="pf-account-email">{session.user.email}</span>
+                      <button className="pf-pop-signout" onClick={handleSignOut} style={{ marginLeft: 'auto' }}>
+                        <LogOut size={14} /> {isKo ? '로그아웃' : 'Đăng xuất'}
+                      </button>
                     </div>
-                    <span style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>{isKo ? '최대 4개 선택 가능' : 'Chọn tối đa 4 thẻ'}</span>
+                    <div className="pf-setting-divider" />
+                    <button type="button" className="pf-setting-row mini" onClick={() => setIsEditing(!isEditing)}>
+                      <div className="pf-setting-icon"><PenLine size={16} /></div>
+                      <span>{isKo ? '프로필 수정' : 'Chỉnh sửa hồ sơ'}</span>
+                      <ChevronRight size={16} style={{ marginLeft: 'auto', transition: 'transform 0.2s', transform: isEditing ? 'rotate(90deg)' : 'none' }} />
+                    </button>
+                    {isEditing && (
+                      <div className="pf-edit-form compact" style={{ borderTop: '1px solid var(--border-light)', paddingTop: 12, marginTop: 4 }}>
+                        <div className="pf-pop-field">
+                          <span>{isKo ? '닉네임' : 'Tên hiển thị'}</span>
+                          <input className="pf-input" placeholder={isKo ? '닉네임 입력' : 'Nhập tên...'} value={profile.displayName} onChange={(e) => setProfile({ ...profile, displayName: e.target.value })} />
+                        </div>
+                        <div className="pf-pop-field" style={{ position: 'relative' }}>
+                          <span>{isKo ? '학교' : 'Trường học'}</span>
+                          <input className="pf-input" placeholder={isKo ? '학교 이름' : 'Tên trường...'} value={profile.school} onChange={(e) => handleSchoolChange(e.target.value)} />
+                          {schoolSuggestions.length > 0 && (
+                            <div className="pf-autocomplete-list">
+                              {schoolSuggestions.map((s, idx) => (
+                                <div key={idx} className="pf-autocomplete-item" onClick={() => selectSchool(s)}>
+                                  <div className="pf-ac-en">{s.en}</div>
+                                  <div className="pf-ac-ko">{s.ko}</div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div className="pf-pop-field" style={{ position: 'relative' }}>
+                          <span>{isKo ? '지역' : 'Khu vực'}</span>
+                          <input className="pf-input" placeholder={isKo ? '서울 노원구' : 'Ví dụ: Seoul Nowon-gu'} value={profile.region} onChange={(e) => handleRegionChange(e.target.value)} />
+                          {regionSuggestions.length > 0 && (
+                            <div className="pf-autocomplete-list">
+                              {regionSuggestions.map((r, idx) => (
+                                <div key={idx} className="pf-autocomplete-item" onClick={() => selectRegion(r)}>
+                                  <div className="pf-ac-en">{r.en}</div>
+                                  <div className="pf-ac-ko">{r.ko}</div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div className="pf-pop-field">
+                          <span>{isKo ? '소개' : 'Giới thiệu bản thân'}</span>
+                          <textarea className="pf-input pf-textarea" placeholder={isKo ? '자신을 소개해주세요' : 'Viết vài dòng giới thiệu...'} rows={2} value={profile.note || ''} onChange={(e) => setProfile({ ...profile, note: e.target.value })} />
+                        </div>
+                        <div className="pf-pop-field">
+                          <span>{isKo ? '관심사 (태그)' : 'Sở thích / Mục tiêu (Thẻ)'}</span>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px' }}>
+                            {profileTags.map(tag => {
+                              const isSelected = profile.tags?.includes(tag);
+                              return (
+                                <button key={tag} type="button"
+                                  onClick={() => {
+                                    const currentTags = profile.tags || [];
+                                    const newTags = isSelected ? currentTags.filter(t => t !== tag) : [...currentTags, tag];
+                                    if (newTags.length <= 4) setProfile({ ...profile, tags: newTags });
+                                  }}
+                                  style={{ padding: '6px 12px', borderRadius: '16px', border: `1px solid ${isSelected ? '#2752ff' : '#e2e8f0'}`, background: isSelected ? 'rgba(39,82,255,0.08)' : 'transparent', color: isSelected ? '#2752ff' : '#64748b', fontSize: '13px', fontWeight: 800, cursor: 'pointer', transition: 'all 0.2s' }}
+                                >{tag}</button>
+                              );
+                            })}
+                          </div>
+                          <span style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>{isKo ? '최대 4개 선택 가능' : 'Chọn tối đa 4 thẻ'}</span>
+                        </div>
+                        <button type="button" className="pf-save-btn" onClick={() => { saveProfile(profile); setIsEditing(false); }} disabled={savingProfile}>
+                          {savingProfile ? '...' : (isKo ? '저장' : 'Lưu thay đổi')}
+                        </button>
+                      </div>
+                    )}
                   </div>
-                  <button type="button" className="pf-save-btn" onClick={() => { saveProfile(profile); setIsEditing(false); }} disabled={savingProfile}>
-                    {savingProfile ? '...' : (isKo ? '저장' : 'Lưu thay đổi')}
-                  </button>
                 </div>
               )}
-            </div>
-          </div>
-        )}
 
-        {/* QUẢN TRỊ — admin only */}
-        {canOpenAdmin && (
-          <div className="pf-settings-group">
-            <div className="pf-settings-group-label">{isKo ? '관리자' : 'QUẢN TRỊ'}</div>
-            <div className="pf-settings-card">
-              <button type="button" className="pf-setting-row mini" onClick={() => { onOpenAdmin ? onOpenAdmin() : (window.location.hash = 'admin'); }}>
-                <div className="pf-setting-icon"><Shield size={16} /></div>
-                <span>{isKo ? '관리자 대시보드' : 'Dashboard admin'}</span>
-                <ChevronRight size={16} style={{ marginLeft: 'auto' }} />
-              </button>
-            </div>
-          </div>
-        )}
+              {/* QUẢN TRỊ — admin only */}
+              {canOpenAdmin && (
+                <div className="pf-settings-group">
+                  <div className="pf-settings-group-label">{isKo ? '관리자' : 'QUẢN TRỊ'}</div>
+                  <div className="pf-settings-card">
+                    <button type="button" className="pf-setting-row mini" onClick={() => { setShowSettings(false); onOpenAdmin ? onOpenAdmin() : (window.location.hash = 'admin'); }}>
+                      <div className="pf-setting-icon"><Shield size={16} /></div>
+                      <span>{isKo ? '관리자 대시보드' : 'Dashboard admin'}</span>
+                      <ChevronRight size={16} style={{ marginLeft: 'auto' }} />
+                    </button>
+                  </div>
+                </div>
+              )}
 
-        {/* ỨNG DỤNG — tất cả mọi người */}
-        <div className="pf-settings-group">
-          <div className="pf-settings-group-label">{isKo ? '일반' : 'ỨNG DỤNG'}</div>
-          <div className="pf-settings-card">
-            <div className="pf-setting-row mini" onClick={onToggleDarkMode} style={{ cursor: 'pointer' }}>
-              <div className="pf-setting-icon">{isDarkMode ? <Moon size={16} /> : <Sun size={16} />}</div>
-              <span>{isKo ? '다크 모드' : 'Chế độ tối'}</span>
-              <div className="pf-toggle" data-active={isDarkMode} style={{ marginLeft: 'auto' }}><div className="pf-toggle-knob" /></div>
-            </div>
-            <div className="pf-setting-divider" />
-            <div className="pf-setting-row mini" onClick={() => setShowWallpaperPicker(!showWallpaperPicker)} style={{ cursor: 'pointer' }}>
-              <div className="pf-setting-icon"><Palette size={16} /></div>
-              <span>{isKo ? '배경화면' : 'Hình nền'}</span>
-              <ChevronRight size={16} style={{ marginLeft: 'auto', transition: 'transform 0.2s', transform: showWallpaperPicker ? 'rotate(90deg)' : 'none' }} />
-            </div>
-            {showWallpaperPicker && (
-              <div className="pf-wallpaper-grid compact" style={{ paddingLeft: 12, paddingRight: 12, paddingBottom: 12 }}>
-                {WALLPAPERS.map((w) => (
-                  <button key={w.key} className={`pf-wallpaper-item ${wallpaper === w.key ? 'active' : ''}`} onClick={() => onChangeWallpaper(w.key)}>
-                    <div className="pf-wallpaper-preview" style={{ background: w.preview }} />
+              {/* ỨNG DỤNG */}
+              <div className="pf-settings-group">
+                <div className="pf-settings-group-label">{isKo ? '일반' : 'ỨNG DỤNG'}</div>
+                <div className="pf-settings-card">
+                  <div className="pf-setting-row mini" onClick={onToggleDarkMode} style={{ cursor: 'pointer' }}>
+                    <div className="pf-setting-icon">{isDarkMode ? <Moon size={16} /> : <Sun size={16} />}</div>
+                    <span>{isKo ? '다크 모드' : 'Chế độ tối'}</span>
+                    <div className="pf-toggle" data-active={isDarkMode} style={{ marginLeft: 'auto' }}><div className="pf-toggle-knob" /></div>
+                  </div>
+                  <div className="pf-setting-divider" />
+                  <div className="pf-setting-row mini" onClick={() => setShowWallpaperPicker(!showWallpaperPicker)} style={{ cursor: 'pointer' }}>
+                    <div className="pf-setting-icon"><Palette size={16} /></div>
+                    <span>{isKo ? '배경화면' : 'Hình nền'}</span>
+                    <ChevronRight size={16} style={{ marginLeft: 'auto', transition: 'transform 0.2s', transform: showWallpaperPicker ? 'rotate(90deg)' : 'none' }} />
+                  </div>
+                  {showWallpaperPicker && (
+                    <div className="pf-wallpaper-grid compact" style={{ paddingLeft: 12, paddingRight: 12, paddingBottom: 12 }}>
+                      {WALLPAPERS.map((w) => (
+                        <button key={w.key} className={`pf-wallpaper-item ${wallpaper === w.key ? 'active' : ''}`} onClick={() => onChangeWallpaper(w.key)}>
+                          <div className="pf-wallpaper-preview" style={{ background: w.preview }} />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="pf-setting-divider" />
+                  <div className="pf-setting-row mini">
+                    <div className="pf-setting-icon"><Globe size={16} /></div>
+                    <span>{isKo ? '언어' : 'Ngôn ngữ'}</span>
+                    <div className="pf-lang-toggle mini" style={{ marginLeft: 'auto' }}>
+                      <button className={lang === 'vi' ? 'active' : ''} onClick={() => onChangeLang('vi')}>VI</button>
+                      <button className={lang === 'ko' ? 'active' : ''} onClick={() => onChangeLang('ko')}>KO</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* STORE SAFETY */}
+              <div className="pf-settings-group">
+                <div className="pf-settings-group-label">{isKo ? '지원' : 'STORE SAFETY'}</div>
+                <div className="pf-settings-card">
+                  <button type="button" className="pf-setting-row mini" onClick={() => setPolicyPanel('privacy')}>
+                    <div className="pf-setting-icon"><Shield size={16} /></div>
+                    <span>{isKo ? '개인정보 처리방침' : 'Chính sách bảo mật'}</span>
+                    <ChevronRight size={16} style={{ marginLeft: 'auto' }} />
                   </button>
-                ))}
+                  <div className="pf-setting-divider" />
+                  <button type="button" className="pf-setting-row mini" onClick={() => setPolicyPanel('terms')}>
+                    <div className="pf-setting-icon"><Info size={16} /></div>
+                    <span>{isKo ? '이용약관' : 'Điều khoản sử dụng'}</span>
+                    <ChevronRight size={16} style={{ marginLeft: 'auto' }} />
+                  </button>
+                  <div className="pf-setting-divider" />
+                  <button type="button" className="pf-setting-row mini" onClick={() => setPolicyPanel('support')}>
+                    <div className="pf-setting-icon"><MessageCircle size={16} /></div>
+                    <span>{isKo ? '지원 문의' : 'Liên hệ hỗ trợ'}</span>
+                    <ChevronRight size={16} style={{ marginLeft: 'auto' }} />
+                  </button>
+                  {session && (
+                    <>
+                      <div className="pf-setting-divider" />
+                      <button type="button" className="pf-setting-row mini pf-danger-row" onClick={() => setPolicyPanel('delete')}>
+                        <div className="pf-setting-icon"><LogOut size={16} /></div>
+                        <span>{isKo ? '계정 삭제 요청' : 'Yêu cầu xoá tài khoản'}</span>
+                        <ChevronRight size={16} style={{ marginLeft: 'auto' }} />
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
-            )}
-            <div className="pf-setting-divider" />
-            <div className="pf-setting-row mini">
-              <div className="pf-setting-icon"><Globe size={16} /></div>
-              <span>{isKo ? '언어' : 'Ngôn ngữ'}</span>
-              <div className="pf-lang-toggle mini" style={{ marginLeft: 'auto' }}>
-                <button className={lang === 'vi' ? 'active' : ''} onClick={() => onChangeLang('vi')}>VI</button>
-                <button className={lang === 'ko' ? 'active' : ''} onClick={() => onChangeLang('ko')}>KO</button>
-              </div>
-            </div>
-          </div>
-        </div>
 
-        {/* STORE SAFETY — tất cả mọi người */}
-        <div className="pf-settings-group">
-          <div className="pf-settings-group-label">{isKo ? '지원' : 'STORE SAFETY'}</div>
-          <div className="pf-settings-card">
-            <button type="button" className="pf-setting-row mini" onClick={() => setPolicyPanel('privacy')}>
-              <div className="pf-setting-icon"><Shield size={16} /></div>
-              <span>{isKo ? '개인정보 처리방침' : 'Chính sách bảo mật'}</span>
-              <ChevronRight size={16} style={{ marginLeft: 'auto' }} />
-            </button>
-            <div className="pf-setting-divider" />
-            <button type="button" className="pf-setting-row mini" onClick={() => setPolicyPanel('terms')}>
-              <div className="pf-setting-icon"><Info size={16} /></div>
-              <span>{isKo ? '이용약관' : 'Điều khoản sử dụng'}</span>
-              <ChevronRight size={16} style={{ marginLeft: 'auto' }} />
-            </button>
-            <div className="pf-setting-divider" />
-            <button type="button" className="pf-setting-row mini" onClick={() => setPolicyPanel('support')}>
-              <div className="pf-setting-icon"><MessageCircle size={16} /></div>
-              <span>{isKo ? '지원 문의' : 'Liên hệ hỗ trợ'}</span>
-              <ChevronRight size={16} style={{ marginLeft: 'auto' }} />
-            </button>
-            {session && (
-              <>
-                <div className="pf-setting-divider" />
-                <button type="button" className="pf-setting-row mini pf-danger-row" onClick={() => setPolicyPanel('delete')}>
-                  <div className="pf-setting-icon"><LogOut size={16} /></div>
-                  <span>{isKo ? '계정 삭제 요청' : 'Yêu cầu xoá tài khoản'}</span>
-                  <ChevronRight size={16} style={{ marginLeft: 'auto' }} />
-                </button>
-              </>
-            )}
-          </div>
+            </div>{/* /sheet-body */}
+          </div>{/* /sheet */}
         </div>
-
-      </div>
+      )}
 
       {/* ===== AUTH OVERLAY for guests ===== */}
       {showAuthInline && !session && (
