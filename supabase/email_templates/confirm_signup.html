@@ -1,0 +1,104 @@
+<!--
+Supabase Auth > Email Templates > Confirm signup
+Subject suggestion:
+Xác nhận email để bắt đầu với Duhoc Mate
+
+Notes:
+- Keep {{ .ConfirmationURL }} exactly as-is. Supabase replaces it at send time.
+- Use inline CSS for better email-client support.
+- This file is UTF-8. Keep Vietnamese accents when pasting into Supabase.
+-->
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <meta name="supported-color-schemes" content="light dark">
+    <title>Xác nhận email Duhoc Mate</title>
+  </head>
+  <body style="margin:0;padding:0;background:#edf4fb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;color:#08162b;">
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">
+      Xác nhận email của bạn để hoàn tất đăng ký Duhoc Mate.
+    </div>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#edf4fb;padding:30px 14px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:580px;background:#ffffff;border-radius:30px;overflow:hidden;box-shadow:0 24px 70px rgba(28,43,76,0.16);">
+            <tr>
+              <td style="padding:32px 32px 26px;background:#dff6ff;background-image:linear-gradient(135deg,#e9fbff 0%,#dfeaff 52%,#f8fbff 100%);">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="vertical-align:middle;">
+                      <div style="font-size:26px;line-height:1;font-weight:900;letter-spacing:-0.03em;color:#08162b;">
+                        Duhoc Mate
+                      </div>
+                      <div style="margin-top:10px;font-size:14px;line-height:1.55;font-weight:700;color:#64748b;">
+                        Tính lương, quản lý lịch làm và kết nối du học sinh Việt tại Hàn
+                      </div>
+                    </td>
+                    <td align="right" style="vertical-align:middle;">
+                      <div style="width:56px;height:56px;border-radius:20px;background:#ffffff;box-shadow:0 14px 30px rgba(39,82,255,0.18);text-align:center;line-height:56px;font-size:28px;color:#11a36a;font-weight:900;">
+                        &#10003;
+                      </div>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:34px 32px 8px;">
+                <div style="display:inline-block;padding:8px 12px;border-radius:999px;background:#eef5ff;color:#2752ff;font-size:12px;line-height:1;font-weight:900;letter-spacing:0.02em;text-transform:uppercase;">
+                  Xác nhận tài khoản
+                </div>
+                <h1 style="margin:20px 0 14px;font-size:32px;line-height:1.12;font-weight:900;letter-spacing:-0.04em;color:#08162b;">
+                  Chào mừng bạn đến với Duhoc Mate
+                </h1>
+                <p style="margin:0;font-size:16px;line-height:1.75;color:#475569;">
+                  Cảm ơn bạn đã đăng ký. Hãy xác nhận email này để kích hoạt tài khoản và bắt đầu đồng bộ dữ liệu an toàn trên các thiết bị của bạn.
+                </p>
+              </td>
+            </tr>
+
+            <tr>
+              <td align="center" style="padding:26px 32px 18px;">
+                <a href="{{ .ConfirmationURL }}" style="display:block;width:100%;box-sizing:border-box;border-radius:18px;background:#2752ff;background-image:linear-gradient(135deg,#2752ff,#7657ff);color:#ffffff;text-decoration:none;font-size:17px;font-weight:900;padding:18px 22px;box-shadow:0 16px 34px rgba(39,82,255,0.28);">
+                  Xác nhận email
+                </a>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:0 32px 26px;">
+                <div style="border-radius:20px;background:#f8fafc;border:1px solid #e2e8f0;padding:17px 18px;">
+                  <p style="margin:0 0 8px;font-size:13px;line-height:1.55;color:#64748b;font-weight:900;">
+                    Lưu ý bảo mật
+                  </p>
+                  <p style="margin:0;font-size:13px;line-height:1.7;color:#64748b;">
+                    Nếu bạn không tạo tài khoản Duhoc Mate, bạn có thể bỏ qua email này. Đường link xác nhận chỉ nên được mở bởi chính bạn.
+                  </p>
+                </div>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:24px 32px 32px;border-top:1px solid #edf2f7;">
+                <p style="margin:0 0 8px;font-size:12px;line-height:1.65;color:#94a3b8;">
+                  Nếu nút xác nhận không hoạt động, hãy sao chép và mở liên kết này trong trình duyệt:
+                </p>
+                <p style="margin:0;font-size:12px;line-height:1.65;color:#64748b;word-break:break-all;">
+                  {{ .ConfirmationURL }}
+                </p>
+                <p style="margin:20px 0 0;font-size:12px;line-height:1.65;color:#94a3b8;text-align:center;">
+                  Duhoc Mate - Đồng hành cùng du học sinh Việt Nam tại Hàn Quốc
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

@@ -300,11 +300,12 @@ function GiftModal({
 // ─────────────────────────────────────────────────────
 
 interface AchievementScreenProps {
-  onClose: () => void;
+  onClose?: () => void;
   isKo?: boolean;
+  inline?: boolean;
 }
 
-export function AchievementScreen({ onClose, isKo = false }: AchievementScreenProps) {
+export function AchievementScreen({ onClose, isKo = false, inline = false }: AchievementScreenProps) {
   const { shifts, rate, session } = useAppStore();
   const uid = session?.user.id ?? null;
 
@@ -374,48 +375,32 @@ export function AchievementScreen({ onClose, isKo = false }: AchievementScreenPr
     localStorage.setItem(`ach-icons-${uid ?? 'guest'}`, JSON.stringify(nextIcons));
   }, [giftMilestone, claimed, collectedIcons, uid]);
 
-  return createPortal(
-    <>
-      <div className="ach-overlay" onClick={onClose}>
-        <div className="ach-sheet" onClick={e => e.stopPropagation()}>
-
-          {/* ── Header ── */}
-          <div className="ach-drag-bar" />
-          <div className="ach-header">
-            <div className="ach-header-left">
-              <Map size={18} />
-              <span>{isKo ? '나의 여정' : 'Hành Trình Của Tôi'}</span>
-              {unclaimedCount > 0 && (
-                <span className="ach-unclaimed-badge">{unclaimedCount}</span>
-              )}
-            </div>
-            <button type="button" className="ach-close" onClick={onClose}>
-              <X size={18} />
-            </button>
-          </div>
-
-          {/* ── Scrollable body ── */}
-          <div className="ach-body">
+  const bodyContent = (
+    <div className="ach-body">
 
             {/* Character Card */}
             <div className="ach-char-card">
-              <div className="ach-char-avatar-wrap">
-                <img src={iconUrl(stage.imgKey)} alt={stage.name_vi} className="ach-char-avatar-img" />
-                <img
-                  src={iconUrl(faceImg(progressPct, unclaimedCount > 0, totalVnd))}
-                  alt="face"
-                  className="ach-char-face-img"
-                />
-                <div className="ach-char-glow" />
-              </div>
-              <div className="ach-char-meta">
-                <div className="ach-char-name">{isKo ? stage.name_ko : stage.name_vi}</div>
-                <div className="ach-char-desc">{isKo ? stage.desc_ko : stage.desc_vi}</div>
+              <div className="ach-char-card-top">
+                <div className="ach-char-avatar-wrap">
+                  <img src={iconUrl(stage.imgKey)} alt={stage.name_vi} className="ach-char-avatar-img" />
+                  <img
+                    src={iconUrl(faceImg(progressPct, unclaimedCount > 0, totalVnd))}
+                    alt="face"
+                    className="ach-char-face-img"
+                  />
+                  <div className="ach-char-glow" />
+                </div>
+                <div className="ach-char-meta">
+                  <div className="ach-char-name">{isKo ? stage.name_ko : stage.name_vi}</div>
+                  <div className="ach-char-desc">{isKo ? stage.desc_ko : stage.desc_vi}</div>
+                </div>
               </div>
               <div className="ach-char-total">
                 <div className="ach-char-total-label">{isKo ? '총 수입' : 'Tổng tích lũy'}</div>
-                <div className="ach-char-total-value">{fmtVnd(totalVnd)}</div>
-                <div className="ach-char-total-sub">VND</div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                  <div className="ach-char-total-value">{fmtVnd(totalVnd)}</div>
+                  <div className="ach-char-total-sub">VND</div>
+                </div>
               </div>
             </div>
 
@@ -497,6 +482,8 @@ export function AchievementScreen({ onClose, isKo = false }: AchievementScreenPr
                 <Map size={14} />
                 {isKo ? '이정표 지도' : 'Bản Đồ Mốc Thành Tích'}
               </div>
+              <div className="ach-map-wrap">
+                <img src="/icon/map_background.png" alt="" className="ach-map-bg" aria-hidden="true" />
               <div className="ach-map">
                 {MILESTONES.map((m, idx) => {
                   const reached = totalVnd >= m.threshold;
@@ -571,6 +558,7 @@ export function AchievementScreen({ onClose, isKo = false }: AchievementScreenPr
                   );
                 })}
               </div>
+              </div>{/* /ach-map-wrap */}
             </div>
 
             {/* Footer hint */}
@@ -580,18 +568,45 @@ export function AchievementScreen({ onClose, isKo = false }: AchievementScreenPr
                 : '💡 Tổng tích lũy được tính từ toàn bộ ca làm đã nhập trong ứng dụng.'}
             </p>
           </div>
+  );
+
+  const giftModal = giftMilestone ? (
+    <GiftModal
+      milestone={giftMilestone}
+      isKo={isKo}
+      onClose={() => setGiftMilestone(null)}
+      onClaim={handleGiftCollect}
+    />
+  ) : null;
+
+  if (inline) {
+    return (
+      <>
+        {bodyContent}
+        {giftModal}
+      </>
+    );
+  }
+
+  return createPortal(
+    <>
+      <div className="ach-overlay" onClick={onClose}>
+        <div className="ach-sheet" onClick={e => e.stopPropagation()}>
+          <div className="ach-drag-bar" />
+          <div className="ach-header">
+            <div className="ach-header-left">
+              <Map size={18} />
+              <span>{isKo ? '나의 여정' : 'Hành Trình Của Tôi'}</span>
+              {unclaimedCount > 0 && <span className="ach-unclaimed-badge">{unclaimedCount}</span>}
+            </div>
+            <button type="button" className="ach-close" onClick={onClose}>
+              <X size={18} />
+            </button>
+          </div>
+          {bodyContent}
         </div>
       </div>
-
-      {/* Gift Modal */}
-      {giftMilestone && (
-        <GiftModal
-          milestone={giftMilestone}
-          isKo={isKo}
-          onClose={() => setGiftMilestone(null)}
-          onClaim={handleGiftCollect}
-        />
-      )}
+      {giftModal}
     </>,
     document.body,
   );

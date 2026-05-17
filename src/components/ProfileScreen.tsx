@@ -30,8 +30,9 @@ import {
   Settings,
   X,
   Trophy,
+  LockKeyhole,
 } from 'lucide-react';
-import { BADGES, BADGE_CATEGORY_META, TIER_META, type BadgeCategory } from '../data/badgeData';
+import { AchievementBanner, AchievementScreen } from './AchievementScreen';
 import { useAppStore } from '../store/appStore';
 
 import { Session } from '@supabase/supabase-js';
@@ -40,6 +41,15 @@ import { regions } from '../data';
 import { supabase } from '../lib/supabase';
 import { schools, School } from '../schools';
 import { koreanRegions, Region } from '../regions';
+import {
+  changeLocalAppLockPin,
+  disableLocalAppLock,
+  enableLocalAppLock,
+  getLocalAppLockDelayMs,
+  isLocalAppLockEnabled,
+  LOCAL_APP_LOCK_CHANGED,
+  requestLocalAppLockNow,
+} from '../lib/localAppLock';
 
 type AuthMode = 'login' | 'register' | 'forgot';
 
@@ -69,7 +79,6 @@ export function ProfileScreen({
   onChangeWallpaper,
   lang,
   onChangeLang,
-  earnedBadges,
   isAdmin = false,
   onOpenAdmin,
   onStartDemo,
@@ -85,7 +94,6 @@ export function ProfileScreen({
   onChangeWallpaper: (w: WallpaperKey) => void;
   lang: AppLang;
   onChangeLang: (l: AppLang) => void;
-  earnedBadges: string[];
   isAdmin?: boolean;
   onOpenAdmin?: () => void;
   onStartDemo?: () => void;
@@ -112,21 +120,25 @@ export function ProfileScreen({
   const [regSchoolSuggestions, setRegSchoolSuggestions] = useState<School[]>([]);
   const [stats, setStats] = useState({ posts: 0, comments: 0, bookmarks: 0, likes: 0 });
   const [policyPanel, setPolicyPanel] = useState<'privacy' | 'terms' | 'support' | 'delete' | null>(null);
+  const [showAppLockPanel, setShowAppLockPanel] = useState(false);
+  const [appLockEnabled, setAppLockEnabled] = useState(() => isLocalAppLockEnabled());
+  const [appLockMode, setAppLockMode] = useState<'enable' | 'manage' | 'change'>('enable');
+  const [appLockPin, setAppLockPin] = useState('');
+  const [appLockConfirm, setAppLockConfirm] = useState('');
+  const [appLockCurrentPin, setAppLockCurrentPin] = useState('');
+  const [appLockMessage, setAppLockMessage] = useState('');
+  const [showAchievement, setShowAchievement] = useState(false);
   const [deleteReason, setDeleteReason] = useState('');
   const [deleteConfirmed, setDeleteConfirmed] = useState(false);
 
-  // Badge progress data from store
   const badgeShifts = useAppStore(s => s.shifts);
-  const badgeExpenses = useAppStore(s => s.expenses);
-  const badgeCompanions = useAppStore(s => s.companions);
-  const badgeData = {
-    shifts: badgeShifts,
-    expenses: badgeExpenses,
-    posts: [],
-    comments: [],
-    companionsCount: badgeCompanions.length,
-    likesCount: stats.likes,
-  } as const;
+  const rateValue = useAppStore(s => s.rate.value);
+
+  useEffect(() => {
+    const syncLockState = () => setAppLockEnabled(isLocalAppLockEnabled());
+    window.addEventListener(LOCAL_APP_LOCK_CHANGED, syncLockState);
+    return () => window.removeEventListener(LOCAL_APP_LOCK_CHANGED, syncLockState);
+  }, []);
 
   useEffect(() => {
     if (!session || !supabase) return;
@@ -320,6 +332,154 @@ export function ProfileScreen({
   const displayName = profile.displayName || (isKo ? '유학생' : 'Du học sinh');
   const initials = displayName.slice(0, 2).toUpperCase();
 
+  const resetAppLockForm = () => {
+    setAppLockPin('');
+    setAppLockConfirm('');
+    setAppLockCurrentPin('');
+    setAppLockMessage('');
+  };
+
+  const openAppLockPanel = () => {
+    resetAppLockForm();
+    setAppLockMode(appLockEnabled ? 'manage' : 'enable');
+    setShowAppLockPanel(true);
+  };
+
+  const normalizePin = (value: string) => value.replace(/\D/g, '').slice(0, 6);
+
+  const handleEnableAppLock = async () => {
+    if (appLockPin.length < 4) {
+      setAppLockMessage(isKo ? 'PIN은 4자리 이상이어야 합니다.' : 'PIN cần ít nhất 4 số.');
+      return;
+    }
+    if (appLockPin !== appLockConfirm) {
+      setAppLockMessage(isKo ? 'PIN 확인이 일치하지 않습니다.' : 'PIN xác nhận chưa khớp.');
+      return;
+    }
+    await enableLocalAppLock(appLockPin);
+    resetAppLockForm();
+    setAppLockEnabled(true);
+    setAppLockMode('manage');
+    setAppLockMessage(isKo ? '앱 잠금을 켰습니다.' : 'Đã bật khoá app trên thiết bị này.');
+  };
+
+  const handleDisableAppLock = async () => {
+    if (getLocalAppLockDelayMs() > 0) {
+      setAppLockMessage(isKo ? '잠시 후 다시 시도하세요.' : 'Sai nhiều lần, vui lòng thử lại sau.');
+      return;
+    }
+    const ok = await disableLocalAppLock(appLockCurrentPin);
+    if (!ok) {
+      setAppLockMessage(isKo ? 'PIN이 올바르지 않습니다.' : 'PIN hiện tại chưa đúng.');
+      setAppLockCurrentPin('');
+      return;
+    }
+    resetAppLockForm();
+    setAppLockEnabled(false);
+    setAppLockMode('enable');
+    setShowAppLockPanel(false);
+  };
+
+  const handleChangeAppLockPin = async () => {
+    if (appLockPin.length < 4) {
+      setAppLockMessage(isKo ? '새 PIN은 4자리 이상이어야 합니다.' : 'PIN mới cần ít nhất 4 số.');
+      return;
+    }
+    if (appLockPin !== appLockConfirm) {
+      setAppLockMessage(isKo ? '새 PIN 확인이 일치하지 않습니다.' : 'PIN mới xác nhận chưa khớp.');
+      return;
+    }
+    const ok = await changeLocalAppLockPin(appLockCurrentPin, appLockPin);
+    if (!ok) {
+      setAppLockMessage(isKo ? '현재 PIN이 올바르지 않습니다.' : 'PIN hiện tại chưa đúng.');
+      setAppLockCurrentPin('');
+      return;
+    }
+    resetAppLockForm();
+    setAppLockMode('manage');
+    setAppLockMessage(isKo ? 'PIN을 변경했습니다.' : 'Đã đổi PIN khoá app.');
+  };
+
+  const settingsContent = (
+    <>
+      {/* ỨNG DỤNG */}
+      <div className="pf-settings-group">
+        <div className="pf-settings-group-label">{isKo ? '일반' : 'ỨNG DỤNG'}</div>
+        <div className="pf-settings-card">
+          <div className="pf-setting-row mini" onClick={onToggleDarkMode} style={{ cursor: 'pointer' }}>
+            <div className="pf-setting-icon">{isDarkMode ? <Moon size={16} /> : <Sun size={16} />}</div>
+            <span>{isKo ? '다크 모드' : 'Chế độ tối'}</span>
+            <div className="pf-toggle" data-active={isDarkMode} style={{ marginLeft: 'auto' }}><div className="pf-toggle-knob" /></div>
+          </div>
+          <div className="pf-setting-divider" />
+          <div className="pf-setting-row mini" onClick={() => setShowWallpaperPicker(!showWallpaperPicker)} style={{ cursor: 'pointer' }}>
+            <div className="pf-setting-icon"><Palette size={16} /></div>
+            <span>{isKo ? '배경화면' : 'Hình nền'}</span>
+            <ChevronRight size={16} style={{ marginLeft: 'auto', transition: 'transform 0.2s', transform: showWallpaperPicker ? 'rotate(90deg)' : 'none' }} />
+          </div>
+          {showWallpaperPicker && (
+            <div className="pf-wallpaper-grid compact" style={{ paddingLeft: 12, paddingRight: 12, paddingBottom: 12 }}>
+              {WALLPAPERS.map((w) => (
+                <button key={w.key} className={`pf-wallpaper-item ${wallpaper === w.key ? 'active' : ''}`} onClick={() => onChangeWallpaper(w.key)}>
+                  <div className="pf-wallpaper-preview" style={{ background: w.preview }} />
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="pf-setting-divider" />
+          <div className="pf-setting-row mini">
+            <div className="pf-setting-icon"><Globe size={16} /></div>
+            <span>{isKo ? '언어' : 'Ngôn ngữ'}</span>
+            <div className="pf-lang-toggle mini" style={{ marginLeft: 'auto' }}>
+              <button className={lang === 'vi' ? 'active' : ''} onClick={() => onChangeLang('vi')}>VI</button>
+              <button className={lang === 'ko' ? 'active' : ''} onClick={() => onChangeLang('ko')}>KO</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* STORE SAFETY */}
+      <div className="pf-settings-group">
+        <div className="pf-settings-group-label">{isKo ? '지원' : 'BẢO MẬT & HỖ TRỢ'}</div>
+        <div className="pf-settings-card">
+          <button type="button" className="pf-setting-row mini" onClick={openAppLockPanel}>
+            <div className="pf-setting-icon"><LockKeyhole size={16} /></div>
+            <span>{isKo ? '앱 잠금' : 'Khoá app'}</span>
+            <div className="pf-toggle" data-active={appLockEnabled} style={{ marginLeft: 'auto' }}><div className="pf-toggle-knob" /></div>
+          </button>
+          <div className="pf-setting-divider" />
+          <button type="button" className="pf-setting-row mini" onClick={() => setPolicyPanel('privacy')}>
+            <div className="pf-setting-icon"><Shield size={16} /></div>
+            <span>{isKo ? '개인정보 처리방침' : 'Chính sách bảo mật'}</span>
+            <ChevronRight size={16} style={{ marginLeft: 'auto' }} />
+          </button>
+          <div className="pf-setting-divider" />
+          <button type="button" className="pf-setting-row mini" onClick={() => setPolicyPanel('terms')}>
+            <div className="pf-setting-icon"><Info size={16} /></div>
+            <span>{isKo ? '이용약관' : 'Điều khoản sử dụng'}</span>
+            <ChevronRight size={16} style={{ marginLeft: 'auto' }} />
+          </button>
+          <div className="pf-setting-divider" />
+          <button type="button" className="pf-setting-row mini" onClick={() => setPolicyPanel('support')}>
+            <div className="pf-setting-icon"><MessageCircle size={16} /></div>
+            <span>{isKo ? '지원 문의' : 'Liên hệ hỗ trợ'}</span>
+            <ChevronRight size={16} style={{ marginLeft: 'auto' }} />
+          </button>
+          {session && (
+            <>
+              <div className="pf-setting-divider" />
+              <button type="button" className="pf-setting-row mini pf-danger-row" onClick={() => setPolicyPanel('delete')}>
+                <div className="pf-setting-icon"><LogOut size={16} /></div>
+                <span>{isKo ? '계정 삭제 요청' : 'Yêu cầu xoá tài khoản'}</span>
+                <ChevronRight size={16} style={{ marginLeft: 'auto' }} />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </>
+  );
+
   const handleSchoolChange = (val: string) => {
     setProfile({ ...profile, school: val });
     if (val.trim().length > 1) {
@@ -493,115 +653,15 @@ export function ProfileScreen({
             </div>
           </div>
 
-          {/* ===== BADGES SECTION ===== */}
-          <section className="pf-card pf-badge-card">
-            <div className="pf-card-header">
-              <Trophy size={18} color="#f59e0b" />
-              <span>{isKo ? '업적 배지' : 'Huy hiệu thành tích'}</span>
-              <span className="pf-badge-count-pill">{earnedBadges.length}<span>/{BADGES.length}</span></span>
-            </div>
-
-            {/* Progress summary bar */}
-            <div className="pf-badge-progress-overview">
-              <div className="pf-badge-progress-track">
-                <div
-                  className="pf-badge-progress-fill-main"
-                  style={{ width: `${Math.round(earnedBadges.length / BADGES.length * 100)}%` }}
-                />
-              </div>
-              <span className="pf-badge-progress-pct">
-                {Math.round(earnedBadges.length / BADGES.length * 100)}%
-              </span>
-            </div>
-
-            {/* Badges grouped by category */}
-            {(Object.keys(BADGE_CATEGORY_META) as BadgeCategory[]).map(cat => {
-              const catBadges = BADGES.filter(b => b.category === cat);
-              if (!catBadges.length) return null;
-              const meta = BADGE_CATEGORY_META[cat];
-              return (
-                <div key={cat} className="pf-badge-group">
-                  <div className="pf-badge-group-title">
-                    <span>{meta.icon}</span>
-                    <span>{isKo ? meta.label_ko : meta.label_vi}</span>
-                  </div>
-                  <div className="pf-badges-grid">
-                    {catBadges.map(badge => {
-                      const isEarned = earnedBadges.includes(badge.id);
-                      const prog = badge.getProgress(badgeData as any);
-                      const pct = Math.min(100, Math.round((prog.current / prog.target) * 100));
-                      const tierLabel = isKo ? TIER_META[badge.tier].label_ko : TIER_META[badge.tier].label_vi;
-
-                      // Format progress text
-                      let progText = '';
-                      if (!isEarned) {
-                        if (badge.category === 'income') {
-                          const fmtM = (v: number) => v >= 1_000_000
-                            ? `${(v / 1_000_000).toFixed(1)}M`
-                            : `${Math.round(v / 1000)}k`;
-                          progText = `${fmtM(prog.current)} / ${fmtM(prog.target)}₩`;
-                        } else {
-                          progText = `${prog.current} / ${prog.target}`;
-                        }
-                      }
-
-                      return (
-                        <div
-                          key={badge.id}
-                          className={`pf-badge2 pf-tier-${badge.tier} ${isEarned ? 'earned' : 'locked'}`}
-                          style={isEarned ? {
-                            background: badge.color,
-                            borderColor: badge.border,
-                            boxShadow: `0 4px 18px ${badge.glow}`,
-                          } : undefined}
-                        >
-                          {/* Tier pill */}
-                          <span className="pf-badge2-tier">{tierLabel}</span>
-
-                          {/* Icon */}
-                          <div className="pf-badge2-emoji">{badge.icon}</div>
-
-                          {/* Name */}
-                          <span className="pf-badge2-name">
-                            {isKo ? badge.label_ko : badge.label_vi}
-                          </span>
-
-                          {/* Progress bar (locked only) */}
-                          {!isEarned && (
-                            <div className="pf-badge2-progress">
-                              <div className="pf-badge2-prog-bar">
-                                <div className="pf-badge2-prog-fill" style={{ width: `${pct}%` }} />
-                              </div>
-                              <span className="pf-badge2-prog-text">{progText}</span>
-                            </div>
-                          )}
-
-                          {/* Lock overlay */}
-                          {!isEarned && <span className="pf-badge2-lock">🔒</span>}
-
-                          {/* Shine overlay for earned */}
-                          {isEarned && <span className="pf-badge2-shine" />}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
+          {/* ===== ACHIEVEMENT SECTION ===== */}
+          <section className="pf-card pf-achievement-inline">
+            <AchievementScreen inline isKo={isKo} />
           </section>
 
         </>
       ) : (
-        /* ===== GUEST: Compact login banner + gear ===== */
-        <div style={{ position: 'relative' }}>
-          <button
-            type="button"
-            className="pf-settings-gear-btn pf-settings-gear-btn--guest"
-            onClick={() => setShowSettings(true)}
-            title={isKo ? '설정' : 'Cài đặt'}
-          >
-            <Settings size={18} />
-          </button>
+        /* ===== GUEST: Compact login banner + inline settings ===== */
+        <div className="pf-guest-profile-stack">
           <div className="pf-guest-banner" onClick={() => setShowAuthInline(true)}>
             <div className="pf-guest-banner-text">
               <span className="pf-guest-banner-title">{isKo ? '로그인하고 데이터를 안전하게 보관하세요' : 'Đăng nhập để lưu dữ liệu an toàn'}</span>
@@ -614,11 +674,14 @@ export function ProfileScreen({
               {isKo ? '로그인' : 'Đăng nhập'}
             </button>
           </div>
+          <div className="pf-guest-settings-inline">
+            {settingsContent}
+          </div>
         </div>
       )}
 
       {/* ===== SETTINGS BOTTOM SHEET (portal → thoát khỏi transform ancestor) ===== */}
-      {showSettings && createPortal(
+      {showSettings && session && createPortal(
         <div className="pf-settings-sheet-overlay" onClick={() => setShowSettings(false)}>
           <div className="pf-settings-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="pf-settings-sheet-handle" />
@@ -726,75 +789,7 @@ export function ProfileScreen({
                 </div>
               )}
 
-              {/* ỨNG DỤNG */}
-              <div className="pf-settings-group">
-                <div className="pf-settings-group-label">{isKo ? '일반' : 'ỨNG DỤNG'}</div>
-                <div className="pf-settings-card">
-                  <div className="pf-setting-row mini" onClick={onToggleDarkMode} style={{ cursor: 'pointer' }}>
-                    <div className="pf-setting-icon">{isDarkMode ? <Moon size={16} /> : <Sun size={16} />}</div>
-                    <span>{isKo ? '다크 모드' : 'Chế độ tối'}</span>
-                    <div className="pf-toggle" data-active={isDarkMode} style={{ marginLeft: 'auto' }}><div className="pf-toggle-knob" /></div>
-                  </div>
-                  <div className="pf-setting-divider" />
-                  <div className="pf-setting-row mini" onClick={() => setShowWallpaperPicker(!showWallpaperPicker)} style={{ cursor: 'pointer' }}>
-                    <div className="pf-setting-icon"><Palette size={16} /></div>
-                    <span>{isKo ? '배경화면' : 'Hình nền'}</span>
-                    <ChevronRight size={16} style={{ marginLeft: 'auto', transition: 'transform 0.2s', transform: showWallpaperPicker ? 'rotate(90deg)' : 'none' }} />
-                  </div>
-                  {showWallpaperPicker && (
-                    <div className="pf-wallpaper-grid compact" style={{ paddingLeft: 12, paddingRight: 12, paddingBottom: 12 }}>
-                      {WALLPAPERS.map((w) => (
-                        <button key={w.key} className={`pf-wallpaper-item ${wallpaper === w.key ? 'active' : ''}`} onClick={() => onChangeWallpaper(w.key)}>
-                          <div className="pf-wallpaper-preview" style={{ background: w.preview }} />
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  <div className="pf-setting-divider" />
-                  <div className="pf-setting-row mini">
-                    <div className="pf-setting-icon"><Globe size={16} /></div>
-                    <span>{isKo ? '언어' : 'Ngôn ngữ'}</span>
-                    <div className="pf-lang-toggle mini" style={{ marginLeft: 'auto' }}>
-                      <button className={lang === 'vi' ? 'active' : ''} onClick={() => onChangeLang('vi')}>VI</button>
-                      <button className={lang === 'ko' ? 'active' : ''} onClick={() => onChangeLang('ko')}>KO</button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* STORE SAFETY */}
-              <div className="pf-settings-group">
-                <div className="pf-settings-group-label">{isKo ? '지원' : 'BẢO MẬT & HỖ TRỢ'}</div>
-                <div className="pf-settings-card">
-                  <button type="button" className="pf-setting-row mini" onClick={() => setPolicyPanel('privacy')}>
-                    <div className="pf-setting-icon"><Shield size={16} /></div>
-                    <span>{isKo ? '개인정보 처리방침' : 'Chính sách bảo mật'}</span>
-                    <ChevronRight size={16} style={{ marginLeft: 'auto' }} />
-                  </button>
-                  <div className="pf-setting-divider" />
-                  <button type="button" className="pf-setting-row mini" onClick={() => setPolicyPanel('terms')}>
-                    <div className="pf-setting-icon"><Info size={16} /></div>
-                    <span>{isKo ? '이용약관' : 'Điều khoản sử dụng'}</span>
-                    <ChevronRight size={16} style={{ marginLeft: 'auto' }} />
-                  </button>
-                  <div className="pf-setting-divider" />
-                  <button type="button" className="pf-setting-row mini" onClick={() => setPolicyPanel('support')}>
-                    <div className="pf-setting-icon"><MessageCircle size={16} /></div>
-                    <span>{isKo ? '지원 문의' : 'Liên hệ hỗ trợ'}</span>
-                    <ChevronRight size={16} style={{ marginLeft: 'auto' }} />
-                  </button>
-                  {session && (
-                    <>
-                      <div className="pf-setting-divider" />
-                      <button type="button" className="pf-setting-row mini pf-danger-row" onClick={() => setPolicyPanel('delete')}>
-                        <div className="pf-setting-icon"><LogOut size={16} /></div>
-                        <span>{isKo ? '계정 삭제 요청' : 'Yêu cầu xoá tài khoản'}</span>
-                        <ChevronRight size={16} style={{ marginLeft: 'auto' }} />
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
+              {settingsContent}
 
             </div>{/* /sheet-body */}
           </div>{/* /sheet */}
@@ -907,6 +902,103 @@ export function ProfileScreen({
           </div>
         </div>
       )}
+      {showAppLockPanel ? createPortal(
+        <div className="pf-policy-overlay" onClick={() => setShowAppLockPanel(false)}>
+          <div className="pf-policy-sheet app-lock-settings-sheet" onClick={(event) => event.stopPropagation()}>
+            <div className="pf-popover-head">
+              <h3>{isKo ? '앱 잠금' : 'Khoá app'}</h3>
+              <button type="button" onClick={() => setShowAppLockPanel(false)}><X size={20} /></button>
+            </div>
+            <div className="pf-policy-body app-lock-settings-body">
+              <div className="app-lock-settings-hero">
+                <div className="app-lock-settings-icon"><LockKeyhole size={24} /></div>
+                <div>
+                  <strong>{appLockEnabled ? (isKo ? '이 기기에서 앱 잠금 켜짐' : 'Đang bật trên thiết bị này') : (isKo ? '이 기기에서 앱 잠금 꺼짐' : 'Chưa bật trên thiết bị này')}</strong>
+                  <p>{isKo ? 'PIN은 기기에만 저장됩니다.' : 'PIN chỉ được lưu local trên thiết bị, không gửi lên máy chủ.'}</p>
+                </div>
+              </div>
+
+              {appLockMode === 'manage' && appLockEnabled ? (
+                <>
+                  {appLockMessage ? <p className="app-lock-settings-msg success">{appLockMessage}</p> : null}
+                  <button type="button" className="pf-submit-btn app-lock-wide-btn" onClick={() => { resetAppLockForm(); requestLocalAppLockNow(); }}>
+                    <LockKeyhole size={16} /> {isKo ? '지금 잠그기' : 'Khoá ngay'}
+                  </button>
+                  <button type="button" className="app-lock-secondary-btn" onClick={() => { resetAppLockForm(); setAppLockMode('change'); }}>
+                    {isKo ? 'PIN 변경' : 'Đổi PIN'}
+                  </button>
+                  <div className="pf-field">
+                    <label>{isKo ? '현재 PIN' : 'PIN hiện tại'}</label>
+                    <input
+                      className="pf-input"
+                      type="password"
+                      inputMode="numeric"
+                      value={appLockCurrentPin}
+                      onChange={(event) => setAppLockCurrentPin(normalizePin(event.target.value))}
+                      placeholder="••••"
+                    />
+                  </div>
+                  <button type="button" className="app-lock-danger-btn" disabled={appLockCurrentPin.length < 4} onClick={() => void handleDisableAppLock()}>
+                    {isKo ? '앱 잠금 끄기' : 'Tắt khoá app'}
+                  </button>
+                </>
+              ) : (
+                <>
+                  {appLockMode === 'change' ? (
+                    <div className="pf-field">
+                      <label>{isKo ? '현재 PIN' : 'PIN hiện tại'}</label>
+                      <input
+                        className="pf-input"
+                        type="password"
+                        inputMode="numeric"
+                        value={appLockCurrentPin}
+                        onChange={(event) => setAppLockCurrentPin(normalizePin(event.target.value))}
+                        placeholder="••••"
+                      />
+                    </div>
+                  ) : null}
+                  <div className="pf-field">
+                    <label>{appLockMode === 'change' ? (isKo ? '새 PIN' : 'PIN mới') : (isKo ? 'PIN 만들기' : 'Tạo PIN')}</label>
+                    <input
+                      className="pf-input"
+                      type="password"
+                      inputMode="numeric"
+                      value={appLockPin}
+                      onChange={(event) => setAppLockPin(normalizePin(event.target.value))}
+                      placeholder="4-6 số"
+                    />
+                  </div>
+                  <div className="pf-field">
+                    <label>{isKo ? 'PIN 확인' : 'Xác nhận PIN'}</label>
+                    <input
+                      className="pf-input"
+                      type="password"
+                      inputMode="numeric"
+                      value={appLockConfirm}
+                      onChange={(event) => setAppLockConfirm(normalizePin(event.target.value))}
+                      placeholder="••••"
+                    />
+                  </div>
+                  {appLockMessage ? <p className="app-lock-settings-msg">{appLockMessage}</p> : null}
+                  <button
+                    type="button"
+                    className="pf-submit-btn app-lock-wide-btn"
+                    onClick={() => void (appLockMode === 'change' ? handleChangeAppLockPin() : handleEnableAppLock())}
+                  >
+                    <LockKeyhole size={16} /> {appLockMode === 'change' ? (isKo ? 'PIN 변경' : 'Lưu PIN mới') : (isKo ? '앱 잠금 켜기' : 'Bật khoá app')}
+                  </button>
+                  {appLockMode === 'change' ? (
+                    <button type="button" className="app-lock-secondary-btn" onClick={() => { resetAppLockForm(); setAppLockMode('manage'); }}>
+                      {isKo ? '돌아가기' : 'Quay lại'}
+                    </button>
+                  ) : null}
+                </>
+              )}
+            </div>
+          </div>
+        </div>,
+        document.body
+      ) : null}
       {policyPanel ? createPortal(
         <div className="pf-policy-overlay" onClick={() => setPolicyPanel(null)}>
           <div className="pf-policy-sheet" onClick={(event) => event.stopPropagation()}>
@@ -1180,6 +1272,7 @@ export function ProfileScreen({
         </div>,
         document.body
       ) : null}
+
     </div>
   );
 }

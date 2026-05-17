@@ -2,6 +2,7 @@
 @import "tailwindcss";
 
 :root {
+  --bottom-nav-reserved: calc(104px + env(safe-area-inset-bottom, 0px));
   --blue-700: #2752ff;
   --blue-500: #4f73ff;
   --green-600: #0d9b72;
@@ -440,12 +441,19 @@ select {
   padding: 8px 16px 132px;
 }
 
+.screen-shell:has(.cm-header) {
+  padding: 0 0 132px;
+}
+
 .screen-shell:has(.cm-detail-screen),
 .screen-shell:has(.cm-write-fullscreen),
 .screen-shell:has(.calendar-modal-backdrop),
-.screen-shell:has(.day-sheet-backdrop),
 .screen-shell:has(.chat-view-container) {
   z-index: 3000;
+}
+
+.screen-shell:has(.day-sheet-backdrop) {
+  z-index: 2400;
 }
 
 .screen-shell:has(.rv-container),
@@ -468,8 +476,7 @@ select {
   display: none;
 }
 
-.phone-shell:has(.calendar-modal-backdrop) .bottom-tabs,
-.phone-shell:has(.day-sheet-backdrop) .bottom-tabs {
+.phone-shell:has(.calendar-modal-backdrop) .bottom-tabs {
   display: none;
 }
 
@@ -1738,10 +1745,10 @@ select {
 
 .day-sheet-backdrop {
   position: fixed;
-  inset: 0;
-  z-index: 4200;
+  inset: 0 0 var(--bottom-nav-reserved);
+  z-index: 2400;
   background: rgba(7, 20, 37, 0.34);
-  backdrop-filter: blur(10px);
+  backdrop-filter: none;
   display: flex;
   align-items: flex-end;
   padding-bottom: 0;
@@ -1751,7 +1758,7 @@ select {
 .day-sheet {
   width: 100%;
   max-height: min(85vh, 720px);
-  height: auto;
+  height: min(68svh, calc(100svh - var(--bottom-nav-reserved) - 40px), 640px);
   overflow-y: auto;
   scrollbar-width: none;
   border-radius: 32px 32px 0 0;
@@ -2363,6 +2370,10 @@ button.ticker-inner {
 }
 
 @media (min-width: 480px) {
+  :root {
+    --bottom-nav-reserved: 88px;
+  }
+
   .app-stage {
     padding: 20px;
   }
@@ -4970,13 +4981,16 @@ button.ticker-inner {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 20px 8px;
+  padding: 18px 20px 14px;
+  margin: 0;
   position: sticky;
   top: 0;
   z-index: 1001;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+  border-radius: 0 0 22px 22px;
+  box-shadow: 0 10px 24px rgba(28, 43, 76, 0.06);
 }
 
 .cm-header--hidden {
@@ -6903,6 +6917,14 @@ button.ticker-inner {
   color: #fff;
 }
 
+.pf-guest-profile-stack {
+  padding-top: 12px;
+}
+
+.pf-guest-settings-inline {
+  padding-top: 12px;
+}
+
 /* ── Settings page (inline, accessible to all) ── */
 .profile-wrapper {
   padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
@@ -8034,6 +8056,183 @@ button.ticker-inner {
   transform: translateX(22px);
 }
 
+.app-lock-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 18% 14%, rgba(215, 255, 95, 0.34), transparent 28%),
+    linear-gradient(135deg, rgba(226, 240, 255, 0.96), rgba(214, 245, 255, 0.96));
+  backdrop-filter: blur(18px);
+}
+
+.app-lock-card {
+  width: min(100%, 340px);
+  border: 1px solid rgba(255, 255, 255, 0.82);
+  border-radius: 30px;
+  padding: 30px 24px 24px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 26px 70px rgba(28, 43, 76, 0.2);
+  text-align: center;
+}
+
+.app-lock-icon,
+.app-lock-settings-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #2752ff;
+  background: rgba(39, 82, 255, 0.1);
+}
+
+.app-lock-icon {
+  width: 62px;
+  height: 62px;
+  border-radius: 22px;
+  margin-bottom: 16px;
+}
+
+.app-lock-card h2 {
+  margin: 0 0 8px;
+  color: #08162b;
+  font-size: 24px;
+  font-weight: 950;
+}
+
+.app-lock-card p {
+  margin: 0 0 18px;
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.app-lock-card input {
+  width: 100%;
+  height: 54px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 18px;
+  background: #f8fafc;
+  color: #08162b;
+  text-align: center;
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: 8px;
+  outline: none;
+}
+
+.app-lock-card input:focus {
+  border-color: #2752ff;
+  box-shadow: 0 0 0 4px rgba(39, 82, 255, 0.1);
+}
+
+.app-lock-card button,
+.app-lock-wide-btn {
+  width: 100%;
+  min-height: 52px;
+  border: none;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #2752ff, #7657ff);
+  color: #ffffff;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.app-lock-card button {
+  margin-top: 16px;
+}
+
+.app-lock-card button:disabled,
+.app-lock-wide-btn:disabled,
+.app-lock-danger-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.app-lock-message,
+.app-lock-wait,
+.app-lock-settings-msg {
+  display: block;
+  margin-top: 10px;
+  color: #e11d48;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.app-lock-wait {
+  color: #64748b;
+}
+
+.app-lock-settings-sheet {
+  max-width: 390px;
+}
+
+.app-lock-settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.app-lock-settings-hero {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+  border-radius: 20px;
+  background: #f8fafc;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.app-lock-settings-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 16px;
+  flex: 0 0 auto;
+}
+
+.app-lock-settings-hero strong {
+  display: block;
+  color: #08162b;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.app-lock-settings-hero p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.app-lock-settings-msg.success {
+  color: #0d9b72;
+}
+
+.app-lock-secondary-btn,
+.app-lock-danger-btn {
+  width: 100%;
+  min-height: 48px;
+  border-radius: 16px;
+  font-size: 14px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.app-lock-secondary-btn {
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: #ffffff;
+  color: #334155;
+}
+
+.app-lock-danger-btn {
+  border: 0;
+  background: #fff1f2;
+  color: #e11d48;
+}
+
 /* Badges */
 .pf-see-all {
   margin-left: auto;
@@ -8631,10 +8830,10 @@ button.ticker-inner {
 }
 
 .cm-sync-strip {
-  margin: 4px 20px 12px;
+  margin: 10px 20px 12px;
   width: fit-content;
   min-height: 28px;
-  border-radius: 10px;
+  border-radius: 999px;
   padding: 0 10px;
   display: flex;
   align-items: center;
@@ -8666,7 +8865,8 @@ button.ticker-inner {
   display: flex;
   justify-content: center;
   gap: 10px;
-  padding: 12px 20px;
+  padding: 12px 16px;
+  margin: 0 4px 10px;
   position: sticky;
   top: 60px;
   /* Below header */
@@ -8674,7 +8874,9 @@ button.ticker-inner {
   background: rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 24px;
+  box-shadow: 0 12px 28px rgba(28, 43, 76, 0.08);
 }
 
 .cm-board-tabs button {
@@ -9204,16 +9406,18 @@ button.ticker-inner {
   background: #ffffff;
   padding: 12px 14px 8px;
   border-radius: 0;
-  box-shadow: none;
+  box-shadow: 0 8px 18px rgba(28, 43, 76, 0.06);
 }
 
 .rv-search-inner {
   display: flex;
   align-items: center;
   gap: 12px;
-  background: #f1f5f9;
+  background: #ffffff;
   padding: 10px 14px;
-  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 16px;
+  box-shadow: 0 6px 16px rgba(28, 43, 76, 0.06);
 }
 
 /* Push tabs down below the fixed search bar, hide sync strip */
@@ -9228,13 +9432,14 @@ button.ticker-inner {
 
 /* Tabs become the bottom half of the unified top bar */
 .screen-shell:has(.rv-container) .cm-board-tabs {
-  margin-top: 58px;
+  margin-top: 66px;
+  margin-left: 0;
+  margin-right: 0;
   background: #ffffff;
-  padding: 8px 14px 10px;
-  border-bottom: none;
-  border-bottom-left-radius: 16px;
-  border-bottom-right-radius: 16px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.09);
+  padding: 10px 14px 12px;
+  border: 0;
+  border-radius: 0 0 20px 20px;
+  box-shadow: 0 10px 22px rgba(28, 43, 76, 0.08);
 }
 
 .rv-search-input-field {
@@ -13613,8 +13818,10 @@ button.admin-stat-card {
   }
 
   .screen-shell:has(.rv-container) .cm-board-tabs {
-    margin-top: 54px;
-    padding: 8px 12px 9px;
+    margin-top: 64px;
+    margin-left: 0;
+    margin-right: 0;
+    padding: 8px 12px 10px;
     gap: 8px;
   }
 
@@ -14721,12 +14928,18 @@ button.admin-stat-card {
 /* ── Character Card ── */
 .ach-char-card {
   display: flex;
-  align-items: center;
-  gap: 14px;
+  flex-direction: column;
+  gap: 12px;
   background: linear-gradient(135deg, #667eea22, #764ba222);
   border: 1.5px solid rgba(102, 126, 234, 0.2);
   border-radius: 22px;
-  padding: 18px 16px;
+  padding: 16px;
+}
+
+.ach-char-card-top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
 }
 
 .ach-char-avatar-wrap {
@@ -14767,9 +14980,7 @@ button.admin-stat-card {
   font-weight: 900;
   color: var(--text-main, #08162b);
   margin-bottom: 4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.2;
 }
 
 .ach-char-desc {
@@ -14780,32 +14991,35 @@ button.admin-stat-card {
 }
 
 .ach-char-total {
-  flex-shrink: 0;
-  text-align: right;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255,255,255,0.5);
+  border-radius: 14px;
+  padding: 10px 14px;
+  border-top: 1px solid rgba(102,126,234,0.12);
 }
 
 .ach-char-total-label {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--text-faint, #94a3b8);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin-bottom: 3px;
+  letter-spacing: 0;
 }
 
 .ach-char-total-value {
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 900;
   color: #2752ff;
   line-height: 1;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .ach-char-total-sub {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--text-faint, #94a3b8);
-  margin-top: 2px;
+  margin-left: 4px;
 }
 
 /* ── Progress Card ── */
@@ -14828,8 +15042,7 @@ button.admin-stat-card {
   font-size: 11px;
   font-weight: 700;
   color: var(--text-faint, #94a3b8);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0;
 }
 
 .ach-progress-next {
@@ -14893,8 +15106,7 @@ button.admin-stat-card {
   font-size: 12px;
   font-weight: 800;
   color: var(--text-soft, #64748b);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0;
 }
 
 /* ── Admin Events ── */
@@ -14969,9 +15181,30 @@ button.admin-stat-card {
 }
 
 /* ── Milestone Map ── */
+.ach-map-wrap {
+  position: relative;
+  border-radius: 20px;
+  overflow: hidden;
+  background: linear-gradient(180deg, #f0fdf4 0%, #e0f2fe 100%);
+}
+
+.ach-map-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+  opacity: 0.28;
+  pointer-events: none;
+}
+
 .ach-map {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
+  padding: 12px 8px;
 }
 
 .ach-ms {
@@ -15169,7 +15402,7 @@ button.admin-stat-card {
   font-size: 22px;
   font-weight: 900;
   color: var(--text-main, #08162b);
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .ach-gift-hint {
@@ -15450,15 +15683,25 @@ button.admin-stat-card {
 .dark .ach-banner-track { background: rgba(255,255,255,0.08); }
 .dark .ach-banner-sub  { color: #64748b; }
 
+/* ── Achievement Inline in Profile ── */
+.pf-achievement-inline {
+  padding: 0 !important;
+  overflow: hidden;
+}
+.pf-achievement-inline .ach-body {
+  max-height: none;
+  overflow: visible;
+  padding: 12px 14px 16px;
+}
+
 /* ── Achievement Real Images ── */
 .ach-char-avatar-img {
-  width: 100px;
-  height: 100px;
+  width: 80px;
+  height: 80px;
   object-fit: contain;
   border-radius: 50%;
   position: relative;
   z-index: 1;
-  drop-shadow: 0 4px 16px rgba(0,0,0,0.12);
 }
 
 .ach-char-face-img {
@@ -15538,7 +15781,7 @@ button.admin-stat-card {
 }
 .admin-events-form-grid label {
   display: flex; flex-direction: column; gap: 4px;
-  font-size: 11px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.3px;
+  font-size: 11px; font-weight: 600; color: #6b7280; letter-spacing: 0;
 }
 .admin-events-form-grid input,
 .admin-events-form-grid textarea {
@@ -15583,3 +15826,26 @@ button.admin-stat-card {
 .dark .admin-event-body strong { color: #f1f5f9; }
 .dark .admin-ghost-btn { color: #94a3b8; border-color: #334155; }
 .dark .admin-ghost-btn:hover { background: #1e293b; }
+
+/* Desktop phone-frame alignment for the calendar day sheet. */
+@media (min-width: 480px) {
+  .rv-floating-search {
+    left: 50%;
+    right: auto;
+    width: 430px;
+    transform: translateX(-50%);
+  }
+
+  .day-sheet-backdrop {
+    left: 50%;
+    right: auto;
+    width: 430px;
+    transform: translateX(-50%);
+  }
+
+  .day-sheet {
+    width: 430px;
+    max-width: 430px;
+    margin: 0;
+  }
+}

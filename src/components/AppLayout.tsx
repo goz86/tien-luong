@@ -9,6 +9,7 @@ import { IncomeScreen } from './IncomeScreen';
 import { CommunityScreen } from './CommunityScreen';
 import { AdminScreen } from './AdminScreen';
 import { ProfileScreen, WALLPAPERS } from './ProfileScreen';
+import { AppLockOverlay } from './AppLockOverlay';
 import { timeAgo } from '../data/communityData';
 import { shiftMonth } from '../utils/helpers';
 import type { Tab } from '../lib/types';
@@ -720,7 +721,6 @@ export default function AppLayout() {
               onChangeWallpaper={store.setWallpaper}
               lang={store.lang}
               onChangeLang={store.setLang}
-              earnedBadges={store.earnedBadges}
               isAdmin={store.isAdmin}
               onOpenAdmin={() => changeTab('admin')}
               onStartDemo={startDemoMode}
@@ -840,6 +840,7 @@ export default function AppLayout() {
             </>
           )}
         </AnimatePresence>
+        <AppLockOverlay lang={store.lang} />
       </div>
     </div>
   );
