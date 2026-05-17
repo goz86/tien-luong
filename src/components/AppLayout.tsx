@@ -34,15 +34,15 @@ type WallpaperKey = string;
 
 const REFRESH_RATE_URL = 'https://open.er-api.com/v6/latest/KRW';
 
-const ANNOUNCEMENT_HIDE_TODAY_KEY = 'duhocmate-announcement-hide-today';
+const ANNOUNCEMENT_PERM_HIDE_KEY = 'duhocmate-announcement-perm-hide'; // user bấm "không hiển thị lại"
 const ANNOUNCEMENT_SESSION_DISMISS_KEY = 'duhocmate-announcement-session-dismissed';
 const ANNOUNCEMENT_AUTO_DISMISS_MS = 12000;
-const ANNOUNCEMENT_HIDE_DURATION_MS = 24 * 60 * 60 * 1000; // 24 giờ thực
+const ANNOUNCEMENT_TTL_MS = 24 * 60 * 60 * 1000; // 24h kể từ created_at
 
 export default function AppLayout() {
   const store = useAppStore();
   const suppressPopstate = useRef(false);
-  const [activeBanner, setActiveBanner] = useState<{ id: string; title: string; body: string; severity: string } | null>(null);
+  const [activeBanner, setActiveBanner] = useState<{ id: string; title: string; body: string; severity: string; created_at: string } | null>(null);
   const [communityTargetPostId, setCommunityTargetPostId] = useState<string | null>(null);
 
   // Ping visitor tracking — ghi nhận lượt truy cập (guest + registered)
@@ -58,40 +58,39 @@ export default function AppLayout() {
     }
     const client = supabaseClient;
 
-    const shouldShow = (item: { id: string }) => {
+    const shouldShow = (item: { id: string; created_at: string }) => {
+      // 1. Thông báo đã quá 24h kể từ khi tạo → không hiện với bất kỳ ai
+      const ageMs = Date.now() - new Date(item.created_at).getTime();
+      if (ageMs >= ANNOUNCEMENT_TTL_MS) return false;
+
+      // 2. User đã bấm "không hiển thị lại" → lưu vĩnh viễn trong localStorage
+      const permHidden = localStorage.getItem(ANNOUNCEMENT_PERM_HIDE_KEY);
+      if (permHidden === item.id) return false;
+
+      // 3. Đã tắt trong session này → không hiện lại cho đến khi đăng nhập lại
       const sessionDismissed = sessionStorage.getItem(ANNOUNCEMENT_SESSION_DISMISS_KEY);
       if (sessionDismissed === item.id) return false;
 
-      const stored = localStorage.getItem(ANNOUNCEMENT_HIDE_TODAY_KEY);
-      if (stored) {
-        const colonIdx = stored.lastIndexOf(':');
-        if (colonIdx !== -1) {
-          const storedId = stored.slice(0, colonIdx);
-          const storedTs = Number(stored.slice(colonIdx + 1));
-          if (storedId === item.id && !Number.isNaN(storedTs) && Date.now() - storedTs < ANNOUNCEMENT_HIDE_DURATION_MS) {
-            return false;
-          }
-        }
-      }
       return true;
     };
 
-    const showIfNeeded = (item: { id: string; title: string; body: string; severity: string } | null) => {
+    const showIfNeeded = (item: { id: string; title: string; body: string; severity: string; created_at: string } | null) => {
       if (!item) return;
       if (shouldShow(item)) setActiveBanner(item);
     };
 
     const loadLatest = () => {
-      const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+      // Chỉ lấy thông báo trong vòng 24h để nhất quán với TTL
+      const cutoff = new Date(Date.now() - ANNOUNCEMENT_TTL_MS).toISOString();
       void client
         .from('admin_announcements')
-        .select('id, title, body, severity')
+        .select('id, title, body, severity, created_at')
         .eq('is_published', true)
         .gte('created_at', cutoff)
         .order('created_at', { ascending: false })
         .limit(1)
         .then(({ data }) => {
-          showIfNeeded((data?.[0] as { id: string; title: string; body: string; severity: string } | undefined) ?? null);
+          showIfNeeded((data?.[0] as { id: string; title: string; body: string; severity: string; created_at: string } | undefined) ?? null);
         });
     };
 
@@ -110,6 +109,7 @@ export default function AppLayout() {
               title: row.title ?? '',
               body: row.body ?? '',
               severity: row.severity ?? 'info',
+              created_at: row.created_at ?? new Date().toISOString(),
             });
           }
         },
@@ -124,8 +124,8 @@ export default function AppLayout() {
   useEffect(() => {
     if (!activeBanner) return;
     const timer = window.setTimeout(() => {
-      // Auto-dismiss sau 12s → lưu localStorage 24h để không hiện lại khi đăng nhập lại
-      localStorage.setItem(ANNOUNCEMENT_HIDE_TODAY_KEY, `${activeBanner.id}:${Date.now()}`);
+      // Auto-dismiss sau 12s → chỉ lưu session (sẽ hiện lại khi đăng nhập lần sau trong 24h đầu)
+      sessionStorage.setItem(ANNOUNCEMENT_SESSION_DISMISS_KEY, activeBanner.id);
       setActiveBanner((current) => (current?.id === activeBanner.id ? null : current));
     }, ANNOUNCEMENT_AUTO_DISMISS_MS);
 
@@ -560,18 +560,19 @@ export default function AppLayout() {
                     type="button"
                     className="admin-entry-announcement-muted"
                     onClick={() => {
-                      localStorage.setItem(ANNOUNCEMENT_HIDE_TODAY_KEY, `${activeBanner.id}:${Date.now()}`);
+                      // Lưu vĩnh viễn vào localStorage → không bao giờ hiện lại trên thiết bị này
+                      localStorage.setItem(ANNOUNCEMENT_PERM_HIDE_KEY, activeBanner.id);
                       setActiveBanner(null);
                     }}
                   >
-                    {store.lang === 'ko' ? '오늘 하루 보지 않기' : 'không hiển thị lại'}
+                    {store.lang === 'ko' ? '다시 보지 않기' : 'không hiển thị lại'}
                   </button>
                   <button
                     type="button"
                     className="admin-entry-announcement-close"
                     onClick={() => {
-                      // Đóng → lưu localStorage 24h, không hiện lại khi đăng nhập lại
-                      localStorage.setItem(ANNOUNCEMENT_HIDE_TODAY_KEY, `${activeBanner.id}:${Date.now()}`);
+                      // Đóng → chỉ lưu session, sẽ hiện lại khi đăng nhập lần sau (nếu còn trong 24h)
+                      sessionStorage.setItem(ANNOUNCEMENT_SESSION_DISMISS_KEY, activeBanner.id);
                       setActiveBanner(null);
                     }}
                   >
