@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { Plus, ChevronLeft, ChevronRight, X, Edit3, Trash2, Bell, TrendingUp, ShieldCheck } from 'lucide-react';
 import { formatKrw, calculateShiftPay, shiftHours } from '../lib/salary';
-import { RateState, Shift, VenueColors } from '../lib/types';
+import { Expense, RateState, Shift, VenueColors } from '../lib/types';
 import { formatDateChip, getVenueColor, formatHoursCompact } from '../utils/helpers';
 import { FinanceMetric } from './shared/ui';
 import { ActivityTicker } from './shared/ActivityTicker';
-import { AchievementBanner, AchievementScreen } from './AchievementScreen';
+import { AchievementBanner, AchievementCompanionNudge, AchievementScreen } from './AchievementScreen';
 
 export function HomeScreen({
   monthlyTotal,
@@ -15,6 +15,7 @@ export function HomeScreen({
   workplaces,
   recentShifts,
   allShifts,
+  expenses,
   venueColors,
   onRefresh,
   onOpenAdd,
@@ -40,6 +41,7 @@ export function HomeScreen({
   workplaces: Array<{ label: string; total: number; count: number; hours: number }>;
   recentShifts: Shift[];
   allShifts: Shift[];
+  expenses: Expense[];
   venueColors: VenueColors;
   onRefresh: () => void;
   onOpenAdd: () => void;
@@ -116,6 +118,12 @@ export function HomeScreen({
     <>
       <header className="appbar">
         <h1 className="appbar-title home-wordmark">Duhoc Mate</h1>
+        <AchievementCompanionNudge
+          allShifts={allShifts}
+          expenses={expenses}
+          rateValue={rate.value}
+          onClick={() => setShowAchievement(true)}
+        />
         <button 
           type="button" 
           aria-label={ui.notifications}
@@ -142,16 +150,6 @@ export function HomeScreen({
       </header>
 
       <ActivityTicker lang={lang} onOpenPost={onOpenCommunityPost} />
-
-      {/* ── Achievement Banner ── */}
-      <div style={{ padding: '0 16px 4px' }}>
-        <AchievementBanner
-          isKo={lang === 'ko'}
-          onClick={() => setShowAchievement(true)}
-          allShifts={allShifts}
-          rateValue={rate.value}
-        />
-      </div>
 
       <section className="hero-balance-card">
         <div className="hero-topline">
@@ -203,6 +201,18 @@ export function HomeScreen({
           {ui.addShift}
         </button>
       </section>
+
+      {/* ── Achievement Banner ── */}
+      <div className="home-achievement-strip">
+        <AchievementBanner
+          compact
+          isKo={lang === 'ko'}
+          onClick={() => setShowAchievement(true)}
+          allShifts={allShifts}
+          expenses={expenses}
+          rateValue={rate.value}
+        />
+      </div>
 
       <style>{`
         .month-navigator {

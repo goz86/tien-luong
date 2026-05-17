@@ -23,8 +23,9 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Gift, Map, ChevronRight, Calendar, Sparkles, Trophy } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
-import { calculateShiftPay } from '../lib/salary';
+import { calculateShiftPay, formatKrw } from '../lib/salary';
 import { supabase } from '../lib/supabase';
+import type { Expense, Shift } from '../lib/types';
 
 // ─────────────────────────────────────────────────────
 // Types
@@ -58,6 +59,15 @@ interface CharacterStage {
   imgKey: string;
   name_vi: string;
   name_ko: string;
+  desc_vi: string;
+  desc_ko: string;
+}
+
+interface CompanionOption {
+  key: string;
+  imgKey: string | null;
+  label_vi: string;
+  label_ko: string;
   desc_vi: string;
   desc_ko: string;
 }
@@ -173,11 +183,52 @@ const CHARACTER_STAGES: CharacterStage[] = [
   },
 ];
 
+const DEFAULT_COMPANION_KEY = 'journey';
+const COMPANION_STORAGE_KEY = 'duhoc-mate-ach-companion';
+const COMPANION_CHANGE_EVENT = 'duhoc-mate-ach-companion-change';
+
+const COMPANION_OPTIONS: CompanionOption[] = [
+  { key: DEFAULT_COMPANION_KEY, imgKey: null, label_vi: 'Theo cấp', label_ko: '레벨별', desc_vi: '', desc_ko: '' },
+  { key: 'hamster', imgKey: 'companion_hamster', label_vi: 'Mầm Non ', label_ko: '새싹 저축 친구', desc_vi: 'Nhỏ xíu nhưng ngày nào cũng lớn thêm một chút.', desc_ko: '작지만 매일 조금씩 자라는 동반자.' },
+  { key: 'cat', imgKey: 'companion_cat', label_vi: 'Mèo Thần Tài', label_ko: '당당한 지갑 고양이', desc_vi: 'Đi làm, giữ ví, và luôn có phong thái rất ổn.', desc_ko: '일도 하고 지갑도 챙기는 당당한 친구.' },
+  { key: 'bunny', imgKey: 'companion_bunny', label_vi: 'Thỏ Tiết Kiệm', label_ko: '저축 항아리 토끼', desc_vi: 'Mỗi khoản để dành đều được ôm thật cẩn thận.', desc_ko: '모아둔 돈을 소중히 안고 가는 친구.' },
+  { key: 'bear', imgKey: 'companion_bear', label_vi: 'Gấu Chăm Chỉ Đi Làm', label_ko: '성실한 알바 곰', desc_vi: 'Bạn đồng hành bền bỉ cho những ngày học và làm.', desc_ko: '공부와 알바를 묵묵히 함께하는 친구.' },
+  { key: 'fox', imgKey: 'companion_fox', label_vi: 'Cáo Nhanh Nhẹn', label_ko: '영리한 계획 여우', desc_vi: 'Biết tính toán, biết xoay xở, biết chọn đường lời hơn.', desc_ko: '계산도 빠르고 계획도 영리한 친구.' },
+  { key: 'star', imgKey: 'companion_star', label_vi: 'Sao May Mắn', label_ko: '귀국 행운 별', desc_vi: 'Luôn nhắc mình kiếm tiền là để sống chủ động hơn.', desc_ko: '돈을 모으는 이유를 반짝이며 알려주는 친구.' },
+];
+
+const COMPANION_MOTIVATIONS = [
+  '힘내세요',
+  '화이팅!',
+  '잘하고 있어요',
+  '천천히 가요',
+  '오늘도 굿!',
+  '수고했어요',
+  '괜찮아요',
+];
+
 const REWARD_POOL = [
   '⭐', '🌟', '💫', '✨', '🎖️', '🏆', '🎀', '🌸',
   '🦋', '🌈', '🎵', '🍀', '🌙', '☀️', '🎊', '💎',
   '🌺', '🦄', '🔮', '🌠',
 ];
+
+const NET_WORTH_MILESTONES: Milestone[] = [
+  { key: 'start', threshold: 0, emoji: '🌱', imgKey: 'net_start', label_vi: 'Lv.0: Sang Hàn Làm Lại Từ Đầu', label_ko: 'Lv.0: 한국에서 다시 시작', desc_vi: 'Từ con số nhỏ, mình bắt đầu giữ lại từng đồng ròng.', desc_ko: '작은 금액부터 차곡차곡 모으는 시작점.', color: '#14b8a6', bgColor: '#f0fdfa' },
+  { key: 'smart_food', threshold: 5_000_000, emoji: '🍱', imgKey: 'net_smart_food', label_vi: 'Ăn Uống Biết Tính Toán', label_ko: '식비 관리 시작', desc_vi: 'Sinh hoạt vẫn ổn, ví cũng bắt đầu ấm lên.', desc_ko: '생활도 챙기고 지갑도 조금 따뜻해졌어요.', color: '#10b981', bgColor: '#ecfdf5' },
+  { key: 'gold_chi', threshold: 18_000_000, emoji: '🪙', imgKey: 'net_gold_chi', label_vi: 'Chỉ Vàng Đầu Tiên', label_ko: '첫 금 한 돈', desc_vi: 'Thu nhập ròng đã có hình hài của tài sản thật.', desc_ko: '순수입이 진짜 자산의 형태를 갖기 시작했어요.', color: '#f59e0b', bgColor: '#fffbeb' },
+  { key: 'seoul', threshold: 50_000_000, emoji: '🏙️', imgKey: 'net_seoul', label_vi: 'Khám Phá Seoul Không Run Ví', label_ko: '서울 탐방, 지갑 안 떨림', desc_vi: 'Có thể đi chơi một chút mà vẫn không lệch kế hoạch.', desc_ko: '조금 즐겨도 계획이 흔들리지 않는 구간.', color: '#0ea5e9', bgColor: '#f0f9ff' },
+  { key: 'emergency', threshold: 100_000_000, emoji: '🛡️', imgKey: 'net_emergency', label_vi: 'Quỹ Dự Phòng Ổn Áp', label_ko: '든든한 비상금', desc_vi: 'Có biến cũng đỡ hoảng, vì mình đã có lớp đệm.', desc_ko: '예상 못 한 일이 와도 버틸 여유가 생겼어요.', color: '#2563eb', bgColor: '#eff6ff' },
+  { key: 'gold_luong', threshold: 165_000_000, emoji: '🏅', imgKey: 'net_gold_luong', label_vi: 'Múc Được 1 Lượng Vàng', label_ko: '금 한 냥 클리어', desc_vi: 'Mốc vàng đúng nghĩa: nhìn lại thấy mình đi xa thật.', desc_ko: '말 그대로 골드 마일스톤, 꽤 멀리 왔어요.', color: '#d97706', bgColor: '#fff7ed' },
+  { key: 'wedding_net', threshold: 250_000_000, emoji: '💍', imgKey: 'net_wedding', label_vi: 'Đủ Làm Đám Cưới :D', label_ko: '결혼식도 가능 :D', desc_vi: 'Không cần quá phô, đủ để làm một ngày thật đáng nhớ.', desc_ko: '과하지 않아도 기억에 남을 하루를 만들 수 있어요.', color: '#f43f5e', bgColor: '#fff1f2' },
+  { key: 'car_loading', threshold: 450_000_000, emoji: '🚗', imgKey: 'net_car_loading', label_vi: 'Xe Ô Tô Loading...', label_ko: '첫 차 로딩 중...', desc_vi: 'Một chiếc xe bình dân bắt đầu bước vào vùng có thể nghĩ tới.', desc_ko: '첫 차를 현실적으로 생각해볼 수 있는 구간.', color: '#6366f1', bgColor: '#eef2ff' },
+  { key: 'vietkieu', threshold: 650_000_000, emoji: '💼', imgKey: 'net_vietkieu', label_vi: 'Việt Kiều Pro VIP', label_ko: '프로 유학생 모드', desc_vi: 'Không chỉ đi làm thêm nữa, đây là cấp độ biết tích sản.', desc_ko: '알바를 넘어 자산을 쌓는 단계.', color: '#8b5cf6', bgColor: '#f5f3ff' },
+  { key: 'return_plan', threshold: 800_000_000, emoji: '🧭', imgKey: 'net_return_plan', label_vi: 'Hồi Hương Có Kế Hoạch', label_ko: '계획 있는 귀국', desc_vi: 'Nếu về nước, bạn về bằng một kế hoạch chứ không phải cảm tính.', desc_ko: '감정이 아니라 계획으로 돌아갈 수 있어요.', color: '#0f766e', bgColor: '#f0fdfa' },
+  { key: 'home_free', threshold: 1_000_000_000, emoji: '🇻🇳', imgKey: 'net_home_free', label_vi: 'Về Nhà Trong Thế Chủ Động', label_ko: '당당하게 집으로', desc_vi: '1 tỷ thu nhập ròng: hành trình về nhà đã có hình hài.', desc_ko: '순수입 10억 VND, 돌아갈 길이 보이기 시작했어요.', color: '#ef4444', bgColor: '#fef2f2' },
+];
+
+const FINAL_NET_MILESTONE = NET_WORTH_MILESTONES[NET_WORTH_MILESTONES.length - 1];
+const BILLION_CELEBRATION_KEY = 'duhoc-mate-billion-net-celebrated';
 
 // ─────────────────────────────────────────────────────
 // Helpers
@@ -190,8 +241,36 @@ function fmtVnd(n: number): string {
   return n.toLocaleString('vi-VN');
 }
 
+function fmtKrwCompact(n: number): string {
+  if (n >= 100_000_000) {
+    const eok = n / 100_000_000;
+    return `${Number(eok.toFixed(eok >= 10 ? 0 : 1)).toLocaleString('ko-KR')}억 원`;
+  }
+  return formatKrw(n);
+}
+
+function calculateNetIncomeKrw(shifts: Shift[], expenses: Expense[]) {
+  const grossKrw = shifts.reduce((sum, s) => sum + calculateShiftPay(s).total, 0);
+  const expenseKrw = expenses.reduce((sum, e) => sum + e.amount, 0);
+  return Math.max(0, grossKrw - expenseKrw);
+}
+
+function calculateNetIncomeVnd(shifts: Shift[], expenses: Expense[], rateValue: number) {
+  return calculateNetIncomeKrw(shifts, expenses) * rateValue;
+}
+
+function hasCelebratedBillion() {
+  if (typeof window === 'undefined') return true;
+  return window.localStorage.getItem(BILLION_CELEBRATION_KEY) === '1';
+}
+
+function markBillionCelebrated() {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(BILLION_CELEBRATION_KEY, '1');
+}
+
 function iconUrl(name: string) {
-  return `/icon/${name}.png`;
+  return `${import.meta.env.BASE_URL}icon/${name}.png`;
 }
 
 function faceImg(progressPct: number, hasUnclaimed: boolean, totalVnd: number): string {
@@ -212,6 +291,62 @@ function loadClaimed(uid?: string | null): string[] {
 }
 function saveClaimed(keys: string[], uid?: string | null) {
   localStorage.setItem(claimedKey(uid), JSON.stringify(keys));
+}
+
+function getCompanionOption(key: string | null): CompanionOption {
+  return COMPANION_OPTIONS.find(option => option.key === key) ?? COMPANION_OPTIONS[0];
+}
+
+function loadCompanionKey(): string {
+  if (typeof window === 'undefined') return DEFAULT_COMPANION_KEY;
+  return getCompanionOption(window.localStorage.getItem(COMPANION_STORAGE_KEY)).key;
+}
+
+function saveCompanionKey(key: string) {
+  if (typeof window === 'undefined') return;
+  const nextKey = getCompanionOption(key).key;
+  window.localStorage.setItem(COMPANION_STORAGE_KEY, nextKey);
+  window.dispatchEvent(new CustomEvent(COMPANION_CHANGE_EVENT, { detail: nextKey }));
+}
+
+function useCompanionChoice() {
+  const [selectedKey, setSelectedKey] = useState(() => loadCompanionKey());
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const sync = () => setSelectedKey(loadCompanionKey());
+    const syncCustom = (event: Event) => {
+      setSelectedKey(getCompanionOption((event as CustomEvent<string>).detail).key);
+    };
+    window.addEventListener('storage', sync);
+    window.addEventListener(COMPANION_CHANGE_EVENT, syncCustom);
+    return () => {
+      window.removeEventListener('storage', sync);
+      window.removeEventListener(COMPANION_CHANGE_EVENT, syncCustom);
+    };
+  }, []);
+
+  const selectCompanion = useCallback((key: string) => {
+    const nextKey = getCompanionOption(key).key;
+    setSelectedKey(nextKey);
+    saveCompanionKey(nextKey);
+  }, []);
+
+  return {
+    selectedKey,
+    selectedCompanion: getCompanionOption(selectedKey),
+    selectCompanion,
+  };
+}
+
+function pickMotivation(exclude?: string) {
+  if (COMPANION_MOTIVATIONS.length <= 1) return COMPANION_MOTIVATIONS[0];
+  let next = COMPANION_MOTIVATIONS[Math.floor(Math.random() * COMPANION_MOTIVATIONS.length)];
+  if (exclude && next === exclude) {
+    const currentIndex = COMPANION_MOTIVATIONS.indexOf(next);
+    next = COMPANION_MOTIVATIONS[(currentIndex + 1) % COMPANION_MOTIVATIONS.length];
+  }
+  return next;
 }
 
 // ─────────────────────────────────────────────────────
@@ -295,6 +430,38 @@ function GiftModal({
   );
 }
 
+function BillionCelebration({ isKo, onClose }: { isKo: boolean; onClose: () => void }) {
+  const petals = Array.from({ length: 42 }, (_, i) => i);
+  return createPortal(
+    <div className="ach-billion-bloom" onClick={onClose}>
+      <div className="ach-billion-petals" aria-hidden="true">
+        {petals.map((item) => (
+          <span
+            key={item}
+            style={{
+              left: `${(item * 19) % 100}%`,
+              animationDelay: `${(item % 11) * 0.12}s`,
+              ['--drift' as string]: `${((item % 7) - 3) * 18}px`,
+              ['--spin' as string]: `${item % 2 ? 1 : -1}`,
+            }}
+          />
+        ))}
+      </div>
+      <div className="ach-billion-card">
+        <div className="ach-billion-kicker">{isKo ? '10억 VND 달성' : 'Chạm mốc 1 tỷ'}</div>
+        <h2>{isKo ? '당당하게 집으로' : 'Về Nhà Trong Thế Chủ Động'}</h2>
+        <p>
+          {isKo
+            ? '순수입 여정이 큰 마일스톤을 넘었어요. 이건 진짜 멋진 기록입니다.'
+            : 'Thu nhập ròng của bạn đã vượt một cột mốc rất lớn. Hành trình về nhà đã có hình hài.'}
+        </p>
+        <button type="button">{isKo ? '계속 보기' : 'Tiếp tục'}</button>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 // ─────────────────────────────────────────────────────
 // Main Component
 // ─────────────────────────────────────────────────────
@@ -306,43 +473,59 @@ interface AchievementScreenProps {
 }
 
 export function AchievementScreen({ onClose, isKo = false, inline = false }: AchievementScreenProps) {
-  const { shifts, rate, session } = useAppStore();
+  const { shifts, expenses, rate, session } = useAppStore();
   const uid = session?.user.id ?? null;
 
   const [claimed, setClaimed] = useState<string[]>(() => loadClaimed(uid));
   const [giftMilestone, setGiftMilestone] = useState<Milestone | null>(null);
   const [events, setEvents] = useState<AdminEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
-  const [collectedIcons, setCollectedIcons] = useState<string[]>(() => {
-    try { return JSON.parse(localStorage.getItem(`ach-icons-${uid ?? 'guest'}`) ?? '[]'); }
-    catch { return []; }
-  });
+  const [showBillionCelebration, setShowBillionCelebration] = useState(false);
+  const [showTotalKrw, setShowTotalKrw] = useState(false);
+  const { selectedKey, selectedCompanion, selectCompanion } = useCompanionChoice();
 
-  // ── Compute total VND from all shifts ──
-  const totalVnd = useMemo(() => {
-    return shifts.reduce((sum, s) => sum + calculateShiftPay(s).total * rate.value, 0);
-  }, [shifts, rate.value]);
+  // ── Compute net income from all shifts ──
+  const totalKrw = useMemo(() => calculateNetIncomeKrw(shifts, expenses), [expenses, shifts]);
+  const totalVnd = useMemo(() => totalKrw * rate.value, [rate.value, totalKrw]);
 
   // ── Current character stage ──
   const stage = useMemo(() => {
     return [...CHARACTER_STAGES].reverse().find(s => totalVnd >= s.threshold) ?? CHARACTER_STAGES[0];
   }, [totalVnd]);
+  const avatarImgKey = selectedCompanion.imgKey ?? stage.imgKey;
+  const avatarAlt = selectedCompanion.imgKey
+    ? (isKo ? selectedCompanion.label_ko : selectedCompanion.label_vi)
+    : stage.name_vi;
+  const displayName = selectedCompanion.imgKey
+    ? (isKo ? selectedCompanion.label_ko : selectedCompanion.label_vi)
+    : (isKo ? stage.name_ko : stage.name_vi);
+  const displayDesc = selectedCompanion.imgKey
+    ? (isKo ? selectedCompanion.desc_ko : selectedCompanion.desc_vi)
+    : (isKo ? stage.desc_ko : stage.desc_vi);
 
   // ── Next milestone ──
-  const nextMilestone = useMemo(() => MILESTONES.find(m => totalVnd < m.threshold) ?? null, [totalVnd]);
+  const nextMilestone = useMemo(() => NET_WORTH_MILESTONES.find(m => totalVnd < m.threshold) ?? null, [totalVnd]);
 
   // ── Progress % to next milestone ──
   const progressPct = useMemo(() => {
     if (!nextMilestone) return 100;
-    const idx = MILESTONES.indexOf(nextMilestone);
-    const prevThreshold = idx > 0 ? MILESTONES[idx - 1].threshold : 0;
+    const idx = NET_WORTH_MILESTONES.indexOf(nextMilestone);
+    const prevThreshold = idx > 0 ? NET_WORTH_MILESTONES[idx - 1].threshold : 0;
     const range = nextMilestone.threshold - prevThreshold;
     const done = Math.max(0, totalVnd - prevThreshold);
     return Math.min(100, (done / range) * 100);
   }, [totalVnd, nextMilestone]);
 
   // ── Unclaimed but reached milestones ──
-  const unclaimedCount = MILESTONES.filter(m => totalVnd >= m.threshold && !claimed.includes(m.key)).length;
+  const unclaimedCount = NET_WORTH_MILESTONES.filter(m => totalVnd >= m.threshold && !claimed.includes(m.key)).length;
+
+  useEffect(() => {
+    if (totalVnd < FINAL_NET_MILESTONE.threshold || hasCelebratedBillion()) return;
+    markBillionCelebrated();
+    setShowBillionCelebration(true);
+    const timer = window.setTimeout(() => setShowBillionCelebration(false), 5200);
+    return () => window.clearTimeout(timer);
+  }, [totalVnd]);
 
   // ── Load admin events ──
   useEffect(() => {
@@ -370,10 +553,8 @@ export function AchievementScreen({ onClose, isKo = false, inline = false }: Ach
     const nextClaimed = [...claimed, giftMilestone.key];
     setClaimed(nextClaimed);
     saveClaimed(nextClaimed, uid);
-    const nextIcons = [...collectedIcons, reward];
-    setCollectedIcons(nextIcons);
-    localStorage.setItem(`ach-icons-${uid ?? 'guest'}`, JSON.stringify(nextIcons));
-  }, [giftMilestone, claimed, collectedIcons, uid]);
+    void reward;
+  }, [giftMilestone, claimed, uid]);
 
   const bodyContent = (
     <div className="ach-body">
@@ -382,26 +563,55 @@ export function AchievementScreen({ onClose, isKo = false, inline = false }: Ach
             <div className="ach-char-card">
               <div className="ach-char-card-top">
                 <div className="ach-char-avatar-wrap">
-                  <img src={iconUrl(stage.imgKey)} alt={stage.name_vi} className="ach-char-avatar-img" />
-                  <img
-                    src={iconUrl(faceImg(progressPct, unclaimedCount > 0, totalVnd))}
-                    alt="face"
-                    className="ach-char-face-img"
-                  />
+                  <img src={iconUrl(avatarImgKey)} alt={avatarAlt} className="ach-char-avatar-img" />
+                  {selectedCompanion.key === DEFAULT_COMPANION_KEY && (
+                    <img
+                      src={iconUrl(faceImg(progressPct, unclaimedCount > 0, totalVnd))}
+                      alt="face"
+                      className="ach-char-face-img"
+                    />
+                  )}
                   <div className="ach-char-glow" />
                 </div>
                 <div className="ach-char-meta">
-                  <div className="ach-char-name">{isKo ? stage.name_ko : stage.name_vi}</div>
-                  <div className="ach-char-desc">{isKo ? stage.desc_ko : stage.desc_vi}</div>
+                  <div className="ach-char-name">{displayName}</div>
+                  <div className="ach-char-desc">{displayDesc}</div>
                 </div>
               </div>
-              <div className="ach-char-total">
-                <div className="ach-char-total-label">{isKo ? '총 수입' : 'Tổng tích lũy'}</div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-                  <div className="ach-char-total-value">{fmtVnd(totalVnd)}</div>
-                  <div className="ach-char-total-sub">VND</div>
-                </div>
+              <div className="ach-companion-picker" aria-label={isKo ? '동반자 선택' : 'Chọn bạn đồng hành'}>
+                {COMPANION_OPTIONS.map(option => {
+                  const optionImgKey = option.imgKey ?? stage.imgKey;
+                  const optionLabel = isKo ? option.label_ko : option.label_vi;
+                  return (
+                    <button
+                      key={option.key}
+                      type="button"
+                      className={`ach-companion-option ${selectedKey === option.key ? 'ach-companion-option--active' : ''}`}
+                      aria-label={optionLabel}
+                      aria-pressed={selectedKey === option.key}
+                      title={optionLabel}
+                      onClick={() => selectCompanion(option.key)}
+                    >
+                      <img src={iconUrl(optionImgKey)} alt="" />
+                    </button>
+                  );
+                })}
               </div>
+              <button
+                type="button"
+                className="ach-char-total ach-char-total--toggle"
+                onClick={() => setShowTotalKrw(value => !value)}
+                title={isKo ? 'VND/KRW 전환' : 'Nhấn để đổi VND/KRW'}
+                aria-label={isKo ? '누적 순수입 VND/KRW 전환' : 'Đổi hiển thị thu nhập ròng tích lũy giữa VND và KRW'}
+              >
+                <div className="ach-char-total-label">{isKo ? '누적 순수입' : 'Thu nhập ròng tích lũy'}</div>
+                <div className="ach-char-total-amount">
+                  <div className="ach-char-total-value">
+                    {showTotalKrw ? fmtKrwCompact(totalKrw) : fmtVnd(totalVnd)}
+                  </div>
+                  <div className="ach-char-total-sub">{showTotalKrw ? 'KRW' : 'VND'}</div>
+                </div>
+              </button>
             </div>
 
             {/* Progress bar to next milestone */}
@@ -425,7 +635,7 @@ export function AchievementScreen({ onClose, isKo = false, inline = false }: Ach
                 <div className="ach-progress-remain">
                   {isKo
                     ? `${fmtVnd(nextMilestone.threshold - totalVnd)} 더 필요해요`
-                    : `Còn ${fmtVnd(nextMilestone.threshold - totalVnd)} nữa là đạt!`}
+                    : `Còn ${fmtVnd(nextMilestone.threshold - totalVnd)} nữa là mở mốc tiếp theo`}
                 </div>
               </div>
             )}
@@ -461,38 +671,23 @@ export function AchievementScreen({ onClose, isKo = false, inline = false }: Ach
               </div>
             )}
 
-            {/* Collected icons */}
-            {collectedIcons.length > 0 && (
-              <div className="ach-section">
-                <div className="ach-section-title">
-                  <Gift size={14} />
-                  {isKo ? '내 아이콘 컬렉션' : 'Bộ sưu tập icon của bạn'}
-                </div>
-                <div className="ach-icon-grid">
-                  {collectedIcons.map((icon, i) => (
-                    <div key={i} className="ach-icon-chip">{icon}</div>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {/* Milestone Map */}
             <div className="ach-section">
               <div className="ach-section-title">
                 <Map size={14} />
-                {isKo ? '이정표 지도' : 'Bản Đồ Mốc Thành Tích'}
+                {isKo ? '순수입 여정 지도' : 'Bản Đồ Thu Nhập Ròng'}
               </div>
               <div className="ach-map-wrap">
-                <img src="/icon/map_background.png" alt="" className="ach-map-bg" aria-hidden="true" />
+                <img src={iconUrl('map_background')} alt="" className="ach-map-bg" aria-hidden="true" />
               <div className="ach-map">
-                {MILESTONES.map((m, idx) => {
+                {NET_WORTH_MILESTONES.map((m, idx) => {
                   const reached = totalVnd >= m.threshold;
                   const isClaimed = claimed.includes(m.key);
                   const isCurrentPos = nextMilestone?.key === m.key
                     ? false
-                    : (idx === MILESTONES.length - 1 && !nextMilestone)
+                    : (idx === NET_WORTH_MILESTONES.length - 1 && !nextMilestone)
                       ? true
-                      : nextMilestone && MILESTONES[MILESTONES.indexOf(nextMilestone) - 1]?.key === m.key;
+                      : nextMilestone && NET_WORTH_MILESTONES[NET_WORTH_MILESTONES.indexOf(nextMilestone) - 1]?.key === m.key;
                   const canClaim = reached && !isClaimed;
 
                   return (
@@ -510,10 +705,10 @@ export function AchievementScreen({ onClose, isKo = false, inline = false }: Ach
                             style={!reached ? { filter: 'grayscale(1)', opacity: 0.3 } : {}}
                           />
                           {isCurrentPos && (
-                            <img src={iconUrl(stage.imgKey)} alt="you are here" className="ach-hamster-badge-img" />
+                            <img src={iconUrl(avatarImgKey)} alt="you are here" className="ach-hamster-badge-img" />
                           )}
                         </div>
-                        {idx < MILESTONES.length - 1 && (
+                        {idx < NET_WORTH_MILESTONES.length - 1 && (
                           <div className={`ach-ms-line ${reached ? 'ach-ms-line--reached' : ''}`}
                             style={reached ? { background: `linear-gradient(to bottom, ${m.color}88, #e2e8f0)` } : {}}
                           />
@@ -564,8 +759,8 @@ export function AchievementScreen({ onClose, isKo = false, inline = false }: Ach
             {/* Footer hint */}
             <p className="ach-footer-hint">
               {isKo
-                ? '💡 총 수입은 앱에 입력한 모든 근무 기록을 기반으로 계산됩니다.'
-                : '💡 Tổng tích lũy được tính từ toàn bộ ca làm đã nhập trong ứng dụng.'}
+                ? '💡 누적 순수입은 전체 근무 수입에서 기록한 지출을 뺀 뒤 VND로 환산합니다.'
+                : '💡 Thu nhập ròng tích lũy = tổng lương đã nhập - chi tiêu đã ghi nhận, sau đó quy đổi sang VND.'}
             </p>
           </div>
   );
@@ -584,6 +779,9 @@ export function AchievementScreen({ onClose, isKo = false, inline = false }: Ach
       <>
         {bodyContent}
         {giftModal}
+        {showBillionCelebration && (
+          <BillionCelebration isKo={isKo} onClose={() => setShowBillionCelebration(false)} />
+        )}
       </>
     );
   }
@@ -607,8 +805,60 @@ export function AchievementScreen({ onClose, isKo = false, inline = false }: Ach
         </div>
       </div>
       {giftModal}
+      {showBillionCelebration && (
+        <BillionCelebration isKo={isKo} onClose={() => setShowBillionCelebration(false)} />
+      )}
     </>,
     document.body,
+  );
+}
+
+export function AchievementCompanionNudge({
+  allShifts,
+  expenses,
+  rateValue,
+  onClick,
+}: {
+  allShifts: Shift[];
+  expenses: Expense[];
+  rateValue: number;
+  onClick: () => void;
+}) {
+  const { selectedCompanion } = useCompanionChoice();
+  const [message, setMessage] = useState(() => pickMotivation());
+  const totalVnd = useMemo(() => calculateNetIncomeVnd(allShifts, expenses, rateValue), [allShifts, expenses, rateValue]);
+  const stage = useMemo(() => {
+    return [...CHARACTER_STAGES].reverse().find(s => totalVnd >= s.threshold) ?? CHARACTER_STAGES[0];
+  }, [totalVnd]);
+  const avatarImgKey = selectedCompanion.imgKey ?? stage.imgKey;
+  const label = selectedCompanion.imgKey ? selectedCompanion.label_vi : stage.name_vi;
+  useEffect(() => {
+    setMessage(current => pickMotivation(current));
+  }, [selectedCompanion.key]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setMessage(current => pickMotivation(current));
+    }, 9000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const handleClick = () => {
+    setMessage(current => pickMotivation(current));
+    onClick();
+  };
+
+  return (
+    <button
+      type="button"
+      className="home-companion-nudge"
+      onClick={handleClick}
+      aria-label={`${label}: ${message}`}
+      title={label}
+    >
+      <img src={iconUrl(avatarImgKey)} alt="" className="home-companion-img" />
+      <span className="home-companion-bubble">{message}</span>
+    </button>
   );
 }
 
@@ -620,30 +870,38 @@ export function AchievementBanner({
   isKo = false,
   onClick,
   allShifts,
+  expenses,
   rateValue,
+  compact = false,
 }: {
   isKo?: boolean;
   onClick: () => void;
-  allShifts: { id: string; [key: string]: unknown }[];
+  allShifts: Shift[];
+  expenses: Expense[];
   rateValue: number;
+  compact?: boolean;
 }) {
-  const totalVnd = useMemo(() => {
-    return allShifts.reduce((sum, s) => {
-      const { total } = calculateShiftPay(s as Parameters<typeof calculateShiftPay>[0]);
-      return sum + total * rateValue;
-    }, 0);
-  }, [allShifts, rateValue]);
+  const [showBillionCelebration, setShowBillionCelebration] = useState(false);
+  const { selectedCompanion } = useCompanionChoice();
+  const totalVnd = useMemo(() => calculateNetIncomeVnd(allShifts, expenses, rateValue), [allShifts, expenses, rateValue]);
 
   const stage = useMemo(() => {
     return [...CHARACTER_STAGES].reverse().find(s => totalVnd >= s.threshold) ?? CHARACTER_STAGES[0];
   }, [totalVnd]);
+  const avatarImgKey = selectedCompanion.imgKey ?? stage.imgKey;
+  const avatarAlt = selectedCompanion.imgKey
+    ? (isKo ? selectedCompanion.label_ko : selectedCompanion.label_vi)
+    : stage.name_vi;
+  const displayName = selectedCompanion.imgKey
+    ? (isKo ? selectedCompanion.label_ko : selectedCompanion.label_vi)
+    : (isKo ? stage.name_ko : stage.name_vi);
 
-  const nextMilestone = useMemo(() => MILESTONES.find(m => totalVnd < m.threshold) ?? null, [totalVnd]);
+  const nextMilestone = useMemo(() => NET_WORTH_MILESTONES.find(m => totalVnd < m.threshold) ?? null, [totalVnd]);
 
   const progressPct = useMemo(() => {
     if (!nextMilestone) return 100;
-    const idx = MILESTONES.indexOf(nextMilestone);
-    const prevThreshold = idx > 0 ? MILESTONES[idx - 1].threshold : 0;
+    const idx = NET_WORTH_MILESTONES.indexOf(nextMilestone);
+    const prevThreshold = idx > 0 ? NET_WORTH_MILESTONES[idx - 1].threshold : 0;
     const range = nextMilestone.threshold - prevThreshold;
     const done = Math.max(0, totalVnd - prevThreshold);
     return Math.min(100, (done / range) * 100);
@@ -651,36 +909,49 @@ export function AchievementBanner({
 
   const unclaimedCount = useMemo(() => {
     const claimed = loadClaimed(null);
-    return MILESTONES.filter(m => totalVnd >= m.threshold && !claimed.includes(m.key)).length;
+    return NET_WORTH_MILESTONES.filter(m => totalVnd >= m.threshold && !claimed.includes(m.key)).length;
+  }, [totalVnd]);
+
+  useEffect(() => {
+    if (totalVnd < FINAL_NET_MILESTONE.threshold || hasCelebratedBillion()) return;
+    markBillionCelebrated();
+    setShowBillionCelebration(true);
+    const timer = window.setTimeout(() => setShowBillionCelebration(false), 5200);
+    return () => window.clearTimeout(timer);
   }, [totalVnd]);
 
   return (
-    <button type="button" className="ach-banner" onClick={onClick}>
-      <img src={`/icon/${stage.imgKey}.png`} alt={stage.name_vi} className="ach-banner-char-img" />
-      <div className="ach-banner-body">
-        <div className="ach-banner-top">
-          <span className="ach-banner-name">{isKo ? stage.name_ko : stage.name_vi}</span>
-          {unclaimedCount > 0 && (
-            <span className="ach-banner-dot">{unclaimedCount} {isKo ? '개 선물' : 'quà'}</span>
+    <>
+      <button type="button" className={`ach-banner ${compact ? 'ach-banner--compact' : ''}`} onClick={onClick}>
+        <img src={iconUrl(avatarImgKey)} alt={avatarAlt} className="ach-banner-char-img" />
+        <div className="ach-banner-body">
+          <div className="ach-banner-top">
+            <span className="ach-banner-name">{displayName}</span>
+            {unclaimedCount > 0 && (
+              <span className="ach-banner-dot">{unclaimedCount} {isKo ? '개 선물' : 'quà'}</span>
+            )}
+          </div>
+          {nextMilestone ? (
+            <>
+              <div className="ach-banner-track">
+                <div
+                  className="ach-banner-fill"
+                  style={{ width: `${progressPct}%`, background: nextMilestone.color }}
+                />
+              </div>
+              <div className="ach-banner-sub">
+                {nextMilestone.emoji} {isKo ? nextMilestone.label_ko : nextMilestone.label_vi} - {Math.round(progressPct)}%
+              </div>
+            </>
+          ) : (
+            <div className="ach-banner-sub">🏆 {isKo ? '모든 목표 달성!' : 'Đã chinh phục tất cả!'}</div>
           )}
         </div>
-        {nextMilestone ? (
-          <>
-            <div className="ach-banner-track">
-              <div
-                className="ach-banner-fill"
-                style={{ width: `${progressPct}%`, background: nextMilestone.color }}
-              />
-            </div>
-            <div className="ach-banner-sub">
-              {nextMilestone.emoji} {isKo ? nextMilestone.label_ko : nextMilestone.label_vi} — {Math.round(progressPct)}%
-            </div>
-          </>
-        ) : (
-          <div className="ach-banner-sub">🏆 {isKo ? '모든 목표 달성!' : 'Đã chinh phục tất cả!'}</div>
-        )}
-      </div>
-      <ChevronRight size={16} className="ach-banner-arrow" />
-    </button>
+        <ChevronRight size={16} className="ach-banner-arrow" />
+      </button>
+      {showBillionCelebration && (
+        <BillionCelebration isKo={isKo} onClose={() => setShowBillionCelebration(false)} />
+      )}
+    </>
   );
 }

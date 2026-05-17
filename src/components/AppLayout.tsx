@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { CalendarDays, House, MessageCircleMore, UserRound, WalletCards, Bell, ThumbsUp, MessageCircle, X, Megaphone, Users, MessageSquare } from 'lucide-react';
 import { hasSupabaseConfig, supabase as supabaseClient } from '../lib/supabase';
@@ -32,6 +33,45 @@ const tabIcons: Array<{ id: Exclude<Tab, 'admin'>; icon: typeof House }> = [
 
 type AppLang = 'vi' | 'ko';
 type WallpaperKey = string;
+
+const WALLPAPER_THEME_VARS: Record<string, CSSProperties> = {
+  default: {
+    '--theme-accent': '#2752ff',
+    '--theme-hero-bg': 'radial-gradient(circle at 86% 12%, rgba(215, 255, 95, 0.34), transparent 24%), radial-gradient(circle at 12% 100%, rgba(38, 217, 164, 0.24), transparent 32%), linear-gradient(135deg, #253adf 0%, #4f73ff 54%, #6b5cf6 100%)',
+    '--theme-hero-sheen': 'linear-gradient(110deg, rgba(255, 255, 255, 0.18), transparent 42%)',
+    '--theme-hero-shadow': '0 18px 38px rgba(39, 82, 255, 0.18)',
+  } as CSSProperties,
+  ocean: {
+    '--theme-accent': '#0284c7',
+    '--theme-hero-bg': 'radial-gradient(circle at 86% 12%, rgba(240, 249, 255, 0.58), transparent 25%), radial-gradient(circle at 10% 96%, rgba(125, 211, 252, 0.24), transparent 32%), linear-gradient(135deg, #0369a1 0%, #38bdf8 56%, #0f8fc8 100%)',
+    '--theme-hero-sheen': 'linear-gradient(110deg, rgba(255, 255, 255, 0.22), transparent 44%)',
+    '--theme-hero-shadow': '0 18px 38px rgba(14, 165, 233, 0.18)',
+  } as CSSProperties,
+  sunset: {
+    '--theme-accent': '#d97706',
+    '--theme-hero-bg': 'radial-gradient(circle at 84% 14%, rgba(255, 247, 237, 0.58), transparent 25%), radial-gradient(circle at 12% 100%, rgba(251, 146, 60, 0.22), transparent 32%), linear-gradient(135deg, #c2410c 0%, #f59e0b 54%, #ea580c 100%)',
+    '--theme-hero-sheen': 'linear-gradient(110deg, rgba(255, 255, 255, 0.22), transparent 44%)',
+    '--theme-hero-shadow': '0 18px 38px rgba(217, 119, 6, 0.18)',
+  } as CSSProperties,
+  forest: {
+    '--theme-accent': '#059669',
+    '--theme-hero-bg': 'radial-gradient(circle at 86% 12%, rgba(240, 253, 244, 0.58), transparent 25%), radial-gradient(circle at 12% 100%, rgba(74, 222, 128, 0.22), transparent 32%), linear-gradient(135deg, #047857 0%, #22c55e 55%, #0f9f6e 100%)',
+    '--theme-hero-sheen': 'linear-gradient(110deg, rgba(255, 255, 255, 0.22), transparent 44%)',
+    '--theme-hero-shadow': '0 18px 38px rgba(5, 150, 105, 0.18)',
+  } as CSSProperties,
+  lavender: {
+    '--theme-accent': '#7c3aed',
+    '--theme-hero-bg': 'radial-gradient(circle at 86% 12%, rgba(250, 245, 255, 0.56), transparent 25%), radial-gradient(circle at 12% 100%, rgba(167, 139, 250, 0.22), transparent 32%), linear-gradient(135deg, #6d28d9 0%, #a78bfa 54%, #7c3aed 100%)',
+    '--theme-hero-sheen': 'linear-gradient(110deg, rgba(255, 255, 255, 0.2), transparent 44%)',
+    '--theme-hero-shadow': '0 18px 38px rgba(124, 58, 237, 0.18)',
+  } as CSSProperties,
+  rose: {
+    '--theme-accent': '#be123c',
+    '--theme-hero-bg': 'radial-gradient(circle at 86% 12%, rgba(255, 241, 242, 0.58), transparent 25%), radial-gradient(circle at 12% 100%, rgba(251, 113, 133, 0.2), transparent 32%), linear-gradient(135deg, #be123c 0%, #fb7185 54%, #db2777 100%)',
+    '--theme-hero-sheen': 'linear-gradient(110deg, rgba(255, 255, 255, 0.22), transparent 44%)',
+    '--theme-hero-shadow': '0 18px 38px rgba(190, 18, 60, 0.18)',
+  } as CSSProperties,
+};
 
 const REFRESH_RATE_URL = 'https://open.er-api.com/v6/latest/KRW';
 
@@ -510,10 +550,11 @@ export default function AppLayout() {
   }, []);
 
   /* ── render ── */
-  const wallpaperStyle =
-    store.wallpaper !== 'default'
-      ? { background: WALLPAPERS.find((w: any) => w.key === store.wallpaper)?.gradient }
-      : undefined;
+  const activeWallpaper = WALLPAPERS.find((w: any) => w.key === store.wallpaper);
+  const wallpaperStyle = {
+    ...(WALLPAPER_THEME_VARS[store.wallpaper] ?? WALLPAPER_THEME_VARS.default),
+    ...(store.wallpaper !== 'default' && activeWallpaper?.gradient ? { background: activeWallpaper.gradient } : {}),
+  } as CSSProperties;
 
   return (
     <div className="app-stage">
@@ -594,7 +635,8 @@ export default function AppLayout() {
               rate={store.rate}
               workplaces={store.workplaceSummary}
               recentShifts={store.recentShifts}
-              allShifts={store.monthShifts}
+              allShifts={store.shifts}
+              expenses={store.expenses}
               onRefresh={refreshRate}
               onOpenAdd={openAddToday}
               onEditShift={(shift) => {

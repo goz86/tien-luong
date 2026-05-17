@@ -26,19 +26,19 @@
       "name": "Thêm ca làm",
       "shortName": "Thêm ca",
       "url": "https://www.duhocmate.com/?action=add-shift",
-      "chosenIconUrl": "https://www.duhocmate.com/icons/icon.png"
+      "chosenIconUrl": "https://www.duhocmate.com/icons/shortcut-96.png"
     },
     {
       "name": "Xem thu nhập",
       "shortName": "Thu nhập",
       "url": "https://www.duhocmate.com/#income",
-      "chosenIconUrl": "https://www.duhocmate.com/icons/icon.png"
+      "chosenIconUrl": "https://www.duhocmate.com/icons/shortcut-96.png"
     },
     {
       "name": "Cộng đồng",
       "shortName": "Cộng đồng",
       "url": "https://www.duhocmate.com/#friends",
-      "chosenIconUrl": "https://www.duhocmate.com/icons/icon.png"
+      "chosenIconUrl": "https://www.duhocmate.com/icons/shortcut-96.png"
     }
   ],
   "generatorApp": "bubblewrap-cli",

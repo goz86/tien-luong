@@ -1,5 +1,19 @@
-const CACHE_VERSION = 'duhoc-mate-v4-cachefix';
-const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/offline.html', '/icons/icon.svg', '/icons/icon.png'];
+const CACHE_VERSION = 'duhoc-mate-v5-app-icon';
+const APP_SHELL = [
+  '/',
+  '/index.html',
+  '/manifest.webmanifest',
+  '/offline.html',
+  '/favicon.ico',
+  '/logo.png',
+  '/apple-touch-icon.png',
+  '/icons/icon.svg',
+  '/icons/icon.png',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+  '/icons/icon-maskable-512.png',
+  '/icons/shortcut-96.png',
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_VERSION).then((cache) => cache.addAll(APP_SHELL)));
