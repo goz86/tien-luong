@@ -1,4 +1,5 @@
 import { FormEvent, useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   LogIn,
   UserPlus,
@@ -616,8 +617,8 @@ export function ProfileScreen({
         </div>
       )}
 
-      {/* ===== SETTINGS BOTTOM SHEET ===== */}
-      {showSettings && (
+      {/* ===== SETTINGS BOTTOM SHEET (portal → thoát khỏi transform ancestor) ===== */}
+      {showSettings && createPortal(
         <div className="pf-settings-sheet-overlay" onClick={() => setShowSettings(false)}>
           <div className="pf-settings-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="pf-settings-sheet-handle" />
@@ -797,7 +798,8 @@ export function ProfileScreen({
 
             </div>{/* /sheet-body */}
           </div>{/* /sheet */}
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ===== AUTH OVERLAY for guests ===== */}
