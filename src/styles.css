@@ -7195,6 +7195,13 @@ button.ticker-inner {
   color: #e11d48 !important;
 }
 
+.pf-donate-row { color: inherit; text-decoration: none; }
+.pf-donate-icon { background: rgba(224, 92, 42, 0.12) !important; color: #e05c2a !important; }
+.pf-telegram-row { color: inherit; text-decoration: none; }
+.pf-telegram-icon { background: rgba(0, 136, 204, 0.12) !important; color: #0088cc !important; }
+.dark .pf-donate-icon { background: rgba(251, 146, 60, 0.15) !important; color: #fb923c !important; }
+.dark .pf-telegram-icon { background: rgba(56, 189, 248, 0.15) !important; color: #38bdf8 !important; }
+
 .pf-demo-btn {
   width: 100%;
   border: 1px solid #bfdbfe;
@@ -15185,7 +15192,12 @@ button.admin-stat-card {
   position: relative;
   border-radius: 20px;
   overflow: hidden;
-  background: linear-gradient(180deg, #f0fdf4 0%, #e0f2fe 100%);
+  background:
+    radial-gradient(circle at 14% 8%, rgba(45, 212, 191, 0.26), transparent 30%),
+    radial-gradient(circle at 84% 18%, rgba(99, 102, 241, 0.18), transparent 28%),
+    linear-gradient(180deg, #f8fbff 0%, #eef8f3 48%, #eef2ff 100%);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.82), 0 18px 45px rgba(15, 23, 42, 0.08);
 }
 
 .ach-map-bg {
@@ -15204,7 +15216,7 @@ button.admin-stat-card {
   z-index: 1;
   display: flex;
   flex-direction: column;
-  padding: 12px 8px;
+  padding: 16px 10px 14px;
 }
 
 .ach-ms {
@@ -15226,9 +15238,10 @@ button.admin-stat-card {
 .ach-ms-node {
   width: 52px;
   height: 52px;
-  border-radius: 16px;
+  border-radius: 18px;
   border: 2px solid transparent;
-  background: transparent;
+  background: rgba(255,255,255,0.55);
+  backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -15239,7 +15252,14 @@ button.admin-stat-card {
 }
 
 .ach-ms--reached .ach-ms-node {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  background: rgba(255,255,255,0.92);
+  box-shadow: 0 10px 22px rgba(15,23,42,0.10);
+}
+
+.ach-ms--current .ach-ms-node {
+  transform: scale(1.05);
+  border-color: rgba(39,82,255,0.28);
+  box-shadow: 0 0 0 7px rgba(39,82,255,0.08), 0 14px 30px rgba(39,82,255,0.16);
 }
 
 .ach-ms-emoji {
@@ -15278,7 +15298,7 @@ button.admin-stat-card {
   align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
-  padding: 6px 0 20px;
+  padding: 6px 0 22px;
   min-width: 0;
 }
 
@@ -15289,10 +15309,14 @@ button.admin-stat-card {
 
 .ach-ms-label {
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 900;
   color: var(--text-faint, #94a3b8);
   margin-bottom: 2px;
   line-height: 1.3;
+}
+
+.ach-ms--current .ach-ms-label {
+  color: #2752ff;
 }
 
 .ach-ms--reached .ach-ms-label {
@@ -15753,6 +15777,108 @@ button.admin-stat-card {
 }
 
 /* ── Admin Events Panel ── */
+.ach-billion-bloom {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: radial-gradient(circle at 50% 20%, rgba(255,255,255,0.72), rgba(15,23,42,0.52));
+  backdrop-filter: blur(10px);
+  animation: ach-bloom-fade 0.28s ease-out both;
+}
+
+.ach-billion-petals {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.ach-billion-petals span {
+  position: absolute;
+  top: -28px;
+  width: 12px;
+  height: 18px;
+  border-radius: 999px 999px 999px 0;
+  background: linear-gradient(135deg, #fb7185, #fef3c7 48%, #38bdf8);
+  opacity: 0.92;
+  transform: translateY(-40px) rotate(0deg);
+  animation: ach-petal-fall 4.8s cubic-bezier(0.2, 0.78, 0.24, 1) infinite;
+}
+
+.ach-billion-card {
+  position: relative;
+  width: min(360px, 100%);
+  border-radius: 32px;
+  padding: 28px 24px 22px;
+  text-align: center;
+  color: #08162b;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255,255,255,0.95), transparent 42%),
+    linear-gradient(145deg, #ffffff, #eaf7ff 54%, #fff7ed);
+  box-shadow: 0 30px 90px rgba(15,23,42,0.26);
+  border: 1px solid rgba(255,255,255,0.8);
+  animation: ach-billion-pop 0.52s cubic-bezier(0.18, 1.35, 0.35, 1) both;
+}
+
+.ach-billion-kicker {
+  display: inline-flex;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(39,82,255,0.1);
+  color: #2752ff;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ach-billion-card h2 {
+  margin: 14px 0 10px;
+  font-size: 28px;
+  line-height: 1.08;
+  letter-spacing: -0.04em;
+}
+
+.ach-billion-card p {
+  margin: 0;
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.6;
+  font-weight: 700;
+}
+
+.ach-billion-card button {
+  margin-top: 18px;
+  width: 100%;
+  border: 0;
+  border-radius: 18px;
+  padding: 14px 18px;
+  color: #fff;
+  background: linear-gradient(135deg, #2752ff, #7657ff);
+  font-size: 15px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+@keyframes ach-bloom-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes ach-billion-pop {
+  from { opacity: 0; transform: translateY(18px) scale(0.92); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes ach-petal-fall {
+  0% { transform: translate3d(0, -40px, 0) rotate(0deg); opacity: 0; }
+  12% { opacity: 0.95; }
+  100% { transform: translate3d(var(--drift), 110vh, 0) rotate(calc(var(--spin) * 540deg)); opacity: 0; }
+}
+
 .admin-action-btn {
   display: inline-flex; align-items: center; gap: 6px;
   background: #0066cc; color: #fff;

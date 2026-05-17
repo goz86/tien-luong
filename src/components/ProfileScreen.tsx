@@ -31,6 +31,7 @@ import {
   X,
   Trophy,
   LockKeyhole,
+  Send,
 } from 'lucide-react';
 import { AchievementBanner, AchievementScreen } from './AchievementScreen';
 import { useAppStore } from '../store/appStore';
@@ -465,6 +466,28 @@ export function ProfileScreen({
             <span>{isKo ? '지원 문의' : 'Liên hệ hỗ trợ'}</span>
             <ChevronRight size={16} style={{ marginLeft: 'auto' }} />
           </button>
+          <div className="pf-setting-divider" />
+          <a
+            href="https://www.facebook.com/hhungsuxi/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="pf-setting-row mini pf-donate-row"
+          >
+            <div className="pf-setting-icon pf-donate-icon"><Heart size={16} /></div>
+            <span>{isKo ? '개발자 후원하기' : 'Ủng hộ nhà phát triển'}</span>
+            <Facebook size={15} style={{ marginLeft: 'auto', opacity: 0.5 }} />
+          </a>
+          <div className="pf-setting-divider" />
+          <a
+            href="https://t.me/goz_kr"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="pf-setting-row mini pf-telegram-row"
+          >
+            <div className="pf-setting-icon pf-telegram-icon"><Send size={15} /></div>
+            <span>{isKo ? 'Telegram으로 연락' : 'Liên hệ qua Telegram'}</span>
+            <span style={{ marginLeft: 'auto', fontSize: 12, opacity: 0.45, fontWeight: 500 }}>@goz_kr</span>
+          </a>
           {session && (
             <>
               <div className="pf-setting-divider" />
