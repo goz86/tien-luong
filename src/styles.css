@@ -13180,24 +13180,19 @@ button.admin-stat-card {
     display: grid;
     grid-template-columns: 3fr 2fr;
     grid-template-areas:
-      "signal signal"
-      "deck   deck"
-      "feed   stats";
+      "kpi   kpi"
+      "feed  stats";
     gap: 20px;
     align-items: start;
   }
 
-  .admin-overview-grid .admin-command-deck {
-    grid-area: deck;
-    grid-template-columns: repeat(4, 1fr);
+  .admin-overview-grid .admin-kpi-strip {
+    grid-area: kpi;
+    grid-template-columns: repeat(5, 1fr);
   }
 
   .admin-overview-grid > .admin-content-panel {
     grid-area: feed;
-  }
-
-  .admin-overview-grid .admin-signal-panel {
-    grid-area: signal;
   }
 
   .admin-overview-grid .admin-visit-panel {
@@ -14106,6 +14101,178 @@ button.admin-stat-card {
   color: #cbd5e1;
   font-weight: 650;
   text-align: center;
+}
+
+/* ── Pending reports urgent banner ── */
+.admin-reports-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 13px 18px;
+  margin-bottom: 4px;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(239, 68, 68, 0.03));
+  border: 1.5px solid rgba(239, 68, 68, 0.28);
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: left;
+}
+
+.admin-reports-banner:hover {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.13), rgba(239, 68, 68, 0.06));
+  border-color: rgba(239, 68, 68, 0.45);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px rgba(239, 68, 68, 0.12);
+}
+
+.admin-reports-banner svg {
+  color: #ef4444;
+  flex-shrink: 0;
+}
+
+.admin-reports-banner > span:not(.admin-reports-banner-cta) {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 700;
+  color: #7f1d1d;
+}
+
+.admin-reports-banner strong {
+  color: #ef4444;
+}
+
+.admin-reports-banner-cta {
+  font-size: 12px;
+  font-weight: 800;
+  color: #ef4444;
+  white-space: nowrap;
+  padding: 4px 10px;
+  background: rgba(239, 68, 68, 0.1);
+  border-radius: 99px;
+}
+
+/* ── KPI stat strip ── */
+.admin-kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 1023px) {
+  .admin-kpi-strip {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.admin-kpi-card {
+  background: #fff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 16px 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: all 0.15s;
+  position: relative;
+}
+
+.admin-kpi-card.clickable {
+  cursor: pointer;
+}
+
+.admin-kpi-card.clickable:hover {
+  border-color: var(--kpi-color, #2752ff);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+}
+
+.admin-kpi-card.clickable:active {
+  transform: translateY(0);
+}
+
+.admin-kpi-card.is-alert {
+  border-color: rgba(239, 68, 68, 0.3);
+  background: linear-gradient(145deg, rgba(239, 68, 68, 0.04), #fff);
+}
+
+.admin-kpi-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--kpi-bg, rgba(39, 82, 255, 0.1));
+  color: var(--kpi-color, #2752ff);
+  margin-bottom: 4px;
+}
+
+.admin-kpi-value {
+  font-size: 26px;
+  font-weight: 950;
+  color: #0f172a;
+  line-height: 1;
+  letter-spacing: -0.5px;
+}
+
+.admin-kpi-card.is-alert .admin-kpi-value {
+  color: #ef4444;
+}
+
+.admin-kpi-label {
+  font-size: 11px;
+  font-weight: 800;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.admin-kpi-delta {
+  font-size: 11px;
+  font-weight: 700;
+  color: #22c55e;
+  margin-top: 2px;
+}
+
+.admin-kpi-delta.is-neutral {
+  color: #94a3b8;
+}
+
+.admin-kpi-delta.is-alert {
+  color: #ef4444;
+}
+
+/* Dark mode */
+.dark .admin-reports-banner {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.12), rgba(239, 68, 68, 0.05));
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.dark .admin-reports-banner > span:not(.admin-reports-banner-cta) {
+  color: #fca5a5;
+}
+
+.dark .admin-kpi-card {
+  background: #111a2d;
+  border-color: rgba(148, 163, 184, 0.14);
+}
+
+.dark .admin-kpi-card.is-alert {
+  border-color: rgba(239, 68, 68, 0.25);
+  background: linear-gradient(145deg, rgba(239, 68, 68, 0.08), #111a2d);
+}
+
+.dark .admin-kpi-value {
+  color: #f8fafc;
+}
+
+.dark .admin-kpi-card.is-alert .admin-kpi-value {
+  color: #f87171;
+}
+
+.dark .admin-kpi-label {
+  color: #64748b;
 }
 
 /* ── Monthly stats breakdown ── */

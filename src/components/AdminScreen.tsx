@@ -1121,75 +1121,122 @@ export function AdminScreen({
         ) : null}
 
       {activeTab === 'overview' ? (
-        <div className="admin-panel-stack admin-overview-grid">
-          {/* Signal panel — top priority */}
-          <section className="admin-signal-panel" aria-label={isKo ? '주요 알림' : 'Tín hiệu mới'}>
-            <button type="button" onClick={openCommentHistory}>
-              <MessageCircle size={18} />
+        <>
+          {/* ── Pending reports urgent banner ── */}
+          {stats.reports > 0 ? (
+            <button type="button" className="admin-reports-banner" onClick={() => openTab('reports')}>
+              <AlertTriangle size={15} />
               <span>
-                <strong>{stats.comments.toLocaleString()}</strong>
-                <small>{ui.stats.comments}</small>
+                {isKo
+                  ? <><strong>{stats.reports}건</strong>의 신고가 처리를 기다리고 있습니다.</>
+                  : <>Có <strong>{stats.reports}</strong> báo cáo đang chờ xử lý</>}
+              </span>
+              <span className="admin-reports-banner-cta">
+                {isKo ? '바로 처리 →' : 'Xử lý ngay →'}
               </span>
             </button>
-            <button type="button" onClick={openNotificationHistory}>
-              <Bell size={18} />
-              <span>
-                <strong>{stats.notifications.toLocaleString()}</strong>
-                <small>{ui.stats.notifications}</small>
-              </span>
-            </button>
-          </section>
+          ) : null}
 
-          {/* Quick-action command deck */}
-          <section className="admin-command-deck" aria-label={isKo ? '관리 작업' : 'Tác vụ quản trị'}>
-            {([
-              { icon: AlertTriangle, label: isKo ? '신고 처리' : 'Báo cáo',    color: '#ef4444', tab: 'reports' as AdminTab,       badge: stats.reports },
-              { icon: Users,         label: isKo ? '사용자'   : 'Người dùng',  color: '#2752ff', tab: 'users' as AdminTab,         badge: stats.users },
-              { icon: FileText,      label: isKo ? '콘텐츠'   : 'Nội dung',    color: '#10b981', tab: 'content' as AdminTab,       badge: posts.length + reviews.length + comments.length },
-              { icon: Megaphone,     label: isKo ? '공지 작성' : 'Thông báo',  color: '#f97316', tab: 'announcements' as AdminTab, badge: stats.notifications },
-            ] as { icon: typeof ShieldCheck; label: string; color: string; tab: AdminTab; badge: number }[]).map(({ icon: Ic, label, color, tab, badge }) => (
-              <button key={tab} type="button" className={`admin-qa-btn${tab === 'reports' && stats.reports > 0 ? ' admin-qa-urgent' : ''}`} style={{ '--qa-color': color } as React.CSSProperties} onClick={() => openTab(tab)}>
-                <span className="admin-qa-icon"><Ic size={20} /></span>
-                <span className="admin-qa-copy">
-                  <strong>{label}</strong>
-                  <small>{badge.toLocaleString()}</small>
-                </span>
-                {tab === 'reports' && stats.reports > 0 ? (
-                  <span className="admin-qa-urgent-dot">{stats.reports}</span>
-                ) : null}
-              </button>
-            ))}
-          </section>
-
-          {/* Unified activity feed */}
-          <ContentPanel title={isKo ? '최근 활동' : 'Hoạt động gần đây'} scroll>
-            {activityFeed.length === 0 ? <EmptyText text={ui.empty} /> : activityFeed.map((item) => (
-              <article key={`${item.type}-${item.id}`} className="admin-feed-row">
-                <span className={`admin-feed-dot admin-feed-dot--${item.type}`} />
-                <div className="admin-feed-body">
-                  <div className="admin-feed-top">
-                    <span className={`admin-feed-badge admin-feed-badge--${item.type}`}>{item.type}</span>
-                    <span className="admin-feed-badge admin-feed-badge--cat">{item.badge}</span>
-                    <span className="admin-feed-time">{timeAgo(item.ts)}</span>
+          <div className="admin-overview-grid">
+            {/* ── KPI strip ── */}
+            <div className="admin-kpi-strip">
+              {([
+                {
+                  icon: Users,
+                  label: ui.stats.users,
+                  val: stats.users,
+                  delta: `↑ ${stats.newUsersWeek} ${isKo ? '이번 주' : 'tuần này'}`,
+                  color: '#2752ff',
+                  bg: 'rgba(39,82,255,0.1)',
+                  onClick: () => openTab('users'),
+                },
+                {
+                  icon: FileText,
+                  label: ui.stats.posts,
+                  val: stats.posts,
+                  delta: isKo ? '전체 게시글' : 'tổng bài viết',
+                  color: '#10b981',
+                  bg: 'rgba(16,185,129,0.1)',
+                  onClick: () => { openTab('content'); setContentView('posts'); },
+                },
+                {
+                  icon: MessageCircle,
+                  label: ui.stats.comments,
+                  val: stats.comments,
+                  delta: isKo ? '미확인 댓글' : 'bình luận mới',
+                  color: '#f59e0b',
+                  bg: 'rgba(245,158,11,0.1)',
+                  onClick: openCommentHistory,
+                },
+                {
+                  icon: Activity,
+                  label: isKo ? '오늘 방문' : 'Ghé thăm hôm nay',
+                  val: visitStats?.sessions_today ?? 0,
+                  delta: `${visitStats?.guests_today ?? 0} ${isKo ? '비회원' : 'khách vãng lai'}`,
+                  color: '#06b6d4',
+                  bg: 'rgba(6,182,212,0.1)',
+                  onClick: undefined,
+                },
+                {
+                  icon: AlertTriangle,
+                  label: ui.stats.reports,
+                  val: stats.reports,
+                  delta: isKo ? '처리 대기' : 'chờ xử lý',
+                  color: stats.reports > 0 ? '#ef4444' : '#94a3b8',
+                  bg: stats.reports > 0 ? 'rgba(239,68,68,0.1)' : 'rgba(148,163,184,0.1)',
+                  onClick: () => openTab('reports'),
+                  isAlert: stats.reports > 0,
+                },
+              ] as { icon: typeof ShieldCheck; label: string; val: number; delta: string; color: string; bg: string; onClick?: () => void; isAlert?: boolean }[]).map(
+                ({ icon: Ic, label, val, delta, color, bg, onClick, isAlert }) => (
+                  <div
+                    key={label}
+                    className={`admin-kpi-card${onClick ? ' clickable' : ''}${isAlert ? ' is-alert' : ''}`}
+                    style={{ '--kpi-color': color, '--kpi-bg': bg } as React.CSSProperties}
+                    onClick={onClick}
+                    role={onClick ? 'button' : undefined}
+                    tabIndex={onClick ? 0 : undefined}
+                  >
+                    <span className="admin-kpi-icon"><Ic size={15} /></span>
+                    <strong className="admin-kpi-value">{val.toLocaleString()}</strong>
+                    <span className="admin-kpi-label">{label}</span>
+                    <span className={`admin-kpi-delta${isAlert && val > 0 ? ' is-alert' : val === 0 ? ' is-neutral' : ''}`}>
+                      {delta}
+                    </span>
                   </div>
-                  <p className="admin-feed-title">{item.title.length > 60 ? item.title.slice(0, 60) + '…' : item.title}</p>
-                  <span className="admin-feed-sub">{item.sub || ui.unknownUser}</span>
-                </div>
-                <button
-                  type="button"
-                  className="admin-feed-del"
-                  disabled={busyId === `${item.type}-${item.id}`}
-                  onClick={() => {
-                    if (item.type === 'post')    void deletePost(item.raw as AdminPost);
-                    if (item.type === 'review')  void deleteReview(item.raw as AdminReview);
-                    if (item.type === 'comment') void deleteComment(item.raw as AdminComment);
-                  }}
-                >
-                  {busyId === `${item.type}-${item.id}` ? <Loader2 size={14} className="cm-spin" /> : <Trash2 size={14} />}
-                </button>
-              </article>
-            ))}
-          </ContentPanel>
+                )
+              )}
+            </div>
+
+            {/* ── Activity feed ── */}
+            <ContentPanel title={isKo ? '최근 활동' : 'Hoạt động gần đây'} scroll>
+              {activityFeed.length === 0 ? <EmptyText text={ui.empty} /> : activityFeed.map((item) => (
+                <article key={`${item.type}-${item.id}`} className="admin-feed-row">
+                  <span className={`admin-feed-dot admin-feed-dot--${item.type}`} />
+                  <div className="admin-feed-body">
+                    <div className="admin-feed-top">
+                      <span className={`admin-feed-badge admin-feed-badge--${item.type}`}>{item.type}</span>
+                      <span className="admin-feed-badge admin-feed-badge--cat">{item.badge}</span>
+                      <span className="admin-feed-time">{timeAgo(item.ts)}</span>
+                    </div>
+                    <p className="admin-feed-title">{item.title.length > 60 ? item.title.slice(0, 60) + '…' : item.title}</p>
+                    <span className="admin-feed-sub">{item.sub || ui.unknownUser}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="admin-feed-del"
+                    disabled={busyId === `${item.type}-${item.id}`}
+                    onClick={() => {
+                      if (item.type === 'post')    void deletePost(item.raw as AdminPost);
+                      if (item.type === 'review')  void deleteReview(item.raw as AdminReview);
+                      if (item.type === 'comment') void deleteComment(item.raw as AdminComment);
+                    }}
+                  >
+                    {busyId === `${item.type}-${item.id}` ? <Loader2 size={14} className="cm-spin" /> : <Trash2 size={14} />}
+                  </button>
+                </article>
+              ))}
+            </ContentPanel>
 
           {/* Visitor stats panel */}
           {visitStats ? (
@@ -1332,7 +1379,8 @@ export function AdminScreen({
               </p>
             </section>
           ) : null}
-        </div>
+          </div>{/* /admin-overview-grid */}
+        </>
       ) : null}
 
       {activeTab === 'users' ? (
