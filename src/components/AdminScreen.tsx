@@ -57,8 +57,10 @@ type AdminPost = {
   title: string;
   content: string;
   display_name: string;
+  is_anonymous: boolean | null;
   likes_count: number | null;
   comments_count: number | null;
+  image_urls: string[] | null;
   created_at: string;
 };
 
@@ -488,7 +490,7 @@ export function AdminScreen({
         .limit(24),
       supabase
         .from('community_posts')
-        .select('id, user_id, category, title, content, display_name, likes_count, comments_count, created_at')
+        .select('id, user_id, category, title, content, display_name, is_anonymous, likes_count, comments_count, image_urls, created_at')
         .order('created_at', { ascending: false })
         .limit(18),
       supabase
@@ -1041,14 +1043,14 @@ export function AdminScreen({
           {/* Metric chips */}
           <div className="admin-metric-strip">
             {([
-              { icon: Users,         val: stats.users,         label: ui.stats.users,         color: '#60a5fa', onClick: undefined },
-              { icon: TrendingUp,    val: stats.newUsersWeek,  label: ui.stats.newUsersWeek,  color: '#34d399', onClick: undefined },
-              { icon: Activity,      val: stats.activeUsersWeek, label: ui.stats.activeWeek,  color: '#06b6d4', onClick: undefined },
-              { icon: FileText,      val: stats.posts,         label: ui.stats.posts,         color: '#818cf8', onClick: undefined },
-              { icon: MessageCircle, val: stats.comments,      label: ui.stats.comments,      color: '#f59e0b', onClick: openCommentHistory },
-              { icon: Star,          val: stats.reviews,       label: ui.stats.reviews,       color: '#a78bfa', onClick: undefined },
-              { icon: AlertTriangle, val: stats.reports,       label: ui.stats.reports,       color: '#f87171', onClick: () => openTab('reports') },
-            ] as { icon: typeof ShieldCheck; val: number; label: string; color: string; onClick?: () => void }[]).map(({ icon: Ic, val, label, color, onClick: oc }) => (
+              { icon: Users,         val: stats.users,           label: ui.stats.users,        color: '#60a5fa', onClick: () => openTab('users') },
+              { icon: TrendingUp,    val: stats.newUsersWeek,    label: ui.stats.newUsersWeek, color: '#34d399', onClick: () => openTab('users') },
+              { icon: Activity,      val: stats.activeUsersWeek, label: ui.stats.activeWeek,   color: '#06b6d4', onClick: () => openTab('users') },
+              { icon: FileText,      val: stats.posts,           label: ui.stats.posts,        color: '#818cf8', onClick: () => { openTab('content'); setContentView('posts'); } },
+              { icon: MessageCircle, val: stats.comments,        label: ui.stats.comments,     color: '#f59e0b', onClick: openCommentHistory },
+              { icon: Star,          val: stats.reviews,         label: ui.stats.reviews,      color: '#a78bfa', onClick: () => { openTab('content'); setContentView('reviews'); } },
+              { icon: AlertTriangle, val: stats.reports,         label: ui.stats.reports,      color: '#f87171', onClick: () => openTab('reports') },
+            ] as { icon: typeof ShieldCheck; val: number; label: string; color: string; onClick: () => void }[]).map(({ icon: Ic, val, label, color, onClick: oc }) => (
               <button key={label} type="button" className={`admin-metric-chip${label === ui.stats.reports && val > 0 ? ' has-badge' : ''}`} style={{ '--chip-color': color } as React.CSSProperties} onClick={oc}>
                 <Ic size={14} />
                 <strong>{val.toLocaleString()}</strong>
@@ -1340,9 +1342,10 @@ export function AdminScreen({
                   <ContentRow
                     key={post.id}
                     title={post.title}
-                    meta={`${post.display_name || ui.unknownUser} · ${timeAgo(post.created_at)} · ${post.comments_count || 0} comments`}
+                    meta={`${post.is_anonymous ? ui.unknownUser : (post.display_name || ui.unknownUser)} · ${timeAgo(post.created_at)} · ${post.comments_count || 0} comments`}
                     body={post.content}
                     badge={post.category}
+                    images={post.image_urls}
                     actionLabel={ui.delete}
                     busy={busyId === `post-${post.id}`}
                     onAction={() => void deletePost(post)}
@@ -1695,6 +1698,7 @@ function ContentRow({
   meta,
   body,
   badge,
+  images,
   actionLabel,
   busy,
   onAction,
@@ -1703,17 +1707,38 @@ function ContentRow({
   meta: string;
   body: string;
   badge: string;
+  images?: string[] | null;
   actionLabel: string;
   busy: boolean;
   onAction: () => void;
 }) {
+  const hasImages = images && images.length > 0;
   return (
     <article className="admin-content-row">
-      <div>
-        <span className="admin-row-badge">{badge}</span>
-        <h3>{title}</h3>
-        <p>{shortText(body)}</p>
-        <small>{meta}</small>
+      <div className="admin-content-row-body">
+        <div className="admin-content-row-text">
+          <span className="admin-row-badge">{badge}</span>
+          <h3>{title}</h3>
+          <p>{shortText(body)}</p>
+          <small>{meta}</small>
+        </div>
+        {hasImages && (
+          <div className={`admin-post-thumbs admin-post-thumbs--${Math.min(images.length, 4)}`}>
+            {images.slice(0, 4).map((url, i) => (
+              <img
+                key={i}
+                src={url}
+                alt=""
+                className="admin-post-thumb"
+                loading="lazy"
+                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+              />
+            ))}
+            {images.length > 4 && (
+              <span className="admin-post-thumb-more">+{images.length - 4}</span>
+            )}
+          </div>
+        )}
       </div>
       <button type="button" className="admin-delete-btn" disabled={busy} onClick={onAction}>
         {busy ? <Loader2 size={15} className="cm-spin" /> : <Trash2 size={15} />}
