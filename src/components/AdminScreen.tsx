@@ -1122,6 +1122,25 @@ export function AdminScreen({
 
       {activeTab === 'overview' ? (
         <div className="admin-panel-stack admin-overview-grid">
+          {/* Signal panel — top priority */}
+          <section className="admin-signal-panel" aria-label={isKo ? '주요 알림' : 'Tín hiệu mới'}>
+            <button type="button" onClick={openCommentHistory}>
+              <MessageCircle size={18} />
+              <span>
+                <strong>{stats.comments.toLocaleString()}</strong>
+                <small>{ui.stats.comments}</small>
+              </span>
+            </button>
+            <button type="button" onClick={openNotificationHistory}>
+              <Bell size={18} />
+              <span>
+                <strong>{stats.notifications.toLocaleString()}</strong>
+                <small>{ui.stats.notifications}</small>
+              </span>
+            </button>
+          </section>
+
+          {/* Quick-action command deck */}
           <section className="admin-command-deck" aria-label={isKo ? '관리 작업' : 'Tác vụ quản trị'}>
             {([
               { icon: AlertTriangle, label: isKo ? '신고 처리' : 'Báo cáo',    color: '#ef4444', tab: 'reports' as AdminTab,       badge: stats.reports },
@@ -1171,22 +1190,6 @@ export function AdminScreen({
               </article>
             ))}
           </ContentPanel>
-          <section className="admin-signal-panel" aria-label={isKo ? '주요 알림' : 'Tín hiệu mới'}>
-            <button type="button" onClick={openCommentHistory}>
-              <MessageCircle size={18} />
-              <span>
-                <strong>{stats.comments.toLocaleString()}</strong>
-                <small>{ui.stats.comments}</small>
-              </span>
-            </button>
-            <button type="button" onClick={openNotificationHistory}>
-              <Bell size={18} />
-              <span>
-                <strong>{stats.notifications.toLocaleString()}</strong>
-                <small>{ui.stats.notifications}</small>
-              </span>
-            </button>
-          </section>
 
           {/* Visitor stats panel */}
           {visitStats ? (
