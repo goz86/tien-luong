@@ -5,6 +5,7 @@ import { RateState, Shift, VenueColors } from '../lib/types';
 import { formatDateChip, getVenueColor, formatHoursCompact } from '../utils/helpers';
 import { FinanceMetric } from './shared/ui';
 import { ActivityTicker } from './shared/ActivityTicker';
+import { AchievementBanner, AchievementScreen } from './AchievementScreen';
 
 export function HomeScreen({
   monthlyTotal,
@@ -101,6 +102,7 @@ export function HomeScreen({
   const [selectedWorkplace, setSelectedWorkplace] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [isVND, setIsVND] = useState(false);
+  const [showAchievement, setShowAchievement] = useState(false);
   const monthNumber = new Date(`${currentMonth}T00:00:00`).getMonth() + 1;
 
   const workplaceShifts = allShifts.filter(s => s.label === selectedWorkplace)
@@ -140,6 +142,16 @@ export function HomeScreen({
       </header>
 
       <ActivityTicker lang={lang} onOpenPost={onOpenCommunityPost} />
+
+      {/* ── Achievement Banner ── */}
+      <div style={{ padding: '0 16px 4px' }}>
+        <AchievementBanner
+          isKo={lang === 'ko'}
+          onClick={() => setShowAchievement(true)}
+          allShifts={allShifts}
+          rateValue={rate.value}
+        />
+      </div>
 
       <section className="hero-balance-card">
         <div className="hero-topline">
@@ -527,6 +539,14 @@ export function HomeScreen({
             </div>
           </div>
         </section>
+      )}
+
+      {/* ── Achievement Screen ── */}
+      {showAchievement && (
+        <AchievementScreen
+          isKo={lang === 'ko'}
+          onClose={() => setShowAchievement(false)}
+        />
       )}
     </>
   );

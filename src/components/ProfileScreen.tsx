@@ -43,7 +43,7 @@ import { koreanRegions, Region } from '../regions';
 
 type AuthMode = 'login' | 'register' | 'forgot';
 
-export type WallpaperKey = 'default' | 'ocean' | 'sunset' | 'forest' | 'lavender' | 'midnight';
+export type WallpaperKey = 'default' | 'ocean' | 'sunset' | 'forest' | 'lavender' | 'rose';
 export type AppLang = 'vi' | 'ko';
 
 const WALLPAPERS: { key: WallpaperKey; label_vi: string; label_ko: string; gradient: string; preview: string }[] = [
@@ -52,7 +52,7 @@ const WALLPAPERS: { key: WallpaperKey; label_vi: string; label_ko: string; gradi
   { key: 'sunset', label_vi: 'Hoàng hôn', label_ko: '노을', gradient: 'linear-gradient(180deg, #fef3c7 0%, #fde68a 30%, #fdba74 70%, #fb923c 100%)', preview: 'linear-gradient(135deg, #fde68a, #fb923c)' },
   { key: 'forest', label_vi: 'Rừng xanh', label_ko: '숲', gradient: 'linear-gradient(180deg, #dcfce7 0%, #bbf7d0 48%, #86efac 100%)', preview: 'linear-gradient(135deg, #bbf7d0, #4ade80)' },
   { key: 'lavender', label_vi: 'Lavender', label_ko: '라벤더', gradient: 'linear-gradient(180deg, #f3e8ff 0%, #e9d5ff 48%, #d8b4fe 100%)', preview: 'linear-gradient(135deg, #e9d5ff, #a855f7)' },
-  { key: 'midnight', label_vi: 'Nửa đêm', label_ko: '밤하늘', gradient: 'linear-gradient(180deg, #1e293b 0%, #0f172a 48%, #020617 100%)', preview: 'linear-gradient(135deg, #1e293b, #020617)' },
+  { key: 'rose', label_vi: 'Hoa hồng', label_ko: '로즈', gradient: 'linear-gradient(180deg, #fff1f2 0%, #fecdd3 48%, #fda4af 100%)', preview: 'linear-gradient(135deg, #fecdd3, #fb7185)' },
 ];
 
 export { WALLPAPERS };
@@ -764,7 +764,7 @@ export function ProfileScreen({
 
               {/* STORE SAFETY */}
               <div className="pf-settings-group">
-                <div className="pf-settings-group-label">{isKo ? '지원' : 'STORE SAFETY'}</div>
+                <div className="pf-settings-group-label">{isKo ? '지원' : 'BẢO MẬT & HỖ TRỢ'}</div>
                 <div className="pf-settings-card">
                   <button type="button" className="pf-setting-row mini" onClick={() => setPolicyPanel('privacy')}>
                     <div className="pf-setting-icon"><Shield size={16} /></div>
@@ -907,7 +907,7 @@ export function ProfileScreen({
           </div>
         </div>
       )}
-      {policyPanel ? (
+      {policyPanel ? createPortal(
         <div className="pf-policy-overlay" onClick={() => setPolicyPanel(null)}>
           <div className="pf-policy-sheet" onClick={(event) => event.stopPropagation()}>
             <div className="pf-popover-head">
@@ -925,12 +925,15 @@ export function ProfileScreen({
             {policyPanel === 'delete' ? (
               <div className="pf-policy-body">
                 <div className="pf-policy-warn-box">
-                  <p>⚠️ <strong>Cảnh báo – Hành động không thể hoàn tác</strong></p>
-                  <p>Tài khoản và toàn bộ dữ liệu sẽ bị <strong>xoá vĩnh viễn ngay lập tức</strong>, bao gồm: lịch làm việc, chi tiêu, bài viết, bình luận và hồ sơ cá nhân.</p>
+                  <p>⚠️ <strong>{isKo ? '경고 – 되돌릴 수 없는 작업' : 'Cảnh báo – Hành động không thể hoàn tác'}</strong></p>
+                  <p>{isKo
+                    ? <>계정과 모든 데이터가 <strong>즉시 영구 삭제</strong>됩니다. 여기에는 근무 일정, 지출 내역, 게시글, 댓글, 개인 프로필이 포함됩니다.</>
+                    : <>Tài khoản và toàn bộ dữ liệu sẽ bị <strong>xoá vĩnh viễn ngay lập tức</strong>, bao gồm: lịch làm việc, chi tiêu, bài viết, bình luận và hồ sơ cá nhân.</>
+                  }</p>
                 </div>
 
                 <p style={{ fontSize: 13, color: 'var(--text-faint)', margin: '4px 0 12px' }}>
-                  Tài khoản đang đăng nhập: <strong>{session?.user.email}</strong>
+                  {isKo ? '현재 로그인 계정: ' : 'Tài khoản đang đăng nhập: '}<strong>{session?.user.email}</strong>
                 </p>
 
                 <textarea
@@ -938,7 +941,7 @@ export function ProfileScreen({
                   rows={3}
                   value={deleteReason}
                   onChange={(event) => setDeleteReason(event.target.value)}
-                  placeholder="Lý do xoá tài khoản (tuỳ chọn)"
+                  placeholder={isKo ? '계정 삭제 이유 (선택사항)' : 'Lý do xoá tài khoản (tuỳ chọn)'}
                 />
 
                 <label className="pf-delete-confirm-label">
@@ -947,7 +950,7 @@ export function ProfileScreen({
                     checked={deleteConfirmed}
                     onChange={(e) => setDeleteConfirmed(e.target.checked)}
                   />
-                  <span>Tôi hiểu rằng dữ liệu sẽ bị xoá vĩnh viễn và không thể khôi phục</span>
+                  <span>{isKo ? '데이터가 영구적으로 삭제되며 복구할 수 없음을 이해합니다' : 'Tôi hiểu rằng dữ liệu sẽ bị xoá vĩnh viễn và không thể khôi phục'}</span>
                 </label>
 
                 <button
@@ -956,121 +959,226 @@ export function ProfileScreen({
                   disabled={loading || !deleteConfirmed}
                   onClick={() => void handleDeleteAccount()}
                 >
-                  {loading ? 'Đang xoá tài khoản...' : 'Xoá tài khoản ngay'}
+                  {loading
+                    ? (isKo ? '계정 삭제 중...' : 'Đang xoá tài khoản...')
+                    : (isKo ? '지금 계정 삭제' : 'Xoá tài khoản ngay')
+                  }
                 </button>
               </div>
             ) : (
               <div className="pf-policy-body">
                 {policyPanel === 'privacy' ? (
                   <>
-                    <p className="pf-policy-updated">Cập nhật lần cuối: 01/05/2025</p>
+                    <p className="pf-policy-updated">{isKo ? '최종 업데이트: 2025년 5월 1일' : 'Cập nhật lần cuối: 01/05/2025'}</p>
 
-                    <h4 className="pf-policy-h">1. Thông tin chúng tôi thu thập</h4>
-                    <p>DuhocMate thu thập các thông tin sau khi bạn đăng ký và sử dụng ứng dụng:</p>
+                    <h4 className="pf-policy-h">{isKo ? '1. 수집하는 정보' : '1. Thông tin chúng tôi thu thập'}</h4>
+                    <p>{isKo ? 'DuhocMate는 앱 가입 및 이용 시 다음 정보를 수집합니다:' : 'DuhocMate thu thập các thông tin sau khi bạn đăng ký và sử dụng ứng dụng:'}</p>
                     <ul className="pf-policy-list">
-                      <li>Thông tin tài khoản: tên hiển thị, địa chỉ email, ảnh đại diện</li>
-                      <li>Thông tin công việc: tên nơi làm, ca làm việc, mức lương, chi tiêu</li>
-                      <li>Nội dung cộng đồng: bài viết, bình luận, đánh giá địa điểm</li>
-                      <li>Dữ liệu sử dụng: thời gian truy cập, thiết bị, phiên bản ứng dụng</li>
+                      {isKo ? (
+                        <>
+                          <li>계정 정보: 표시 이름, 이메일 주소, 프로필 사진</li>
+                          <li>근무 정보: 근무지명, 근무 시간대, 급여, 지출 내역</li>
+                          <li>커뮤니티 콘텐츠: 게시글, 댓글, 장소 리뷰</li>
+                          <li>사용 데이터: 접속 시간, 기기 정보, 앱 버전</li>
+                        </>
+                      ) : (
+                        <>
+                          <li>Thông tin tài khoản: tên hiển thị, địa chỉ email, ảnh đại diện</li>
+                          <li>Thông tin công việc: tên nơi làm, ca làm việc, mức lương, chi tiêu</li>
+                          <li>Nội dung cộng đồng: bài viết, bình luận, đánh giá địa điểm</li>
+                          <li>Dữ liệu sử dụng: thời gian truy cập, thiết bị, phiên bản ứng dụng</li>
+                        </>
+                      )}
                     </ul>
 
-                    <h4 className="pf-policy-h">2. Mục đích sử dụng</h4>
+                    <h4 className="pf-policy-h">{isKo ? '2. 이용 목적' : '2. Mục đích sử dụng'}</h4>
                     <ul className="pf-policy-list">
-                      <li>Đồng bộ dữ liệu giữa các thiết bị của bạn</li>
-                      <li>Cung cấp tính năng cộng đồng và kết nối người dùng</li>
-                      <li>Cải thiện chất lượng dịch vụ và trải nghiệm người dùng</li>
-                      <li>Gửi thông báo quan trọng liên quan đến tài khoản</li>
+                      {isKo ? (
+                        <>
+                          <li>기기 간 데이터 동기화</li>
+                          <li>커뮤니티 기능 및 사용자 연결 제공</li>
+                          <li>서비스 품질 및 사용자 경험 개선</li>
+                          <li>계정 관련 중요 알림 발송</li>
+                        </>
+                      ) : (
+                        <>
+                          <li>Đồng bộ dữ liệu giữa các thiết bị của bạn</li>
+                          <li>Cung cấp tính năng cộng đồng và kết nối người dùng</li>
+                          <li>Cải thiện chất lượng dịch vụ và trải nghiệm người dùng</li>
+                          <li>Gửi thông báo quan trọng liên quan đến tài khoản</li>
+                        </>
+                      )}
                     </ul>
 
-                    <h4 className="pf-policy-h">3. Chia sẻ dữ liệu</h4>
-                    <p>DuhocMate <strong>không bán, không cho thuê</strong> dữ liệu cá nhân của bạn cho bên thứ ba. Dữ liệu chỉ được chia sẻ trong các trường hợp:</p>
+                    <h4 className="pf-policy-h">{isKo ? '3. 데이터 공유' : '3. Chia sẻ dữ liệu'}</h4>
+                    <p>{isKo
+                      ? <>DuhocMate는 개인 데이터를 제3자에게 <strong>판매하거나 대여하지 않습니다</strong>. 다음의 경우에만 데이터가 공유됩니다:</>
+                      : <>DuhocMate <strong>không bán, không cho thuê</strong> dữ liệu cá nhân của bạn cho bên thứ ba. Dữ liệu chỉ được chia sẻ trong các trường hợp:</>
+                    }</p>
                     <ul className="pf-policy-list">
-                      <li>Yêu cầu hợp pháp từ cơ quan nhà nước có thẩm quyền</li>
-                      <li>Các nhà cung cấp dịch vụ kỹ thuật (Supabase) phục vụ vận hành ứng dụng</li>
+                      {isKo ? (
+                        <>
+                          <li>관할 정부 기관의 합법적인 요청</li>
+                          <li>앱 운영을 위한 기술 서비스 제공업체(Supabase)</li>
+                        </>
+                      ) : (
+                        <>
+                          <li>Yêu cầu hợp pháp từ cơ quan nhà nước có thẩm quyền</li>
+                          <li>Các nhà cung cấp dịch vụ kỹ thuật (Supabase) phục vụ vận hành ứng dụng</li>
+                        </>
+                      )}
                     </ul>
 
-                    <h4 className="pf-policy-h">4. Bảo mật dữ liệu</h4>
-                    <p>Dữ liệu được mã hoá trong quá trình truyền (HTTPS/TLS) và lưu trữ trên hạ tầng đám mây bảo mật. Chúng tôi áp dụng các biện pháp kỹ thuật phù hợp để ngăn chặn truy cập trái phép.</p>
+                    <h4 className="pf-policy-h">{isKo ? '4. 데이터 보안' : '4. Bảo mật dữ liệu'}</h4>
+                    <p>{isKo
+                      ? '데이터는 전송 중 암호화(HTTPS/TLS)되며 보안 클라우드 인프라에 저장됩니다. 무단 접근을 방지하기 위한 적절한 기술적 조치를 적용하고 있습니다.'
+                      : 'Dữ liệu được mã hoá trong quá trình truyền (HTTPS/TLS) và lưu trữ trên hạ tầng đám mây bảo mật. Chúng tôi áp dụng các biện pháp kỹ thuật phù hợp để ngăn chặn truy cập trái phép.'
+                    }</p>
 
-                    <h4 className="pf-policy-h">5. Quyền của bạn</h4>
+                    <h4 className="pf-policy-h">{isKo ? '5. 귀하의 권리' : '5. Quyền của bạn'}</h4>
                     <ul className="pf-policy-list">
-                      <li>Yêu cầu xem, chỉnh sửa hoặc xoá dữ liệu cá nhân</li>
-                      <li>Rút lại sự đồng ý bất kỳ lúc nào</li>
-                      <li>Yêu cầu xoá tài khoản hoàn toàn trong mục Cài đặt</li>
+                      {isKo ? (
+                        <>
+                          <li>개인 데이터 열람, 수정 또는 삭제 요청</li>
+                          <li>언제든지 동의 철회</li>
+                          <li>설정 메뉴에서 계정 완전 삭제 요청</li>
+                        </>
+                      ) : (
+                        <>
+                          <li>Yêu cầu xem, chỉnh sửa hoặc xoá dữ liệu cá nhân</li>
+                          <li>Rút lại sự đồng ý bất kỳ lúc nào</li>
+                          <li>Yêu cầu xoá tài khoản hoàn toàn trong mục Cài đặt</li>
+                        </>
+                      )}
                     </ul>
-                    <p>Liên hệ: <strong>duhocmate@gmail.com</strong></p>
+                    <p>{isKo ? '문의: ' : 'Liên hệ: '}<strong>duhocmate@gmail.com</strong></p>
                   </>
                 ) : policyPanel === 'terms' ? (
                   <>
-                    <p className="pf-policy-updated">Cập nhật lần cuối: 01/05/2025</p>
+                    <p className="pf-policy-updated">{isKo ? '최종 업데이트: 2025년 5월 1일' : 'Cập nhật lần cuối: 01/05/2025'}</p>
 
-                    <h4 className="pf-policy-h">1. Chấp nhận điều khoản</h4>
-                    <p>Khi sử dụng DuhocMate, bạn đồng ý tuân thủ các điều khoản này. Nếu không đồng ý, vui lòng ngừng sử dụng ứng dụng.</p>
+                    <h4 className="pf-policy-h">{isKo ? '1. 약관 동의' : '1. Chấp nhận điều khoản'}</h4>
+                    <p>{isKo
+                      ? 'DuhocMate를 사용함으로써 본 약관에 동의하는 것으로 간주됩니다. 동의하지 않으시면 앱 사용을 중단해 주세요.'
+                      : 'Khi sử dụng DuhocMate, bạn đồng ý tuân thủ các điều khoản này. Nếu không đồng ý, vui lòng ngừng sử dụng ứng dụng.'
+                    }</p>
 
-                    <h4 className="pf-policy-h">2. Mô tả dịch vụ</h4>
-                    <p>DuhocMate là ứng dụng hỗ trợ du học sinh, thực tập sinh tại Hàn Quốc quản lý lịch làm việc, thu nhập, chi tiêu và kết nối cộng đồng. Thông tin về lương, thuế, phụ cấp chỉ mang tính <strong>tham khảo</strong>, không thay thế tư vấn pháp lý hoặc tài chính chuyên nghiệp.</p>
+                    <h4 className="pf-policy-h">{isKo ? '2. 서비스 설명' : '2. Mô tả dịch vụ'}</h4>
+                    <p>{isKo
+                      ? <>DuhocMate는 한국의 유학생 및 인턴십 참가자가 근무 일정, 수입, 지출을 관리하고 커뮤니티와 연결할 수 있도록 지원하는 앱입니다. 급여, 세금, 수당에 관한 정보는 <strong>참고용</strong>이며 전문적인 법률 또는 재무 상담을 대체하지 않습니다.</>
+                      : <>DuhocMate là ứng dụng hỗ trợ du học sinh, thực tập sinh tại Hàn Quốc quản lý lịch làm việc, thu nhập, chi tiêu và kết nối cộng đồng. Thông tin về lương, thuế, phụ cấp chỉ mang tính <strong>tham khảo</strong>, không thay thế tư vấn pháp lý hoặc tài chính chuyên nghiệp.</>
+                    }</p>
 
-                    <h4 className="pf-policy-h">3. Nghĩa vụ người dùng</h4>
+                    <h4 className="pf-policy-h">{isKo ? '3. 사용자 의무' : '3. Nghĩa vụ người dùng'}</h4>
                     <ul className="pf-policy-list">
-                      <li>Cung cấp thông tin chính xác khi đăng ký</li>
-                      <li>Bảo mật thông tin đăng nhập, không chia sẻ tài khoản</li>
-                      <li>Chịu trách nhiệm về mọi hoạt động dưới tài khoản của mình</li>
+                      {isKo ? (
+                        <>
+                          <li>가입 시 정확한 정보 제공</li>
+                          <li>로그인 정보 보호 및 계정 미공유</li>
+                          <li>본인 계정의 모든 활동에 대한 책임</li>
+                        </>
+                      ) : (
+                        <>
+                          <li>Cung cấp thông tin chính xác khi đăng ký</li>
+                          <li>Bảo mật thông tin đăng nhập, không chia sẻ tài khoản</li>
+                          <li>Chịu trách nhiệm về mọi hoạt động dưới tài khoản của mình</li>
+                        </>
+                      )}
                     </ul>
 
-                    <h4 className="pf-policy-h">4. Nội dung bị cấm</h4>
+                    <h4 className="pf-policy-h">{isKo ? '4. 금지 콘텐츠' : '4. Nội dung bị cấm'}</h4>
                     <ul className="pf-policy-list">
-                      <li>Nội dung quấy rối, phân biệt đối xử, thù địch</li>
-                      <li>Thông tin cá nhân của người khác khi chưa được phép</li>
-                      <li>Lừa đảo, spam, quảng cáo không được phép</li>
-                      <li>Nội dung vi phạm pháp luật Hàn Quốc hoặc Việt Nam</li>
-                      <li>Thông tin sai lệch gây hoang mang cộng đồng</li>
+                      {isKo ? (
+                        <>
+                          <li>괴롭힘, 차별, 혐오 콘텐츠</li>
+                          <li>허가 없이 타인의 개인 정보 공유</li>
+                          <li>사기, 스팸, 무허가 광고</li>
+                          <li>한국 또는 베트남 법률을 위반하는 콘텐츠</li>
+                          <li>커뮤니티에 혼란을 야기하는 허위 정보</li>
+                        </>
+                      ) : (
+                        <>
+                          <li>Nội dung quấy rối, phân biệt đối xử, thù địch</li>
+                          <li>Thông tin cá nhân của người khác khi chưa được phép</li>
+                          <li>Lừa đảo, spam, quảng cáo không được phép</li>
+                          <li>Nội dung vi phạm pháp luật Hàn Quốc hoặc Việt Nam</li>
+                          <li>Thông tin sai lệch gây hoang mang cộng đồng</li>
+                        </>
+                      )}
                     </ul>
 
-                    <h4 className="pf-policy-h">5. Xử lý vi phạm</h4>
-                    <p>DuhocMate có quyền xoá nội dung vi phạm, tạm khoá hoặc xoá vĩnh viễn tài khoản mà không cần báo trước trong trường hợp vi phạm nghiêm trọng.</p>
+                    <h4 className="pf-policy-h">{isKo ? '5. 위반 처리' : '5. Xử lý vi phạm'}</h4>
+                    <p>{isKo
+                      ? 'DuhocMate는 심각한 위반의 경우 사전 통보 없이 위반 콘텐츠 삭제, 계정 임시 정지 또는 영구 삭제 조치를 취할 권리가 있습니다.'
+                      : 'DuhocMate có quyền xoá nội dung vi phạm, tạm khoá hoặc xoá vĩnh viễn tài khoản mà không cần báo trước trong trường hợp vi phạm nghiêm trọng.'
+                    }</p>
 
-                    <h4 className="pf-policy-h">6. Giới hạn trách nhiệm</h4>
-                    <p>DuhocMate không chịu trách nhiệm về thiệt hại phát sinh từ việc sử dụng thông tin trong ứng dụng cho các quyết định tài chính, pháp lý hoặc nghề nghiệp.</p>
+                    <h4 className="pf-policy-h">{isKo ? '6. 책임의 한계' : '6. Giới hạn trách nhiệm'}</h4>
+                    <p>{isKo
+                      ? 'DuhocMate는 앱 내 정보를 재무, 법률 또는 직업적 결정에 사용하여 발생하는 손해에 대해 책임을 지지 않습니다.'
+                      : 'DuhocMate không chịu trách nhiệm về thiệt hại phát sinh từ việc sử dụng thông tin trong ứng dụng cho các quyết định tài chính, pháp lý hoặc nghề nghiệp.'
+                    }</p>
 
-                    <h4 className="pf-policy-h">7. Thay đổi điều khoản</h4>
-                    <p>Điều khoản có thể được cập nhật. Thay đổi quan trọng sẽ được thông báo qua ứng dụng. Tiếp tục sử dụng đồng nghĩa với việc chấp nhận điều khoản mới.</p>
+                    <h4 className="pf-policy-h">{isKo ? '7. 약관 변경' : '7. Thay đổi điều khoản'}</h4>
+                    <p>{isKo
+                      ? '약관은 업데이트될 수 있습니다. 중요한 변경 사항은 앱을 통해 공지됩니다. 계속 사용하는 것은 새로운 약관에 동의하는 것을 의미합니다.'
+                      : 'Điều khoản có thể được cập nhật. Thay đổi quan trọng sẽ được thông báo qua ứng dụng. Tiếp tục sử dụng đồng nghĩa với việc chấp nhận điều khoản mới.'
+                    }</p>
                   </>
                 ) : (
                   <>
-                    <h4 className="pf-policy-h">Liên hệ chúng tôi</h4>
+                    <h4 className="pf-policy-h">{isKo ? '문의하기' : 'Liên hệ chúng tôi'}</h4>
                     <div className="pf-support-card">
                       <span className="pf-support-icon">✉️</span>
                       <div>
-                        <p className="pf-support-label">Email hỗ trợ</p>
+                        <p className="pf-support-label">{isKo ? '지원 이메일' : 'Email hỗ trợ'}</p>
                         <p className="pf-support-value">duhocmate@gmail.com</p>
                       </div>
                     </div>
                     <div className="pf-support-card">
                       <span className="pf-support-icon">⏱️</span>
                       <div>
-                        <p className="pf-support-label">Thời gian phản hồi</p>
-                        <p className="pf-support-value">Trong vòng 24–48 giờ (ngày làm việc)</p>
+                        <p className="pf-support-label">{isKo ? '응답 시간' : 'Thời gian phản hồi'}</p>
+                        <p className="pf-support-value">{isKo ? '24~48시간 이내 (영업일 기준)' : 'Trong vòng 24–48 giờ (ngày làm việc)'}</p>
                       </div>
                     </div>
 
-                    <h4 className="pf-policy-h" style={{ marginTop: 20 }}>Báo cáo nội dung vi phạm</h4>
-                    <p>Nếu bạn gặp bài viết, bình luận hoặc tài khoản vi phạm, hãy nhấn nút <strong>Báo cáo</strong> ngay trong ứng dụng để admin có đủ ngữ cảnh xử lý nhanh nhất.</p>
+                    <h4 className="pf-policy-h" style={{ marginTop: 20 }}>{isKo ? '위반 콘텐츠 신고' : 'Báo cáo nội dung vi phạm'}</h4>
+                    <p>{isKo
+                      ? <>위반 게시글, 댓글 또는 계정을 발견하셨다면 앱 내 <strong>신고</strong> 버튼을 눌러 주세요. 관리자가 빠르게 처리할 수 있도록 충분한 맥락이 제공됩니다.</>
+                      : <>Nếu bạn gặp bài viết, bình luận hoặc tài khoản vi phạm, hãy nhấn nút <strong>Báo cáo</strong> ngay trong ứng dụng để admin có đủ ngữ cảnh xử lý nhanh nhất.</>
+                    }</p>
 
-                    <h4 className="pf-policy-h">Các vấn đề thường gặp</h4>
+                    <h4 className="pf-policy-h">{isKo ? '자주 묻는 질문' : 'Các vấn đề thường gặp'}</h4>
                     <ul className="pf-policy-list">
-                      <li>Không đăng nhập được → kiểm tra email & mật khẩu, thử "Quên mật khẩu"</li>
-                      <li>Dữ liệu không đồng bộ → kiểm tra kết nối mạng, tải lại trang</li>
-                      <li>Quên mật khẩu → nhấn "Quên mật khẩu" tại màn hình đăng nhập</li>
-                      <li>Muốn đổi email → liên hệ qua email hỗ trợ bên trên</li>
+                      {isKo ? (
+                        <>
+                          <li>로그인이 안 될 때 → 이메일 & 비밀번호 확인, "비밀번호 찾기" 시도</li>
+                          <li>데이터가 동기화되지 않을 때 → 네트워크 연결 확인 후 페이지 새로고침</li>
+                          <li>비밀번호를 잊어버렸을 때 → 로그인 화면에서 "비밀번호 찾기" 클릭</li>
+                          <li>이메일 변경을 원할 때 → 위의 지원 이메일로 문의</li>
+                        </>
+                      ) : (
+                        <>
+                          <li>Không đăng nhập được → kiểm tra email & mật khẩu, thử "Quên mật khẩu"</li>
+                          <li>Dữ liệu không đồng bộ → kiểm tra kết nối mạng, tải lại trang</li>
+                          <li>Quên mật khẩu → nhấn "Quên mật khẩu" tại màn hình đăng nhập</li>
+                          <li>Muốn đổi email → liên hệ qua email hỗ trợ bên trên</li>
+                        </>
+                      )}
                     </ul>
 
-                    <p style={{ fontSize: 12, color: 'var(--text-faint)', marginTop: 16 }}>Khi gửi email, hãy cung cấp: tên tài khoản, mô tả vấn đề và ảnh chụp màn hình (nếu có) để được hỗ trợ nhanh hơn.</p>
+                    <p style={{ fontSize: 12, color: 'var(--text-faint)', marginTop: 16 }}>{isKo
+                      ? '이메일 문의 시 계정 이름, 문제 설명, 스크린샷(있는 경우)을 함께 보내주시면 더 빠르게 지원받을 수 있습니다.'
+                      : 'Khi gửi email, hãy cung cấp: tên tài khoản, mô tả vấn đề và ảnh chụp màn hình (nếu có) để được hỗ trợ nhanh hơn.'
+                    }</p>
                   </>
                 )}
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       ) : null}
     </div>
   );

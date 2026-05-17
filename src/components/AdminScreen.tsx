@@ -6,11 +6,13 @@ import {
   ArrowLeft,
   Ban,
   Bell,
+  Calendar,
   CheckCircle2,
   FileText,
   Loader2,
   Megaphone,
   MessageCircle,
+  Plus,
   RefreshCw,
   ShieldCheck,
   ShieldOff,
@@ -24,7 +26,7 @@ import { supabase } from '../lib/supabase';
 import type { AppLang } from './ProfileScreen';
 import { timeAgo } from '../data/communityData';
 
-type AdminTab = 'overview' | 'users' | 'content' | 'reports' | 'announcements' | 'logs';
+type AdminTab = 'overview' | 'users' | 'content' | 'reports' | 'announcements' | 'logs' | 'events';
 type AdminContentView = 'posts' | 'reviews' | 'comments';
 type ModerationStatus = 'active' | 'muted' | 'suspended' | 'banned';
 type AnnouncementSeverity = 'info' | 'success' | 'warning' | 'danger';
@@ -188,6 +190,7 @@ const ADMIN_TABS: Array<{ id: AdminTab; icon: typeof ShieldCheck }> = [
   { id: 'reports',       icon: AlertTriangle },
   { id: 'announcements', icon: Megaphone },
   { id: 'logs',          icon: ShieldCheck },
+  { id: 'events',        icon: Calendar },
 ];
 
 const ADMIN_SEEN_KEY = 'duhoc-mate-admin-seen-v1';
@@ -212,6 +215,7 @@ const UI = {
       reports:       'Báo cáo',
       announcements: 'Thông báo',
       logs:          'Nhật ký',
+      events:        'Sự kiện',
     },
     stats: {
       users:         'Người dùng',
@@ -291,6 +295,7 @@ const UI = {
       reports:       '신고',
       announcements: '공지',
       logs:          '로그',
+      events:        '이벤트',
     },
     stats: {
       users:         '사용자',
@@ -1729,6 +1734,10 @@ export function AdminScreen({
         </ContentPanel>
       ) : null}
 
+      {activeTab === 'events' && supabase ? (
+        <EventsPanel isKo={isKo} supabaseClient={supabase} />
+      ) : null}
+
       </main>{/* /admin-main-content */}
 
       {/* Image lightbox */}
@@ -1938,4 +1947,130 @@ function ContentRow({
 
 function EmptyText({ text }: { text: string }) {
   return <p className="admin-empty">{text}</p>;
+}
+
+/* ─── EventsPanel ─────────────────────────────────────────────── */
+interface AdminEvent {
+  id: string;
+  title: string;
+  description: string | null;
+  reward_emoji: string;
+  start_date: string;
+  end_date: string;
+  active: boolean;
+  created_at: string;
+}
+
+function EventsPanel({ isKo, supabaseClient }: { isKo: boolean; supabaseClient: NonNullable<typeof import('../lib/supabase').supabase> }) {
+  const [events, setEvents] = useState<AdminEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ title: '', description: '', reward_emoji: '🎁', start_date: '', end_date: '', active: true });
+  const [editId, setEditId] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [notice, setNotice] = useState('');
+
+  const t = isKo
+    ? { title: '이벤트 관리', add: '+ 이벤트 추가', save: '저장', cancel: '취소', delete: '삭제', active: '활성', inactive: '비활성', empty: '이벤트 없음', start: '시작일', end: '종료일', titleLabel: '제목', desc: '설명', emoji: '보상 이모지', saved: '저장되었습니다.', deleted: '삭제되었습니다.' }
+    : { title: 'Quản lý sự kiện', add: '+ Thêm sự kiện', save: 'Lưu', cancel: 'Huỷ', delete: 'Xoá', active: 'Đang hoạt động', inactive: 'Tắt', empty: 'Chưa có sự kiện nào.', start: 'Ngày bắt đầu', end: 'Ngày kết thúc', titleLabel: 'Tiêu đề', desc: 'Mô tả', emoji: 'Emoji phần thưởng', saved: 'Đã lưu.', deleted: 'Đã xoá.' };
+
+  const loadEvents = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabaseClient.from('admin_events').select('*').order('start_date', { ascending: false });
+    setEvents(data ?? []);
+    setLoading(false);
+  }, [supabaseClient]);
+
+  useEffect(() => { loadEvents(); }, [loadEvents]);
+
+  function startAdd() {
+    setEditId(null);
+    setForm({ title: '', description: '', reward_emoji: '🎁', start_date: '', end_date: '', active: true });
+    setShowForm(true);
+  }
+
+  function startEdit(ev: AdminEvent) {
+    setEditId(ev.id);
+    setForm({ title: ev.title, description: ev.description ?? '', reward_emoji: ev.reward_emoji, start_date: ev.start_date, end_date: ev.end_date, active: ev.active });
+    setShowForm(true);
+  }
+
+  async function handleSave() {
+    if (!form.title.trim() || !form.start_date || !form.end_date) return;
+    setSaving(true);
+    if (editId) {
+      await supabaseClient.from('admin_events').update({ ...form, description: form.description || null }).eq('id', editId);
+    } else {
+      await supabaseClient.from('admin_events').insert({ ...form, description: form.description || null });
+    }
+    setSaving(false);
+    setShowForm(false);
+    setNotice(t.saved);
+    setTimeout(() => setNotice(''), 2500);
+    loadEvents();
+  }
+
+  async function handleDelete(id: string) {
+    await supabaseClient.from('admin_events').delete().eq('id', id);
+    setNotice(t.deleted);
+    setTimeout(() => setNotice(''), 2500);
+    loadEvents();
+  }
+
+  return (
+    <ContentPanel title={t.title} scroll>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        {notice ? <span style={{ fontSize: 13, color: '#28cd41', fontWeight: 600 }}>{notice}</span> : <span />}
+        <button type="button" className="admin-action-btn" onClick={startAdd}>
+          <Plus size={14} /> {t.add}
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="admin-events-form">
+          <div className="admin-events-form-grid">
+            <label>{t.titleLabel}<input value={form.title} onChange={e => setForm(s => ({ ...s, title: e.target.value }))} /></label>
+            <label>{t.emoji}<input value={form.reward_emoji} onChange={e => setForm(s => ({ ...s, reward_emoji: e.target.value }))} style={{ maxWidth: 80 }} /></label>
+            <label>{t.start}<input type="date" value={form.start_date} onChange={e => setForm(s => ({ ...s, start_date: e.target.value }))} /></label>
+            <label>{t.end}<input type="date" value={form.end_date} onChange={e => setForm(s => ({ ...s, end_date: e.target.value }))} /></label>
+            <label style={{ gridColumn: '1/-1' }}>{t.desc}<textarea value={form.description} rows={2} onChange={e => setForm(s => ({ ...s, description: e.target.value }))} /></label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, gridColumn: '1/-1' }}>
+              <input type="checkbox" checked={form.active} onChange={e => setForm(s => ({ ...s, active: e.target.checked }))} />
+              {t.active}
+            </label>
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+            <button type="button" className="admin-action-btn" onClick={handleSave} disabled={saving}>
+              {saving ? <Loader2 size={13} className="cm-spin" /> : null} {t.save}
+            </button>
+            <button type="button" className="admin-ghost-btn" onClick={() => setShowForm(false)}>{t.cancel}</button>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 32 }}><Loader2 size={20} className="cm-spin" /></div>
+      ) : events.length === 0 ? (
+        <EmptyText text={t.empty} />
+      ) : (
+        <div className="admin-events-list">
+          {events.map(ev => (
+            <article key={ev.id} className={`admin-event-row${ev.active ? '' : ' inactive'}`}>
+              <span className="admin-event-emoji">{ev.reward_emoji}</span>
+              <div className="admin-event-body">
+                <strong>{ev.title}</strong>
+                {ev.description && <p>{ev.description}</p>}
+                <small>{ev.start_date} ~ {ev.end_date}</small>
+              </div>
+              <span className={`admin-event-badge ${ev.active ? 'active' : 'inactive'}`}>{ev.active ? t.active : t.inactive}</span>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button type="button" className="admin-ghost-btn" onClick={() => startEdit(ev)}>{isKo ? '수정' : 'Sửa'}</button>
+                <button type="button" className="admin-delete-btn" onClick={() => handleDelete(ev.id)}><Trash2 size={13} /></button>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </ContentPanel>
+  );
 }
