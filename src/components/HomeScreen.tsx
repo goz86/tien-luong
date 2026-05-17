@@ -1,11 +1,14 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { Plus, ChevronLeft, ChevronRight, X, Edit3, Trash2, Bell, TrendingUp, ShieldCheck } from 'lucide-react';
 import { formatKrw, calculateShiftPay, shiftHours } from '../lib/salary';
-import { Expense, RateState, Shift, VenueColors } from '../lib/types';
+import { CurrencyMode, Expense, RateState, Shift, VenueColors } from '../lib/types';
+import { formatCurrencyFlowAmount } from '../lib/currency';
 import { formatDateChip, getVenueColor, formatHoursCompact } from '../utils/helpers';
 import { FinanceMetric } from './shared/ui';
 import { ActivityTicker } from './shared/ActivityTicker';
-import { AchievementBanner, AchievementCompanionNudge, AchievementScreen } from './AchievementScreen';
+import { AchievementBanner, AchievementCompanionNudge } from './AchievementWidgets';
+
+const AchievementScreen = lazy(() => import('./AchievementScreen').then((m) => ({ default: m.AchievementScreen })));
 
 export function HomeScreen({
   monthlyTotal,
@@ -33,6 +36,7 @@ export function HomeScreen({
   onToggleAnonymous,
   rankings,
   myId,
+  currencyMode,
 }: {
   monthlyTotal: number;
   monthlyHours: number;
@@ -59,6 +63,7 @@ export function HomeScreen({
   onToggleAnonymous: (val: boolean) => void;
   rankings: any[];
   myId: string;
+  currencyMode: CurrencyMode;
 }) {
   const ui = lang === 'ko' ? {
     notifications: '알림',
@@ -156,11 +161,9 @@ export function HomeScreen({
           <div onClick={() => setIsVND(!isVND)} style={{ cursor: 'pointer', flex: 1, minWidth: 0, overflow: 'hidden' }} title={ui.currencyHint}>
             <p>{ui.monthlyIncome}</p>
             {(() => {
-              const display = isVND
-                ? `${Math.round(monthlyTotal * rate.value).toLocaleString('vi-VN')} VNĐ`
-                : formatKrw(monthlyTotal);
+              const { text: display, code } = formatCurrencyFlowAmount(monthlyTotal, currencyMode, rate.value, isVND);
               const len = display.replace(/\s/g, '').length;
-              const fs = isVND
+              const fs = code === 'VND'
                 ? (len > 16 ? '18px' : len > 12 ? '22px' : '26px')
                 : (len > 11 ? '24px' : len > 9 ? '28px' : len > 7 ? '32px' : '35px');
               return (
@@ -252,7 +255,7 @@ export function HomeScreen({
           left: 0;
           right: 0;
           bottom: 0;
-          background: rgba(8, 22, 43, 0.4);
+          background: rgba(8, 22, 43, 0.34);
           backdrop-filter: blur(8px);
           z-index: 2000;
           display: flex;
@@ -260,53 +263,125 @@ export function HomeScreen({
           padding: 0;
         }
         .modal-content {
-          background: white;
+          background:
+            radial-gradient(circle at 92% 0%, rgba(38, 217, 164, 0.11), transparent 30%),
+            linear-gradient(180deg, #ffffff 0%, #f6f9ff 100%);
           width: 100%;
           max-width: 430px;
           margin: 0 auto;
           height: 85vh;
           border-top-left-radius: 40px;
           border-top-right-radius: 40px;
-          padding: 24px;
+          padding: 20px 22px 0;
           overflow-y: auto;
-          box-shadow: 0 -20px 60px rgba(0,0,0,0.15);
+          box-shadow: 0 -24px 70px rgba(15, 23, 42, 0.18);
           display: flex;
           flex-direction: column;
           position: relative;
+          border: 1px solid rgba(255, 255, 255, 0.75);
+          border-bottom: 0;
         }
         .modal-handle {
-          width: 48px;
+          width: 42px;
           height: 5px;
           background: #e2e8f0;
           border-radius: 99px;
-          margin: 0 auto 20px;
+          margin: 0 auto 18px;
           flex-shrink: 0;
         }
         .modal-header {
           display: flex;
           justify-content: space-between;
-          align-items: center;
-          margin-bottom: 24px;
+          align-items: flex-start;
+          gap: 16px;
+          margin: 0 -22px 18px;
+          padding: 0 22px 18px;
+          border-bottom: 1px solid rgba(112, 129, 159, 0.08);
           flex-shrink: 0;
+        }
+        .workplace-history-title {
+          margin: 4px 0 0;
+          font-size: clamp(22px, 6vw, 26px);
+          line-height: 1.05;
+          font-weight: 900;
+          letter-spacing: -0.05em;
+          color: var(--text-main);
+        }
+        .modal-close-button {
+          width: 42px;
+          height: 42px;
+          border: 0;
+          border-radius: 17px;
+          background: rgba(241, 245, 249, 0.9);
+          color: #64748b;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.08);
         }
         .history-list {
           flex: 1;
           overflow-y: auto;
-          padding-bottom: 40px;
+          padding: 2px 0 18px;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
         }
         .workplace-history-item {
-          display: flex;
-          align-items: center;
-          padding: 18px 0;
-          border-bottom: 1px solid #f1f5f9;
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto;
+          gap: 12px;
+          align-items: start;
+          padding: 13px 14px;
+          border: 1px solid rgba(148, 163, 184, 0.14);
+          border-radius: 22px;
+          background:
+            radial-gradient(circle at 92% 18%, rgba(79, 115, 255, 0.08), transparent 34%),
+            linear-gradient(135deg, rgba(255, 255, 255, 0.97), rgba(246, 249, 255, 0.92));
+          box-shadow: 0 14px 34px rgba(28, 43, 76, 0.08);
+          transition: transform 0.18s ease, box-shadow 0.18s ease;
+        }
+        .workplace-history-item:active {
+          transform: scale(0.985);
+        }
+        .workplace-history-date {
+          font-weight: 900;
+          font-size: 15px;
+          letter-spacing: -0.02em;
+          color: var(--text-main);
+        }
+        .workplace-history-meta {
+          font-size: 12px;
+          color: var(--text-soft);
+          margin-top: 5px;
+          font-weight: 800;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .workplace-history-note {
+          font-size: 11px;
+          color: #94a3b8;
+          font-style: italic;
+          margin-top: 3px;
+        }
+        .workplace-history-pay {
+          text-align: right;
+          font-weight: 900;
+          font-size: 16px;
+          color: var(--blue-700);
+          font-feature-settings: "tnum";
+          white-space: nowrap;
         }
         .history-actions {
           display: flex;
-          gap: 8px;
+          justify-content: flex-end;
+          gap: 6px;
+          margin-top: 8px;
         }
         .action-btn {
-          width: 38px;
-          height: 38px;
+          width: 32px;
+          height: 32px;
           border-radius: 12px;
           display: flex;
           align-items: center;
@@ -316,18 +391,45 @@ export function HomeScreen({
           transition: all 0.2s;
         }
         .action-btn:active { transform: scale(0.9); }
-        .edit-btn { background: #eff6ff; color: #2752ff; }
-        .delete-btn { background: #fff1f2; color: #e11d48; }
+        .edit-btn { background: linear-gradient(180deg, #eef4ff, #eaf0ff); color: #2752ff; }
+        .delete-btn { background: linear-gradient(180deg, #fff5f6, #ffecef); color: #e11d48; }
+        .workplace-history-footer {
+          padding: 2px 20px calc(100px + env(safe-area-inset-bottom)) 20px;
+        }
+        .workplace-history-add {
+          width: 100%;
+          min-height: 48px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          padding: 14px;
+          background: linear-gradient(135deg, var(--blue-700), #7657ff);
+          color: white;
+          border-radius: 18px;
+          font-weight: 900;
+          border: none;
+          cursor: pointer;
+          box-shadow: 0 18px 34px rgba(39, 82, 255, 0.22);
+        }
 
         .dark .modal-content {
-          background: #0f172a;
+          background:
+            radial-gradient(circle at 92% 0%, rgba(38, 217, 164, 0.12), transparent 32%),
+            linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
           color: white;
+          border-color: rgba(255, 255, 255, 0.06);
         }
         .dark .workplace-history-item {
-          border-bottom-color: #1e293b;
+          border-color: rgba(255, 255, 255, 0.07);
+          background:
+            radial-gradient(circle at 92% 18%, rgba(79, 115, 255, 0.14), transparent 34%),
+            linear-gradient(135deg, rgba(30, 41, 59, 0.96), rgba(15, 23, 42, 0.92));
+          box-shadow: 0 14px 34px rgba(0, 0, 0, 0.22);
         }
         .dark .modal-handle { background: #334155; }
-        .dark .edit-btn { background: #1e293b; }
+        .dark .modal-close-button { background: rgba(30, 41, 59, 0.92); color: #94a3b8; }
+        .dark .edit-btn { background: rgba(39, 82, 255, 0.16); }
       `}</style>
 
       <section className="section-block">
@@ -362,51 +464,50 @@ export function HomeScreen({
 
       {selectedWorkplace && (
         <div className="modal-overlay" onClick={() => setSelectedWorkplace(null)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()}>
+          <div className="modal-content workplace-history-modal" onClick={e => e.stopPropagation()}>
             <div className="modal-handle" />
             <div className="modal-header">
               <div>
                 <p className="section-kicker">{ui.shiftHistory}</p>
-                <h3 style={{ fontSize: '24px', fontWeight: 900, color: 'var(--text-main)' }}>{selectedWorkplace}</h3>
+                <h3 className="workplace-history-title">{selectedWorkplace}</h3>
               </div>
-              <button onClick={() => setSelectedWorkplace(null)} style={{ border: 'none', background: '#f1f5f9', borderRadius: '16px', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <X size={20} color="#64748b" />
+              <button className="modal-close-button" onClick={() => setSelectedWorkplace(null)} aria-label={lang === 'ko' ? '닫기' : 'Đóng'}>
+                <X size={20} />
               </button>
             </div>
 
             <div className="history-list">
               {workplaceShifts.map(shift => (
                 <div key={shift.id} className="workplace-history-item">
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 800, fontSize: '16px', color: 'var(--text-main)' }}>{formatDateChip(shift.date)}</div>
-                    <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px', fontWeight: 500 }}>
+                  <div>
+                    <div className="workplace-history-date">{formatDateChip(shift.date)}</div>
+                    <div className="workplace-history-meta">
                       {shift.startTime} - {shift.endTime} · {formatHoursCompact(shiftHours(shift))}
-                      {shift.notes && <div style={{ fontSize: '11px', color: '#94a3b8', fontStyle: 'italic', marginTop: '2px' }}>{shift.notes}</div>}
+                      {shift.notes && <div className="workplace-history-note">{shift.notes}</div>}
                     </div>
                   </div>
-                  <div style={{ textAlign: 'right', marginRight: '16px' }}>
-                    <div style={{ fontWeight: 900, fontSize: '17px', color: '#2752ff', fontFeatureSettings: '"tnum"' }}>{formatKrw(calculateShiftPay(shift).total)}</div>
-                  </div>
-                  <div className="history-actions">
-                    <button className="action-btn edit-btn" onClick={() => {
-                      onEditShift(shift);
-                      setSelectedWorkplace(null);
-                    }}>
-                      <Edit3 size={18} />
-                    </button>
-                    <button className="action-btn delete-btn" onClick={() => setDeleteConfirmId(shift.id)}>
-                      <Trash2 size={18} />
-                    </button>
+                  <div>
+                    <div className="workplace-history-pay">{formatKrw(calculateShiftPay(shift).total)}</div>
+                    <div className="history-actions">
+                      <button className="action-btn edit-btn" onClick={() => {
+                        onEditShift(shift);
+                        setSelectedWorkplace(null);
+                      }}>
+                        <Edit3 size={16} />
+                      </button>
+                      <button className="action-btn delete-btn" onClick={() => setDeleteConfirmId(shift.id)}>
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
 
-            <div style={{ padding: '0 24px calc(100px + env(safe-area-inset-bottom)) 24px' }}>
+            <div className="workplace-history-footer">
               <button 
                 type="button" 
-                className="quick-save-button" 
-                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '14px', background: '#2752ff', color: 'white', borderRadius: '16px', fontWeight: 800, border: 'none', cursor: 'pointer' }}
+                className="workplace-history-add"
                 onClick={() => {
                   onOpenAdd();
                   setSelectedWorkplace(null);
@@ -553,10 +654,12 @@ export function HomeScreen({
 
       {/* ── Achievement Screen ── */}
       {showAchievement && (
-        <AchievementScreen
-          isKo={lang === 'ko'}
-          onClose={() => setShowAchievement(false)}
-        />
+        <Suspense fallback={null}>
+          <AchievementScreen
+            isKo={lang === 'ko'}
+            onClose={() => setShowAchievement(false)}
+          />
+        </Suspense>
       )}
     </>
   );

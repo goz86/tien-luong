@@ -8,6 +8,18 @@ export type RateState = {
   updatedAt: string;
 };
 
+export type CurrencyMode = 'krw-vnd' | 'vnd-vnd' | 'vnd-krw';
+
+export interface PersonalGoal {
+  id: string;
+  title: string;
+  amount: number;
+  currency: 'VND' | 'KRW';
+  icon: string;
+  createdAt: string;
+  completedAt?: string | null;
+}
+
 export type VenueColors = Record<string, string>;
 
 export interface CompanionProfile {
@@ -56,6 +68,8 @@ export type StoredState = {
   venueColors: VenueColors;
   incomeTarget?: number;
   expenses: Expense[];
+  personalGoals?: PersonalGoal[];
+  currencyMode?: CurrencyMode;
 };
 
 export type ShiftDraft = {

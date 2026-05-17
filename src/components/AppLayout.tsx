@@ -1,21 +1,23 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { CalendarDays, House, MessageCircleMore, UserRound, WalletCards, Bell, ThumbsUp, MessageCircle, X, Megaphone, Users, MessageSquare } from 'lucide-react';
 import { hasSupabaseConfig, supabase as supabaseClient } from '../lib/supabase';
 import { useAppStore } from '../store/appStore';
 import { HomeScreen } from './HomeScreen';
-import { CalendarScreen } from './CalendarScreen';
-import { IncomeScreen } from './IncomeScreen';
-import { CommunityScreen } from './CommunityScreen';
-import { AdminScreen } from './AdminScreen';
-import { ProfileScreen, WALLPAPERS } from './ProfileScreen';
+import { WALLPAPERS } from '../lib/wallpapers';
 import { AppLockOverlay } from './AppLockOverlay';
 import { timeAgo } from '../data/communityData';
 import { shiftMonth } from '../utils/helpers';
 import type { Tab } from '../lib/types';
 import { recordAppVisit } from '../lib/appVisits';
 import { getGuestSessionId } from '../lib/guestSession';
+
+const CalendarScreen = lazy(() => import('./CalendarScreen').then((m) => ({ default: m.CalendarScreen })));
+const IncomeScreen = lazy(() => import('./IncomeScreen').then((m) => ({ default: m.IncomeScreen })));
+const CommunityScreen = lazy(() => import('./CommunityScreen').then((m) => ({ default: m.CommunityScreen })));
+const ProfileScreen = lazy(() => import('./ProfileScreen').then((m) => ({ default: m.ProfileScreen })));
+const AdminScreen = lazy(() => import('./AdminScreen').then((m) => ({ default: m.AdminScreen })));
 
 /* ── i18n labels for bottom tabs ── */
 const tabLabels: Record<string, Record<Tab, string>> = {
@@ -627,6 +629,7 @@ export default function AppLayout() {
         </AnimatePresence>
 
         <main key={store.tab} className="screen-shell">
+          <Suspense fallback={<div className="tab-loading">{store.lang === 'ko' ? '불러오는 중...' : 'Đang tải...'}</div>}>
           {store.tab === 'home' && (
             <HomeScreen
               monthlyTotal={store.monthlyTotal}
@@ -674,6 +677,7 @@ export default function AppLayout() {
               onToggleAnonymous={handleToggleAnonymous}
               rankings={store.rankings}
               myId={store.session?.user.id || ''}
+              currencyMode={store.currencyMode}
             />
           )}
           {store.tab === 'calendar' && (
@@ -731,6 +735,7 @@ export default function AppLayout() {
               target={store.incomeTarget}
               onSetTarget={store.setIncomeTarget}
               lang={store.lang}
+              currencyMode={store.currencyMode}
             />
           )}
           {store.tab === 'friends' && (
@@ -776,6 +781,7 @@ export default function AppLayout() {
               onBack={() => changeTab('profile')}
             />
           )}
+          </Suspense>
         </main>
 
         {/* ── Bottom Tabs ── */}

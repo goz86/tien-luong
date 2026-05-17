@@ -21,11 +21,11 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Gift, Map, ChevronRight, Calendar, Sparkles, Trophy } from 'lucide-react';
+import { X, Gift, Map, ChevronRight, Calendar, Sparkles, Trophy, Plus, Trash2, CheckCircle2 } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { calculateShiftPay, formatKrw } from '../lib/salary';
 import { supabase } from '../lib/supabase';
-import type { Expense, Shift } from '../lib/types';
+import type { Expense, Shift, PersonalGoal } from '../lib/types';
 
 // ─────────────────────────────────────────────────────
 // Types
@@ -76,75 +76,6 @@ interface CompanionOption {
 // Data
 // ─────────────────────────────────────────────────────
 
-export const MILESTONES: Milestone[] = [
-  {
-    key: 'tea', threshold: 1_000_000, emoji: '🧋', imgKey: 'badge_tea',
-    label_vi: 'Trà Sữa Gang', label_ko: '버블티 부자',
-    desc_vi: 'Đủ trà sữa cả tháng rồi!', desc_ko: '한 달 버블티 값이 생겼어요!',
-    color: '#ec4899', bgColor: '#fdf2f8',
-  },
-  {
-    key: 'airpods', threshold: 3_000_000, emoji: '🎧', imgKey: 'badge_airpods',
-    label_vi: 'AirPods Moment', label_ko: '에어팟 구매 가능',
-    desc_vi: 'Flex với bạn bè thôi!', desc_ko: '친구들한테 자랑할 수 있어요!',
-    color: '#8b5cf6', bgColor: '#f5f3ff',
-  },
-  {
-    key: 'plane', threshold: 5_000_000, emoji: '✈️', imgKey: 'badge_plane',
-    label_vi: 'Vé Về Thăm Nhà', label_ko: '귀국 항공권',
-    desc_vi: 'Bay về ôm má một cái!', desc_ko: '엄마한테 돌아갈 수 있어요!',
-    color: '#0ea5e9', bgColor: '#f0f9ff',
-  },
-  {
-    key: 'gold', threshold: 10_000_000, emoji: '🏅', imgKey: 'badge_gold',
-    label_vi: '1 Cây Vàng!', label_ko: '금 1돈!',
-    desc_vi: 'Ông bà tổ tiên phù hộ!', desc_ko: '조상님이 도와주셨어요!',
-    color: '#f59e0b', bgColor: '#fffbeb',
-  },
-  {
-    key: 'motorbike', threshold: 20_000_000, emoji: '🛵', imgKey: 'badge_motorbike',
-    label_vi: 'Xe Máy Cho Ba', label_ko: '아버지 오토바이',
-    desc_vi: 'Quà hiếu thảo số 1!', desc_ko: '최고의 효도 선물!',
-    color: '#10b981', bgColor: '#f0fdf4',
-  },
-  {
-    key: 'ring', threshold: 35_000_000, emoji: '💍', imgKey: 'badge_ring',
-    label_vi: 'Nhẫn Cầu Hôn', label_ko: '프로포즈 반지',
-    desc_vi: 'Thả thính được rồi đó!', desc_ko: '이제 프로포즈해도 돼요!',
-    color: '#a855f7', bgColor: '#faf5ff',
-  },
-  {
-    key: 'wedding', threshold: 50_000_000, emoji: '👰', imgKey: 'badge_wedding',
-    label_vi: 'Đám Cưới Xịn', label_ko: '결혼식',
-    desc_vi: 'Buffet 50 bàn luôn!', desc_ko: '50테이블 뷔페 가능!',
-    color: '#f43f5e', bgColor: '#fff1f2',
-  },
-  {
-    key: 'phone', threshold: 80_000_000, emoji: '📱', imgKey: 'badge_phone',
-    label_vi: 'iPhone Mới Nhất', label_ko: '최신 아이폰',
-    desc_vi: 'Flex không cần filter!', desc_ko: '필터 없이 자랑해요!',
-    color: '#3b82f6', bgColor: '#eff6ff',
-  },
-  {
-    key: 'house', threshold: 100_000_000, emoji: '🏠', imgKey: 'badge_house',
-    label_vi: 'Cọc Được Nhà', label_ko: '집 계약금',
-    desc_vi: 'Ký hợp đồng thôi!', desc_ko: '계약서 사인할 시간!',
-    color: '#22c55e', bgColor: '#f0fdf4',
-  },
-  {
-    key: 'car', threshold: 150_000_000, emoji: '🚗', imgKey: 'badge_car',
-    label_vi: 'Mua Xe Ô Tô', label_ko: '자동차 구매',
-    desc_vi: 'Đón ba má bằng xe riêng!', desc_ko: '부모님을 직접 모시러 가요!',
-    color: '#f97316', bgColor: '#fff7ed',
-  },
-  {
-    key: 'vietnam', threshold: 200_000_000, emoji: '🇻🇳', imgKey: 'badge_vietnam',
-    label_vi: 'Về Việt Nam Thôi!', label_ko: '베트남으로 귀국!',
-    desc_vi: 'Hoàn thành hành trình!', desc_ko: '여정 완료!',
-    color: '#ef4444', bgColor: '#fef2f2',
-  },
-];
-
 const CHARACTER_STAGES: CharacterStage[] = [
   {
     threshold: 0, emoji: '🥚', imgKey: 'hamster_egg',
@@ -190,10 +121,10 @@ const COMPANION_CHANGE_EVENT = 'duhoc-mate-ach-companion-change';
 const COMPANION_OPTIONS: CompanionOption[] = [
   { key: DEFAULT_COMPANION_KEY, imgKey: null, label_vi: 'Theo cấp', label_ko: '레벨별', desc_vi: '', desc_ko: '' },
   { key: 'hamster', imgKey: 'companion_hamster', label_vi: 'Mầm Non ', label_ko: '새싹 저축 친구', desc_vi: 'Nhỏ xíu nhưng ngày nào cũng lớn thêm một chút.', desc_ko: '작지만 매일 조금씩 자라는 동반자.' },
-  { key: 'cat', imgKey: 'companion_cat', label_vi: 'Mèo Thần Tài', label_ko: '당당한 지갑 고양이', desc_vi: 'Đi làm, giữ ví, và luôn có phong thái rất ổn.', desc_ko: '일도 하고 지갑도 챙기는 당당한 친구.' },
-  { key: 'bunny', imgKey: 'companion_bunny', label_vi: 'Thỏ Tiết Kiệm', label_ko: '저축 항아리 토끼', desc_vi: 'Mỗi khoản để dành đều được ôm thật cẩn thận.', desc_ko: '모아둔 돈을 소중히 안고 가는 친구.' },
-  { key: 'bear', imgKey: 'companion_bear', label_vi: 'Gấu Chăm Chỉ Đi Làm', label_ko: '성실한 알바 곰', desc_vi: 'Bạn đồng hành bền bỉ cho những ngày học và làm.', desc_ko: '공부와 알바를 묵묵히 함께하는 친구.' },
-  { key: 'fox', imgKey: 'companion_fox', label_vi: 'Cáo Nhanh Nhẹn', label_ko: '영리한 계획 여우', desc_vi: 'Biết tính toán, biết xoay xở, biết chọn đường lời hơn.', desc_ko: '계산도 빠르고 계획도 영리한 친구.' },
+  { key: 'cat', imgKey: 'companion_cat', label_vi: 'Mèo Thần Tài', label_ko: '당당한 지갑 고양이', desc_vi: 'Mèo cam, bảo vệ chủ nhân, và luôn có tinh thần tốt.', desc_ko: '일도 하고 지갑도 챙기는 당당한 친구.' },
+  { key: 'bunny', imgKey: 'companion_bunny', label_vi: 'Thỏ Tiết Kiệm', label_ko: '저축 항아리 토끼', desc_vi: 'Tiết kiệm để thành phú bà.', desc_ko: '모아둔 돈을 소중히 안고 가는 친구.' },
+  { key: 'bear', imgKey: 'companion_bear', label_vi: 'Gấu Chăm Chỉ Đi Làm', label_ko: '성실한 알바 곰', desc_vi: 'Đi làm chăm chỉ để có tiền cưới vợ.', desc_ko: '공부와 알바를 묵묵히 함께하는 친구.' },
+  { key: 'fox', imgKey: 'companion_fox', label_vi: 'Cáo Nhanh Nhẹn', label_ko: '영리한 계획 여우', desc_vi: 'Cần cù thì bù thông minh,nhớ chưa.', desc_ko: '계산도 빠르고 계획도 영리한 친구.' },
   { key: 'star', imgKey: 'companion_star', label_vi: 'Sao May Mắn', label_ko: '귀국 행운 별', desc_vi: 'Luôn nhắc mình kiếm tiền là để sống chủ động hơn.', desc_ko: '돈을 모으는 이유를 반짝이며 알려주는 친구.' },
 ];
 
@@ -207,6 +138,13 @@ const COMPANION_MOTIVATIONS = [
   '괜찮아요',
 ];
 
+const GOAL_PRESETS = [
+  { icon: '✈️', title_vi: 'Vé máy bay về nhà', title_ko: '귀국 항공권', amount: 8_000_000, currency: 'VND' as const },
+  { icon: '📱', title_vi: 'iPhone mới', title_ko: '새 아이폰', amount: 1_500_000, currency: 'KRW' as const },
+  { icon: '🏠', title_vi: 'Tiền nhà 1 tháng', title_ko: '한 달 월세', amount: 500_000, currency: 'KRW' as const },
+  { icon: '💌', title_vi: 'Gửi về gia đình', title_ko: '가족에게 송금', amount: 10_000_000, currency: 'VND' as const },
+];
+
 const REWARD_POOL = [
   '⭐', '🌟', '💫', '✨', '🎖️', '🏆', '🎀', '🌸',
   '🦋', '🌈', '🎵', '🍀', '🌙', '☀️', '🎊', '💎',
@@ -215,16 +153,16 @@ const REWARD_POOL = [
 
 const NET_WORTH_MILESTONES: Milestone[] = [
   { key: 'start', threshold: 0, emoji: '🌱', imgKey: 'net_start', label_vi: 'Lv.0: Sang Hàn Làm Lại Từ Đầu', label_ko: 'Lv.0: 한국에서 다시 시작', desc_vi: 'Từ con số nhỏ, mình bắt đầu giữ lại từng đồng ròng.', desc_ko: '작은 금액부터 차곡차곡 모으는 시작점.', color: '#14b8a6', bgColor: '#f0fdfa' },
-  { key: 'smart_food', threshold: 5_000_000, emoji: '🍱', imgKey: 'net_smart_food', label_vi: 'Ăn Uống Biết Tính Toán', label_ko: '식비 관리 시작', desc_vi: 'Sinh hoạt vẫn ổn, ví cũng bắt đầu ấm lên.', desc_ko: '생활도 챙기고 지갑도 조금 따뜻해졌어요.', color: '#10b981', bgColor: '#ecfdf5' },
-  { key: 'gold_chi', threshold: 18_000_000, emoji: '🪙', imgKey: 'net_gold_chi', label_vi: 'Chỉ Vàng Đầu Tiên', label_ko: '첫 금 한 돈', desc_vi: 'Thu nhập ròng đã có hình hài của tài sản thật.', desc_ko: '순수입이 진짜 자산의 형태를 갖기 시작했어요.', color: '#f59e0b', bgColor: '#fffbeb' },
-  { key: 'seoul', threshold: 50_000_000, emoji: '🏙️', imgKey: 'net_seoul', label_vi: 'Khám Phá Seoul Không Run Ví', label_ko: '서울 탐방, 지갑 안 떨림', desc_vi: 'Có thể đi chơi một chút mà vẫn không lệch kế hoạch.', desc_ko: '조금 즐겨도 계획이 흔들리지 않는 구간.', color: '#0ea5e9', bgColor: '#f0f9ff' },
+  { key: 'smart_food', threshold: 5_000_000, emoji: '🍱', imgKey: 'net_smart_food', label_vi: 'Tiết kiệm là chân ái', label_ko: '식비 관리 시작', desc_vi: 'Sinh hoạt vẫn ổn, ví cũng bắt đầu ấm lên.', desc_ko: '생활도 챙기고 지갑도 조금 따뜻해졌어요.', color: '#10b981', bgColor: '#ecfdf5' },
+  { key: 'gold_chi', threshold: 18_000_000, emoji: '🪙', imgKey: 'net_gold_chi', label_vi: 'Mua Chỉ Vàng Đầu Tiên', label_ko: '첫 금 한 돈', desc_vi: 'Thu nhập ròng đã có hình hài của tài sản thật.', desc_ko: '순수입이 진짜 자산의 형태를 갖기 시작했어요.', color: '#f59e0b', bgColor: '#fffbeb' },
+  { key: 'seoul', threshold: 50_000_000, emoji: '🏙️', imgKey: 'net_seoul', label_vi: 'Vui Seoul Không Run Ví', label_ko: '서울 탐방, 지갑 안 떨림', desc_vi: 'Có thể đi chơi một chút mà vẫn không lệch kế hoạch.', desc_ko: '조금 즐겨도 계획이 흔들리지 않는 구간.', color: '#0ea5e9', bgColor: '#f0f9ff' },
   { key: 'emergency', threshold: 100_000_000, emoji: '🛡️', imgKey: 'net_emergency', label_vi: 'Quỹ Dự Phòng Ổn Áp', label_ko: '든든한 비상금', desc_vi: 'Có biến cũng đỡ hoảng, vì mình đã có lớp đệm.', desc_ko: '예상 못 한 일이 와도 버틸 여유가 생겼어요.', color: '#2563eb', bgColor: '#eff6ff' },
   { key: 'gold_luong', threshold: 165_000_000, emoji: '🏅', imgKey: 'net_gold_luong', label_vi: 'Múc Được 1 Lượng Vàng', label_ko: '금 한 냥 클리어', desc_vi: 'Mốc vàng đúng nghĩa: nhìn lại thấy mình đi xa thật.', desc_ko: '말 그대로 골드 마일스톤, 꽤 멀리 왔어요.', color: '#d97706', bgColor: '#fff7ed' },
   { key: 'wedding_net', threshold: 250_000_000, emoji: '💍', imgKey: 'net_wedding', label_vi: 'Đủ Làm Đám Cưới :D', label_ko: '결혼식도 가능 :D', desc_vi: 'Không cần quá phô, đủ để làm một ngày thật đáng nhớ.', desc_ko: '과하지 않아도 기억에 남을 하루를 만들 수 있어요.', color: '#f43f5e', bgColor: '#fff1f2' },
-  { key: 'car_loading', threshold: 450_000_000, emoji: '🚗', imgKey: 'net_car_loading', label_vi: 'Xe Ô Tô Loading...', label_ko: '첫 차 로딩 중...', desc_vi: 'Một chiếc xe bình dân bắt đầu bước vào vùng có thể nghĩ tới.', desc_ko: '첫 차를 현실적으로 생각해볼 수 있는 구간.', color: '#6366f1', bgColor: '#eef2ff' },
+  { key: 'car_loading', threshold: 450_000_000, emoji: '🚗', imgKey: 'net_car_loading', label_vi: 'Đủ mua Xe Ô Tô', label_ko: '첫 차 로딩 중...', desc_vi: 'Một chiếc xe bình dân bắt đầu bước vào vùng có thể nghĩ tới.', desc_ko: '첫 차를 현실적으로 생각해볼 수 있는 구간.', color: '#6366f1', bgColor: '#eef2ff' },
   { key: 'vietkieu', threshold: 650_000_000, emoji: '💼', imgKey: 'net_vietkieu', label_vi: 'Việt Kiều Pro VIP', label_ko: '프로 유학생 모드', desc_vi: 'Không chỉ đi làm thêm nữa, đây là cấp độ biết tích sản.', desc_ko: '알바를 넘어 자산을 쌓는 단계.', color: '#8b5cf6', bgColor: '#f5f3ff' },
-  { key: 'return_plan', threshold: 800_000_000, emoji: '🧭', imgKey: 'net_return_plan', label_vi: 'Hồi Hương Có Kế Hoạch', label_ko: '계획 있는 귀국', desc_vi: 'Nếu về nước, bạn về bằng một kế hoạch chứ không phải cảm tính.', desc_ko: '감정이 아니라 계획으로 돌아갈 수 있어요.', color: '#0f766e', bgColor: '#f0fdfa' },
-  { key: 'home_free', threshold: 1_000_000_000, emoji: '🇻🇳', imgKey: 'net_home_free', label_vi: 'Về Nhà Trong Thế Chủ Động', label_ko: '당당하게 집으로', desc_vi: '1 tỷ thu nhập ròng: hành trình về nhà đã có hình hài.', desc_ko: '순수입 10억 VND, 돌아갈 길이 보이기 시작했어요.', color: '#ef4444', bgColor: '#fef2f2' },
+  { key: 'return_plan', threshold: 800_000_000, emoji: '🧭', imgKey: 'net_return_plan', label_vi: 'Lên kế hoạch làm ăn', label_ko: '계획 있는 귀국', desc_vi: 'Nếu về nước, bạn về bằng một kế hoạch chứ không phải cảm tính.', desc_ko: '감정이 아니라 계획으로 돌아갈 수 있어요.', color: '#0f766e', bgColor: '#f0fdfa' },
+  { key: 'home_free', threshold: 1_000_000_000, emoji: '🇻🇳', imgKey: 'net_home_free', label_vi: 'Tôi đã trở thành tỷ phú.', label_ko: '당당하게 집으로', desc_vi: '1 tỷ thu nhập ròng: hành trình về nhà đã có hình hài.', desc_ko: '순수입 10억 VND, 돌아갈 길이 보이기 시작했어요.', color: '#ef4444', bgColor: '#fef2f2' },
 ];
 
 const FINAL_NET_MILESTONE = NET_WORTH_MILESTONES[NET_WORTH_MILESTONES.length - 1];
@@ -247,6 +185,11 @@ function fmtKrwCompact(n: number): string {
     return `${Number(eok.toFixed(eok >= 10 ? 0 : 1)).toLocaleString('ko-KR')}억 원`;
   }
   return formatKrw(n);
+}
+
+function formatGoalMoney(value: number, currency: PersonalGoal['currency']) {
+  if (currency === 'KRW') return value >= 100_000_000 ? fmtKrwCompact(value) : formatKrw(value);
+  return fmtVnd(value);
 }
 
 function calculateNetIncomeKrw(shifts: Shift[], expenses: Expense[]) {
@@ -473,7 +416,17 @@ interface AchievementScreenProps {
 }
 
 export function AchievementScreen({ onClose, isKo = false, inline = false }: AchievementScreenProps) {
-  const { shifts, expenses, rate, session } = useAppStore();
+  const {
+    shifts,
+    expenses,
+    rate,
+    session,
+    personalGoals,
+    currencyMode,
+    addPersonalGoal,
+    removePersonalGoal,
+    togglePersonalGoalDone,
+  } = useAppStore();
   const uid = session?.user.id ?? null;
 
   const [claimed, setClaimed] = useState<string[]>(() => loadClaimed(uid));
@@ -482,11 +435,22 @@ export function AchievementScreen({ onClose, isKo = false, inline = false }: Ach
   const [eventsLoading, setEventsLoading] = useState(true);
   const [showBillionCelebration, setShowBillionCelebration] = useState(false);
   const [showTotalKrw, setShowTotalKrw] = useState(false);
+  const [goalTitle, setGoalTitle] = useState('');
+  const [goalAmount, setGoalAmount] = useState('');
+  const [goalCurrency, setGoalCurrency] = useState<PersonalGoal['currency']>('VND');
+  const [goalIcon, setGoalIcon] = useState('🎯');
   const { selectedKey, selectedCompanion, selectCompanion } = useCompanionChoice();
 
   // ── Compute net income from all shifts ──
-  const totalKrw = useMemo(() => calculateNetIncomeKrw(shifts, expenses), [expenses, shifts]);
-  const totalVnd = useMemo(() => totalKrw * rate.value, [rate.value, totalKrw]);
+  const rawNetAmount = useMemo(() => calculateNetIncomeKrw(shifts, expenses), [expenses, shifts]);
+  const totalKrw = useMemo(
+    () => currencyMode === 'krw-vnd' ? rawNetAmount : rawNetAmount / Math.max(rate.value, 1),
+    [currencyMode, rate.value, rawNetAmount],
+  );
+  const totalVnd = useMemo(
+    () => currencyMode === 'krw-vnd' ? rawNetAmount * rate.value : rawNetAmount,
+    [currencyMode, rate.value, rawNetAmount],
+  );
 
   // ── Current character stage ──
   const stage = useMemo(() => {
@@ -556,6 +520,29 @@ export function AchievementScreen({ onClose, isKo = false, inline = false }: Ach
     void reward;
   }, [giftMilestone, claimed, uid]);
 
+  const handleAddGoal = useCallback(() => {
+    const amount = Number(goalAmount.replace(/\D/g, ''));
+    if (!goalTitle.trim() || !Number.isFinite(amount) || amount <= 0) return;
+    addPersonalGoal({
+      title: goalTitle.trim(),
+      amount,
+      currency: goalCurrency,
+      icon: goalIcon,
+      completedAt: null,
+    });
+    setGoalTitle('');
+    setGoalAmount('');
+    setGoalCurrency('VND');
+    setGoalIcon('🎯');
+  }, [addPersonalGoal, goalAmount, goalCurrency, goalIcon, goalTitle]);
+
+  const applyGoalPreset = useCallback((preset: typeof GOAL_PRESETS[number]) => {
+    setGoalIcon(preset.icon);
+    setGoalTitle(isKo ? preset.title_ko : preset.title_vi);
+    setGoalAmount(String(preset.amount));
+    setGoalCurrency(preset.currency);
+  }, [isKo]);
+
   const bodyContent = (
     <div className="ach-body">
 
@@ -602,9 +589,9 @@ export function AchievementScreen({ onClose, isKo = false, inline = false }: Ach
                 className="ach-char-total ach-char-total--toggle"
                 onClick={() => setShowTotalKrw(value => !value)}
                 title={isKo ? 'VND/KRW 전환' : 'Nhấn để đổi VND/KRW'}
-                aria-label={isKo ? '누적 순수입 VND/KRW 전환' : 'Đổi hiển thị thu nhập ròng tích lũy giữa VND và KRW'}
+                aria-label={isKo ? '누적 순수입 VND/KRW 전환' : 'Đổi hiển thị thu nhập giữa VND và KRW'}
               >
-                <div className="ach-char-total-label">{isKo ? '누적 순수입' : 'Thu nhập ròng tích lũy'}</div>
+                <div className="ach-char-total-label">{isKo ? '누적 순수입' : 'Thu nhập'}</div>
                 <div className="ach-char-total-amount">
                   <div className="ach-char-total-value">
                     {showTotalKrw ? fmtKrwCompact(totalKrw) : fmtVnd(totalVnd)}
@@ -645,6 +632,97 @@ export function AchievementScreen({ onClose, isKo = false, inline = false }: Ach
                 {isKo ? '모든 목표를 달성했어요! 🏆' : 'Bạn đã chinh phục toàn bộ hành trình! 🏆'}
               </div>
             )}
+
+            {/* Personal Goals */}
+            <div className="ach-section">
+              <div className="ach-section-title">
+                {isKo ? '나만의 목표' : 'Mục tiêu cá nhân'}
+              </div>
+              <div className="ach-goal-panel">
+                <div className="ach-goal-presets" aria-label={isKo ? '목표 빠른 선택' : 'Chọn nhanh mục tiêu'}>
+                  {GOAL_PRESETS.map((preset) => (
+                    <button
+                      key={`${preset.icon}-${preset.amount}`}
+                      type="button"
+                      className="ach-goal-preset"
+                      onClick={() => applyGoalPreset(preset)}
+                    >
+                      <span>{preset.icon}</span>
+                      {isKo ? preset.title_ko : preset.title_vi}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="ach-goal-form">
+                  <button type="button" className="ach-goal-icon-btn" onClick={() => {
+                    const icons = ['🎯', '✈️', '📱', '🏠', '💌', '💍', '🚗', '🪙'];
+                    const next = icons[(icons.indexOf(goalIcon) + 1) % icons.length] ?? icons[0];
+                    setGoalIcon(next);
+                  }}>
+                    {goalIcon}
+                  </button>
+                  <input
+                    value={goalTitle}
+                    onChange={(event) => setGoalTitle(event.target.value)}
+                    placeholder={isKo ? '목표 이름' : 'Tên mục tiêu'}
+                    className="ach-goal-input"
+                  />
+                  <input
+                    value={goalAmount ? Number(goalAmount).toLocaleString('en-US') : ''}
+                    onChange={(event) => setGoalAmount(event.target.value.replace(/\D/g, ''))}
+                    placeholder={isKo ? '금액' : 'Số tiền'}
+                    inputMode="numeric"
+                    className="ach-goal-amount-input"
+                  />
+                  <div className="ach-goal-currency">
+                    <button type="button" className={goalCurrency === 'VND' ? 'active' : ''} onClick={() => setGoalCurrency('VND')}>VND</button>
+                    <button type="button" className={goalCurrency === 'KRW' ? 'active' : ''} onClick={() => setGoalCurrency('KRW')}>KRW</button>
+                  </div>
+                  <button type="button" className="ach-goal-add-btn" onClick={handleAddGoal} aria-label={isKo ? '목표 추가' : 'Thêm mục tiêu'}>
+                    <Plus size={16} />
+                  </button>
+                </div>
+
+                <div className="ach-goal-list">
+                  {personalGoals.length === 0 ? (
+                    <p className="ach-goal-empty">
+                      {isKo
+                        ? '항공권, 월세, 가족 송금처럼 나만의 목표를 만들어보세요.'
+                        : 'Hãy tạo một mục tiêu riêng cho bạn nhé .'}
+                    </p>
+                  ) : personalGoals.map((goal) => {
+                    const current = goal.currency === 'KRW' ? totalKrw : totalVnd;
+                    const pct = Math.min(100, (current / Math.max(goal.amount, 1)) * 100);
+                    const reached = pct >= 100 || Boolean(goal.completedAt);
+                    return (
+                      <article key={goal.id} className={`ach-goal-item ${reached ? 'ach-goal-item--done' : ''}`}>
+                        <div className="ach-goal-item-icon">{goal.icon}</div>
+                        <div className="ach-goal-item-main">
+                          <div className="ach-goal-item-top">
+                            <strong>{goal.title}</strong>
+                            <span>{Math.round(pct)}%</span>
+                          </div>
+                          <div className="ach-goal-mini-track">
+                            <span style={{ width: `${pct}%` }} />
+                          </div>
+                          <div className="ach-goal-item-meta">
+                            {formatGoalMoney(current, goal.currency)} / {formatGoalMoney(goal.amount, goal.currency)}
+                          </div>
+                        </div>
+                        <div className="ach-goal-actions">
+                          <button type="button" onClick={() => togglePersonalGoalDone(goal.id)} aria-label={isKo ? '완료 표시' : 'Đánh dấu hoàn thành'}>
+                            <CheckCircle2 size={15} />
+                          </button>
+                          <button type="button" onClick={() => removePersonalGoal(goal.id)} aria-label={isKo ? '삭제' : 'Xóa'}>
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
 
             {/* Admin Events */}
             {!eventsLoading && events.length > 0 && (
@@ -691,7 +769,7 @@ export function AchievementScreen({ onClose, isKo = false, inline = false }: Ach
                   const canClaim = reached && !isClaimed;
 
                   return (
-                    <div key={m.key} className={`ach-ms ${reached ? 'ach-ms--reached' : ''} ${isCurrentPos ? 'ach-ms--current' : ''}`}>
+                    <div key={m.key} className={`ach-ms ${reached ? 'ach-ms--reached' : ''} ${canClaim ? 'ach-ms--ready' : ''} ${isCurrentPos ? 'ach-ms--current' : ''}`}>
                       {/* Left: icon + connector */}
                       <div className="ach-ms-left">
                         <div
@@ -760,7 +838,7 @@ export function AchievementScreen({ onClose, isKo = false, inline = false }: Ach
             <p className="ach-footer-hint">
               {isKo
                 ? '💡 누적 순수입은 전체 근무 수입에서 기록한 지출을 뺀 뒤 VND로 환산합니다.'
-                : '💡 Thu nhập ròng tích lũy = tổng lương đã nhập - chi tiêu đã ghi nhận, sau đó quy đổi sang VND.'}
+                : '💡 Thu nhập = tổng lương đã nhập - chi tiêu đã ghi nhận, sau đó quy đổi sang VND.'}
             </p>
           </div>
   );
@@ -794,7 +872,7 @@ export function AchievementScreen({ onClose, isKo = false, inline = false }: Ach
           <div className="ach-header">
             <div className="ach-header-left">
               <Map size={18} />
-              <span>{isKo ? '나의 여정' : 'Hành Trình Của Tôi'}</span>
+              <span>{isKo ? '나의 여정' : 'Hành Trình kiếm 1 tỷ đầu tiên'}</span>
               {unclaimedCount > 0 && <span className="ach-unclaimed-badge">{unclaimedCount}</span>}
             </div>
             <button type="button" className="ach-close" onClick={onClose}>

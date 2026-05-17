@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { Session } from '@supabase/supabase-js';
 import type {
   Tab, StoredState, ShiftDraft, VenueColors,
-  Expense, ProfileDraft, CompanionProfile, Shift, RateState,
+  Expense, ProfileDraft, CompanionProfile, Shift, RateState, PersonalGoal, CurrencyMode,
 } from '../lib/types';
 import type { CommunityNotification } from '../data/communityData';
 import type { AppLang, WallpaperKey } from '../components/ProfileScreen';
@@ -63,6 +63,8 @@ function fallbackState(): StoredState {
     venueColors: {},
     incomeTarget: 2000000,
     expenses: [],
+    personalGoals: [],
+    currencyMode: 'krw-vnd',
   };
 }
 
@@ -74,6 +76,7 @@ function clearUserScopedState() {
     requested: [],
     friendships: [],
     expenses: [],
+    personalGoals: [],
     notifications: [],
     showNotifications: false,
     toastNotification: null,
@@ -105,6 +108,10 @@ function loadState(): StoredState {
           : {},
       incomeTarget: typeof parsed.incomeTarget === 'number' ? parsed.incomeTarget : 2000000,
       expenses: Array.isArray(parsed.expenses) ? parsed.expenses : [],
+      personalGoals: Array.isArray(parsed.personalGoals) ? parsed.personalGoals : [],
+      currencyMode: ['krw-vnd', 'vnd-vnd', 'vnd-krw'].includes(parsed.currencyMode as string)
+        ? (parsed.currencyMode as CurrencyMode)
+        : 'krw-vnd',
     };
   } catch {
     return fallbackState();
@@ -141,6 +148,8 @@ export interface AppState {
   venueColors: VenueColors;
   incomeTarget: number;
   expenses: Expense[];
+  personalGoals: PersonalGoal[];
+  currencyMode: CurrencyMode;
 
   // Auth
   session: Session | null;
@@ -230,6 +239,12 @@ export interface AppState {
   // Income target
   setIncomeTarget: (n: number) => void;
 
+  // Personal goals
+  addPersonalGoal: (goal: Omit<PersonalGoal, 'id' | 'createdAt'>) => void;
+  updatePersonalGoal: (id: string, patch: Partial<Omit<PersonalGoal, 'id' | 'createdAt'>>) => void;
+  removePersonalGoal: (id: string) => void;
+  togglePersonalGoalDone: (id: string) => void;
+
   // UI
   setDraft: (d: ShiftDraft | ((prev: ShiftDraft) => ShiftDraft)) => void;
   setEditingShiftId: (id: string | null) => void;
@@ -240,6 +255,7 @@ export interface AppState {
   setIsDarkMode: (v: boolean) => void;
   setWallpaper: (w: WallpaperKey) => void;
   setLang: (l: AppLang) => void;
+  setCurrencyMode: (m: CurrencyMode) => void;
 
   // Notifications
   setNotifications: (n: CommunityNotification[] | ((prev: CommunityNotification[]) => CommunityNotification[])) => void;
@@ -310,6 +326,8 @@ export const useAppStore = create<AppState>((set, get) => {
     venueColors: initial.venueColors,
     incomeTarget: initial.incomeTarget ?? 2000000,
     expenses: initial.expenses ?? [],
+    personalGoals: initial.personalGoals ?? [],
+    currencyMode: initial.currencyMode ?? 'krw-vnd',
 
     // ── auth ──
     session: null,
@@ -364,6 +382,8 @@ export const useAppStore = create<AppState>((set, get) => {
           venueColors: s.venueColors,
           incomeTarget: s.incomeTarget,
           expenses: s.expenses,
+          personalGoals: s.personalGoals,
+          currencyMode: s.currencyMode,
         } as StoredState),
       );
     },
@@ -516,6 +536,42 @@ export const useAppStore = create<AppState>((set, get) => {
       get().persist();
     },
 
+    addPersonalGoal: (goal) => {
+      set((s) => ({
+        personalGoals: [
+          {
+            ...goal,
+            id: `goal-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            createdAt: new Date().toISOString(),
+          },
+          ...s.personalGoals,
+        ],
+      }));
+      get().persist();
+    },
+    updatePersonalGoal: (id, patch) => {
+      set((s) => ({
+        personalGoals: s.personalGoals.map((goal) => (
+          goal.id === id ? { ...goal, ...patch } : goal
+        )),
+      }));
+      get().persist();
+    },
+    removePersonalGoal: (id) => {
+      set((s) => ({ personalGoals: s.personalGoals.filter((goal) => goal.id !== id) }));
+      get().persist();
+    },
+    togglePersonalGoalDone: (id) => {
+      set((s) => ({
+        personalGoals: s.personalGoals.map((goal) => (
+          goal.id === id
+            ? { ...goal, completedAt: goal.completedAt ? null : new Date().toISOString() }
+            : goal
+        )),
+      }));
+      get().persist();
+    },
+
     // UI
     setDraft: (d) => set((s) => ({ draft: typeof d === 'function' ? d(s.draft) : d })),
     setEditingShiftId: (id) => set({ editingShiftId: id }),
@@ -535,6 +591,10 @@ export const useAppStore = create<AppState>((set, get) => {
     setLang: (l) => {
       window.localStorage.setItem('duhoc-mate-lang', l);
       set({ lang: l });
+    },
+    setCurrencyMode: (m) => {
+      set({ currencyMode: m });
+      get().persist();
     },
 
     // Notifications

@@ -37,7 +37,7 @@ import { AchievementBanner, AchievementScreen } from './AchievementScreen';
 import { useAppStore } from '../store/appStore';
 
 import { Session } from '@supabase/supabase-js';
-import { ProfileDraft } from '../lib/types';
+import { CurrencyMode, ProfileDraft } from '../lib/types';
 import { regions } from '../data';
 import { supabase } from '../lib/supabase';
 import { schools, School } from '../schools';
@@ -134,6 +134,8 @@ export function ProfileScreen({
 
   const badgeShifts = useAppStore(s => s.shifts);
   const rateValue = useAppStore(s => s.rate.value);
+  const currencyMode = useAppStore(s => s.currencyMode);
+  const setCurrencyMode = useAppStore(s => s.setCurrencyMode);
 
   useEffect(() => {
     const syncLockState = () => setAppLockEnabled(isLocalAppLockEnabled());
@@ -435,6 +437,28 @@ export function ProfileScreen({
               <button className={lang === 'vi' ? 'active' : ''} onClick={() => onChangeLang('vi')}>VI</button>
               <button className={lang === 'ko' ? 'active' : ''} onClick={() => onChangeLang('ko')}>KO</button>
             </div>
+          </div>
+          <div className="pf-setting-divider" />
+          <div className="pf-setting-row mini pf-currency-row">
+            <div className="pf-setting-icon"><Globe size={16} /></div>
+            <span>{isKo ? '통화 방향' : 'Tiền tệ'}</span>
+          </div>
+          <div className="pf-currency-mode-grid">
+            {([
+              { key: 'krw-vnd', label: isKo ? 'KRW → VND' : 'Hàn → Việt', hint: 'KRW/VND' },
+              { key: 'vnd-vnd', label: isKo ? 'VND → VND' : 'Việt → Việt', hint: 'VND' },
+              { key: 'vnd-krw', label: isKo ? 'VND → KRW' : 'Việt → Hàn', hint: 'VND/KRW' },
+            ] as Array<{ key: CurrencyMode; label: string; hint: string }>).map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                className={currencyMode === item.key ? 'active' : ''}
+                onClick={() => setCurrencyMode(item.key)}
+              >
+                <strong>{item.label}</strong>
+                <span>{item.hint}</span>
+              </button>
+            ))}
           </div>
         </div>
       </div>

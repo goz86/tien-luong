@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { toPng } from 'html-to-image';
 import {
   AlertTriangle,
   BarChart3,
@@ -31,8 +32,9 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { calculateShiftPay, formatKrw } from '../lib/salary';
-import type { Expense, RateState, Shift, VenueColors } from '../lib/types';
+import { calculateShiftPay } from '../lib/salary';
+import type { CurrencyMode, Expense, RateState, Shift, VenueColors } from '../lib/types';
+import { formatCurrencyFlowAmount } from '../lib/currency';
 import { DateWheelModal } from './shared/DateWheelModal';
 import { getVenueColor, shiftMonth, formatHoursCompact } from '../utils/helpers';
 
@@ -88,6 +90,13 @@ function formatPercent(value: number) {
   return `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
 }
 
+function profileLine(isKo: boolean, saveRatio: number) {
+  if (saveRatio >= 70) return isKo ? '저축력이 아주 좋아요.' : 'Giữ tiền quá ổn, rất đáng tự hào.';
+  if (saveRatio >= 40) return isKo ? '좋은 리듬으로 가고 있어요.' : 'Nhịp làm và giữ tiền đang rất đẹp.';
+  if (saveRatio > 0) return isKo ? '이번 달도 한 걸음 더 갔어요.' : 'Tháng này vẫn tiến thêm một bước.';
+  return isKo ? '기록을 시작한 것만으로도 좋아요.' : 'Bắt đầu ghi lại đã là một bước tốt.';
+}
+
 export function IncomeScreen({
   rate,
   shifts,
@@ -99,6 +108,7 @@ export function IncomeScreen({
   target,
   onSetTarget,
   lang = 'vi',
+  currencyMode,
 }: {
   rate: RateState;
   shifts: Shift[];
@@ -110,6 +120,7 @@ export function IncomeScreen({
   target: number;
   onSetTarget: (target: number) => void;
   lang?: AppLang;
+  currencyMode: CurrencyMode;
 }) {
   const isKo = lang === 'ko';
   const locale = isKo ? 'ko-KR' : 'vi-VN';
@@ -221,6 +232,9 @@ export function IncomeScreen({
   const [chartMonth, setChartMonth] = useState(currentMonthIso);
   const [chartView, setChartView] = useState<ChartViewMode>('day');
   const [showCelebration, setShowCelebration] = useState(false);
+  const [showShareCard, setShowShareCard] = useState(false);
+  const [isExportingShare, setIsExportingShare] = useState(false);
+  const shareCardRef = useRef<HTMLDivElement>(null);
   const [expenseForm, setExpenseForm] = useState<Omit<Expense, 'id'>>({
     category: 'food',
     amount: 0,
@@ -245,10 +259,7 @@ export function IncomeScreen({
   }, [activeSelect]);
 
   const formatMoney = (val: number) => {
-    if (isVnd) {
-      return new Intl.DateTimeFormat(locale).format(new Date()) && `${Math.round(val * rate.value).toLocaleString(locale)}đ`;
-    }
-    return formatKrw(val);
+    return formatCurrencyFlowAmount(val, currencyMode, rate.value, isVnd).text;
   };
 
   const selectedMonthKey = chartMonth.slice(0, 7);
@@ -320,6 +331,7 @@ export function IncomeScreen({
 
   const totalExpenses = useMemo(() => monthExpenses.reduce((sum, expense) => sum + expense.amount, 0), [monthExpenses]);
   const netBalance = monthlyTotal - totalExpenses;
+  const saveRatio = monthlyTotal > 0 ? Math.max(0, Math.min(100, (netBalance / monthlyTotal) * 100)) : 0;
   const maxWeekdayTotal = Math.max(...weekdayTotals, 1);
   const strongestDay = weekdayTotals.indexOf(Math.max(...weekdayTotals));
   const progressPercentage = Math.min((monthlyTotal / (target || 1)) * 100, 100);
@@ -466,6 +478,24 @@ export function IncomeScreen({
     setIsAddingExpense(false);
   }
 
+  async function handleExportShareCard() {
+    if (!shareCardRef.current) return;
+    setIsExportingShare(true);
+    try {
+      const dataUrl = await toPng(shareCardRef.current, {
+        cacheBust: true,
+        pixelRatio: 2,
+        backgroundColor: '#eef6ff',
+      });
+      const link = document.createElement('a');
+      link.href = dataUrl;
+      link.download = `duhoc-mate-${selectedMonthKey}-report.png`;
+      link.click();
+    } finally {
+      setIsExportingShare(false);
+    }
+  }
+
   return (
     <>
       <header className="income-header">
@@ -494,6 +524,57 @@ export function IncomeScreen({
             <strong>{formatHoursCompact(monthlyHours)}</strong>
           </article>
         </div>
+      </section>
+
+      <section className={`income-share-report ${showShareCard ? 'open' : ''}`}>
+        <div className="income-share-head">
+          <div>
+            <span>{isKo ? '공유 카드' : 'Báo cáo chia sẻ'}</span>
+            <strong>{isKo ? '이번 달 기록을 예쁘게 저장' : 'Lưu lại tháng làm việc của mình'}</strong>
+          </div>
+          <button type="button" onClick={() => setShowShareCard(v => !v)}>
+            {showShareCard ? (isKo ? '숨기기' : 'Ẩn') : (isKo ? '보기' : 'Xem')}
+          </button>
+        </div>
+        {showShareCard && (
+          <>
+            <div className="income-share-card" ref={shareCardRef}>
+              <div className="income-share-bg-orb one" />
+              <div className="income-share-bg-orb two" />
+              <div className="income-share-brand">
+                <img src="/logo.png" alt="" />
+                <span>Duhoc Mate</span>
+              </div>
+              <div className="income-share-mascot">
+                <img src="/icon/companion_hamster.png" alt="" />
+              </div>
+              <p>{isKo ? `${chartMonthNumber}월 리포트` : `Báo cáo tháng ${chartMonthNumber}`}</p>
+              <h3>{isKo ? '이번 달도 잘 버텼어요' : 'Tháng này mình đã làm được'}</h3>
+              <div className="income-share-total">{formatMoney(netBalance)}</div>
+              <div className="income-share-grid">
+                <div>
+                  <span>{isKo ? '근무 시간' : 'Số giờ'}</span>
+                  <strong>{formatHoursCompact(monthlyHours)}</strong>
+                </div>
+                <div>
+                  <span>{isKo ? '총 급여' : 'Tổng lương'}</span>
+                  <strong>{formatMoney(monthlyTotal)}</strong>
+                </div>
+                <div>
+                  <span>{isKo ? '저축률' : 'Giữ lại'}</span>
+                  <strong>{Math.round(saveRatio)}%</strong>
+                </div>
+              </div>
+              <div className="income-share-footer">
+                <span>{profileLine(isKo, saveRatio)}</span>
+                <small>duhocmate.com</small>
+              </div>
+            </div>
+            <button type="button" className="income-share-export" onClick={handleExportShareCard} disabled={isExportingShare}>
+              {isExportingShare ? (isKo ? '저장 중...' : 'Đang tạo ảnh...') : (isKo ? 'PNG 저장' : 'Tải ảnh PNG')}
+            </button>
+          </>
+        )}
       </section>
 
       <section className="income-goal-panel">

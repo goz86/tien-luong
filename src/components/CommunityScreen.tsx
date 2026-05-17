@@ -1077,7 +1077,7 @@ export function CommunityScreen({
     unread: 'Chưa đọc',
     noUnread: 'Không có tin nhắn chưa đọc',
     noNearby: `Chưa có bạn nào trong bán kính ${NEARBY_RADIUS_KM}km`,
-    enableLocation: 'Bật quyền vị trí để tìm bạn gần bạn trong bán kính 3km',
+    enableLocation: 'Đăng nhập,Bật quyền vị trí để tìm bạn gần bạn trong bán kính 3km',
     noChats: 'Chưa có cuộc hội thoại nào',
     you: 'Bạn: ',
     online: 'Đang online',
@@ -1268,7 +1268,7 @@ export function CommunityScreen({
           state.source === 'supabase'
             ? 'Đang trực tuyến'
             : currentUserId
-              ? 'Chưa có dữ liệu Supabase'
+              ? 'Chưa có dữ liệu '
               : 'Đăng nhập để đồng bộ bài viết'
         );
       })
