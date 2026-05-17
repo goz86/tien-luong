@@ -13180,9 +13180,9 @@ button.admin-stat-card {
     display: grid;
     grid-template-columns: 3fr 2fr;
     grid-template-areas:
+      "signal signal"
       "deck   deck"
-      "feed   stats"
-      "signal stats";
+      "feed   stats";
     gap: 20px;
     align-items: start;
   }
