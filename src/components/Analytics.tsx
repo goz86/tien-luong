@@ -160,13 +160,13 @@ export function Analytics({ shifts, t }: AnalyticsProps) {
                     axisLine={false} 
                     tickLine={false} 
                     tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
-                    tickFormatter={(val) => (val && typeof val === 'string' ? val.slice(-2) : '')}
+                    tickFormatter={(val: string) => (val && typeof val === 'string' ? val.slice(-2) : '')}
                   />
-                  <YAxis 
-                    axisLine={false} 
-                    tickLine={false} 
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
                     tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
-                    tickFormatter={(val) => (val >= 1000 ? (val / 1000) + 'k' : val)}
+                    tickFormatter={(val: number) => (val >= 1000 ? (val / 1000) + 'k' : String(val))}
                   />
                   <Tooltip 
                     contentStyle={{ 
@@ -230,7 +230,7 @@ export function Analytics({ shifts, t }: AnalyticsProps) {
                       axisLine={false} 
                       tickLine={false} 
                       tick={{ fill: 'var(--text-muted)', fontSize: 9 }}
-                      tickFormatter={(val) => (val && typeof val === 'string' ? val.slice(-2) : '')}
+                      tickFormatter={(val: string) => (val && typeof val === 'string' ? val.slice(-2) : '')}
                     />
                     <YAxis hide />
                     <Tooltip />
