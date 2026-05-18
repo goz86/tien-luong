@@ -21,13 +21,8 @@ requestAnimationFrame(() => {
   });
 });
 
-const isLocalPreview =
-  window.location.hostname === 'localhost' ||
-  window.location.hostname === '127.0.0.1' ||
-  window.location.hostname === '::1';
-
 // Service Worker registration with update detection
-if ('serviceWorker' in navigator && (import.meta.env.DEV || isLocalPreview)) {
+if ('serviceWorker' in navigator && import.meta.env.DEV) {
   window.addEventListener('load', async () => {
     try {
       const registrations = await navigator.serviceWorker.getRegistrations();

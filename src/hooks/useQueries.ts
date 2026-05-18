@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { useAppStore } from '../store/appStore';
 import type { Shift, Expense, ProfileDraft, CompanionProfile } from '../lib/types';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import type { CommunityNotification } from '../data/communityData';
 import { BADGES } from '../data/badgeData';
 import { calculateShiftPay } from '../lib/salary';
@@ -65,6 +65,35 @@ function shiftToRow(shift: Shift, userId: string) {
     tax_deduction: shift.taxDeduction,
     holiday_allowance: shift.holidayAllowance,
   };
+}
+
+function expenseToRow(expense: Expense, userId: string) {
+  return {
+    id: expense.id,
+    user_id: userId,
+    category: expense.category,
+    amount: expense.amount,
+    date: expense.date,
+    note: expense.note,
+  };
+}
+
+function mergeById<T extends { id: string }>(cloudItems: T[], localItems: T[]) {
+  const merged = new Map<string, T>();
+  cloudItems.forEach((item) => merged.set(item.id, item));
+  localItems.forEach((item) => merged.set(item.id, item));
+  return Array.from(merged.values());
+}
+
+function hasProfileContent(profile: ProfileDraft) {
+  return Boolean(
+    profile.displayName?.trim() ||
+    profile.school?.trim() ||
+    profile.region?.trim() ||
+    profile.note?.trim() ||
+    profile.avatarUrl?.trim() ||
+    profile.tags?.length
+  );
 }
 
 /* ── Shifts ── */
@@ -439,6 +468,7 @@ export function useBadgesQuery(userId: string | undefined) {
 /* ── Hub: syncs RQ data → Zustand store ── */
 export function useSyncQueriesToStore() {
   const userId = useAppStore((s) => s.session?.user.id);
+  const online = useAppStore((s) => s.online);
   const setShifts = useAppStore((s) => s.setShifts);
   const setExpenses = useAppStore((s) => s.setExpenses);
   const setCompanions = useAppStore((s) => s.setCompanions);
@@ -450,6 +480,7 @@ export function useSyncQueriesToStore() {
   const setRate = useAppStore((s) => s.setRate);
   const setRequested = useAppStore((s) => s.setRequested);
   const setIsAnonymousRank = useAppStore((s) => s.setIsAnonymousRank);
+  const lastLocalSyncRef = useRef<string>('');
 
   const { data: shifts } = useShiftsQuery(userId);
   const { data: expenses } = useExpensesQuery(userId);
@@ -461,13 +492,67 @@ export function useSyncQueriesToStore() {
 
   const { data: profileData } = useProfileQuery(userId);
 
+  useEffect(() => {
+    if (!supabase || !userId || !online) return;
+    const client = supabase;
+    const state = useAppStore.getState();
+    const syncKey = JSON.stringify({
+      userId,
+      shifts: state.shifts,
+      expenses: state.expenses,
+      profile: state.profile,
+    });
+    if (lastLocalSyncRef.current === syncKey) return;
+    lastLocalSyncRef.current = syncKey;
+
+    const syncLocalToCloud = async () => {
+      try {
+        const latest = useAppStore.getState();
+        if (latest.shifts.length) {
+          await client
+            .from('shift_entries')
+            .upsert(latest.shifts.map((shift) => shiftToRow(shift, userId)), { onConflict: 'id' });
+        }
+
+        if (latest.expenses.length) {
+          await client
+            .from('expenses')
+            .upsert(latest.expenses.map((expense) => expenseToRow(expense, userId)), { onConflict: 'id' });
+        }
+
+        if (hasProfileContent(latest.profile)) {
+          await client.from('profiles').upsert({
+            id: userId,
+            display_name: latest.profile.displayName,
+            school: latest.profile.school,
+            region: latest.profile.region,
+            note: latest.profile.note,
+            avatar_url: latest.profile.avatarUrl || null,
+            tags: latest.profile.tags ?? [],
+          });
+        }
+      } catch (error) {
+        lastLocalSyncRef.current = '';
+        console.warn('Unable to sync local data to Supabase:', error);
+      }
+    };
+
+    void syncLocalToCloud();
+  }, [userId, online]);
+
   // Sync all query data to Zustand via useEffect (NOT during render)
   useEffect(() => {
-    if (shifts) setShifts(shifts);
+    if (shifts) {
+      const localShifts = useAppStore.getState().shifts;
+      setShifts(mergeById(shifts, localShifts));
+    }
   }, [shifts, setShifts]);
 
   useEffect(() => {
-    if (expenses) setExpenses(expenses);
+    if (expenses) {
+      const localExpenses = useAppStore.getState().expenses;
+      setExpenses(mergeById(expenses, localExpenses));
+    }
   }, [expenses, setExpenses]);
 
   useEffect(() => {
@@ -506,12 +591,12 @@ export function useSyncQueriesToStore() {
     if (profileData) {
       useAppStore.getState().setProfile((prev) => ({
         ...prev,
-        displayName: profileData.displayName,
-        school: profileData.school,
-        region: profileData.region,
-        note: profileData.note,
-        avatarUrl: profileData.avatarUrl,
-        tags: profileData.tags,
+        displayName: prev.displayName || profileData.displayName,
+        school: prev.school || profileData.school,
+        region: prev.region || profileData.region,
+        note: prev.note || profileData.note,
+        avatarUrl: prev.avatarUrl || profileData.avatarUrl,
+        tags: prev.tags?.length ? prev.tags : profileData.tags,
       }));
     }
   }, [profileData]);

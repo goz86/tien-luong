@@ -533,20 +533,24 @@ export default function AppLayout() {
     };
     s.addShift(shift, nextTab);
     if (supabaseClient && s.session) {
-      await supabaseClient.from('shift_entries').upsert({
-        id: shift.id,
-        user_id: s.session.user.id,
-        work_date: shift.date,
-        venue: shift.label,
-        start_time: shift.startTime,
-        end_time: shift.endTime,
-        hourly_wage: shift.hourlyWage,
-        break_minutes: shift.breakMinutes,
-        notes: shift.notes,
-        night_shift: shift.nightShift,
-        tax_deduction: shift.taxDeduction,
-        holiday_allowance: shift.holidayAllowance,
-      });
+      try {
+        await supabaseClient.from('shift_entries').upsert({
+          id: shift.id,
+          user_id: s.session.user.id,
+          work_date: shift.date,
+          venue: shift.label,
+          start_time: shift.startTime,
+          end_time: shift.endTime,
+          hourly_wage: shift.hourlyWage,
+          break_minutes: shift.breakMinutes,
+          notes: shift.notes,
+          night_shift: shift.nightShift,
+          tax_deduction: shift.taxDeduction,
+          holiday_allowance: shift.holidayAllowance,
+        });
+      } catch (error) {
+        console.warn('Saved shift locally; Supabase sync will retry later.', error);
+      }
     }
   }, []);
 
@@ -555,20 +559,24 @@ export default function AppLayout() {
     s.updateShift(shift);
     s.setSelectedDate(shift.date);
     if (supabaseClient && s.session) {
-      await supabaseClient.from('shift_entries').upsert({
-        id: shift.id,
-        user_id: s.session.user.id,
-        work_date: shift.date,
-        venue: shift.label,
-        start_time: shift.startTime,
-        end_time: shift.endTime,
-        hourly_wage: shift.hourlyWage,
-        break_minutes: shift.breakMinutes,
-        notes: shift.notes,
-        night_shift: shift.nightShift,
-        tax_deduction: shift.taxDeduction,
-        holiday_allowance: shift.holidayAllowance,
-      });
+      try {
+        await supabaseClient.from('shift_entries').upsert({
+          id: shift.id,
+          user_id: s.session.user.id,
+          work_date: shift.date,
+          venue: shift.label,
+          start_time: shift.startTime,
+          end_time: shift.endTime,
+          hourly_wage: shift.hourlyWage,
+          break_minutes: shift.breakMinutes,
+          notes: shift.notes,
+          night_shift: shift.nightShift,
+          tax_deduction: shift.taxDeduction,
+          holiday_allowance: shift.holidayAllowance,
+        });
+      } catch (error) {
+        console.warn('Updated shift locally; Supabase sync will retry later.', error);
+      }
     }
   }, []);
 
@@ -576,7 +584,11 @@ export default function AppLayout() {
     const s = useAppStore.getState();
     s.deleteShift(id);
     if (supabaseClient && s.session) {
-      await supabaseClient.from('shift_entries').delete().eq('id', id);
+      try {
+        await supabaseClient.from('shift_entries').delete().eq('id', id);
+      } catch (error) {
+        console.warn('Deleted shift locally; Supabase delete could not sync yet.', error);
+      }
     }
   }, []);
 
@@ -586,14 +598,18 @@ export default function AppLayout() {
     const next = { ...expense, id: crypto.randomUUID() };
     s.addExpenseLocally(next);
     if (supabaseClient && s.session) {
-      await supabaseClient.from('expenses').insert({
-        id: next.id,
-        user_id: s.session.user.id,
-        category: next.category,
-        amount: next.amount,
-        date: next.date,
-        note: next.note,
-      });
+      try {
+        await supabaseClient.from('expenses').insert({
+          id: next.id,
+          user_id: s.session.user.id,
+          category: next.category,
+          amount: next.amount,
+          date: next.date,
+          note: next.note,
+        });
+      } catch (error) {
+        console.warn('Saved expense locally; Supabase sync will retry later.', error);
+      }
     }
   }, []);
 
@@ -601,7 +617,11 @@ export default function AppLayout() {
     const s = useAppStore.getState();
     s.removeExpenseLocally(id);
     if (supabaseClient && s.session) {
-      await supabaseClient.from('expenses').delete().eq('id', id);
+      try {
+        await supabaseClient.from('expenses').delete().eq('id', id);
+      } catch (error) {
+        console.warn('Deleted expense locally; Supabase delete could not sync yet.', error);
+      }
     }
   }, []);
 
@@ -733,7 +753,7 @@ export default function AppLayout() {
               >
                 <div className="first-setup-orbit" aria-hidden="true" />
                 <div className="first-setup-head">
-                  <span className="first-setup-kicker">{store.lang === 'ko' ? '처음 설정' : 'Lần đầu vào app'}</span>
+                  <span className="first-setup-kicker">{store.lang === 'ko' ? '처음 설정' : 'Chào mừng bạn đến với Duhoc Mate'}</span>
                   <h2 id="first-setup-title">{store.lang === 'ko' ? '나만의 친구를 골라요' : 'Chọn người bạn đồng hành'}</h2>
                   <p>{store.lang === 'ko' ? '캐릭터와 배경을 먼저 정해볼까요.' : 'Chọn linh vật và màu nền cho không gian của bạn.'}</p>
                 </div>

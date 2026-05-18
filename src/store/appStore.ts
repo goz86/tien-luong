@@ -426,9 +426,10 @@ export const useAppStore = create<AppState>((set, get) => {
         const nextUserId = nextSession?.user.id ?? null;
         const userChanged = previousUserId !== nextUserId;
         const wasGuest = !previousUserId && Boolean(nextUserId);
-        const cleared = userChanged ? clearUserScopedState() : {};
-        const nextNotifications = userChanged ? [] : state.notifications;
-        const nextAdminRole = userChanged ? null : state.adminRole;
+        const shouldClearLocalData = userChanged && !wasGuest;
+        const cleared = shouldClearLocalData ? clearUserScopedState() : {};
+        const nextNotifications = shouldClearLocalData ? [] : state.notifications;
+        const nextAdminRole = shouldClearLocalData ? null : state.adminRole;
 
         // Sync pending guest likes/bookmarks khi đăng nhập lần đầu
         if (wasGuest && nextUserId) {
@@ -454,7 +455,7 @@ export const useAppStore = create<AppState>((set, get) => {
             session: nextSession,
             adminRole: nextAdminRole,
             notifications: nextNotifications,
-            shifts: userChanged ? [] : state.shifts,
+            shifts: shouldClearLocalData ? [] : state.shifts,
           }),
         };
       });
@@ -469,7 +470,13 @@ export const useAppStore = create<AppState>((set, get) => {
     setSavingProfile: (v) => set({ savingProfile: v }),
 
     // Shifts
-    setShifts: (s) => set({ shifts: s }),
+    setShifts: (shifts) => {
+      set((state) => ({
+        shifts,
+        ...derive({ shifts, calendarMonth: state.calendarMonth }),
+      }));
+      get().persist();
+    },
     addShift: (shift, nextTab = 'calendar') => {
       set((state) => {
         const nextShifts = [shift, ...state.shifts];
@@ -512,7 +519,10 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     // Expenses
-    setExpenses: (e) => set({ expenses: e }),
+    setExpenses: (expenses) => {
+      set({ expenses });
+      get().persist();
+    },
     addExpenseLocally: (expense) => {
       set((s) => ({ expenses: [...s.expenses, expense] }));
       get().persist();

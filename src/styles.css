@@ -830,7 +830,7 @@ select {
   max-height: min(780px, calc(100svh - 36px));
   overflow: hidden auto;
   border-radius: 34px;
-  padding: 24px 18px 18px;
+  padding: 24px 18px 0;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.9)),
     radial-gradient(circle at 90% 0%, rgba(39, 82, 255, 0.14), transparent 30%);
@@ -871,6 +871,7 @@ select {
   background: rgba(39, 82, 255, 0.08);
   color: var(--theme-accent, #2752ff);
   font-size: 12px;
+  line-height: 1.25;
   font-weight: 900;
 }
 
@@ -1013,13 +1014,20 @@ select {
 
 .first-setup-actions {
   position: sticky;
-  bottom: -18px;
+  bottom: 0;
   display: grid;
   grid-template-columns: 0.9fr 1.4fr;
   gap: 10px;
-  margin: 16px -2px 0;
-  padding: 12px 0 0;
-  background: linear-gradient(180deg, rgba(248, 250, 252, 0), rgba(248, 250, 252, 0.96) 28%);
+  margin: 16px -18px 0;
+  padding: 14px 18px 18px;
+  border-radius: 26px 26px 34px 34px;
+  background:
+    linear-gradient(180deg, rgba(248, 250, 252, 0), rgba(248, 250, 252, 0.94) 26%),
+    rgba(248, 250, 252, 0.88);
+  box-shadow:
+    0 -18px 34px rgba(248, 250, 252, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(12px);
 }
 
 .first-setup-actions button {
@@ -1066,7 +1074,12 @@ select {
 }
 
 .dark .first-setup-actions {
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0), rgba(15, 23, 42, 0.96) 28%);
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0), rgba(15, 23, 42, 0.94) 26%),
+    rgba(15, 23, 42, 0.88);
+  box-shadow:
+    0 -18px 34px rgba(15, 23, 42, 0.62),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .dark .first-setup-secondary {
@@ -1100,8 +1113,14 @@ select {
   }
 
   .first-setup-card {
-    padding: 22px 14px 16px;
+    padding: 22px 14px 0;
     border-radius: 30px;
+  }
+
+  .first-setup-actions {
+    margin: 16px -14px 0;
+    padding: 14px 14px 16px;
+    border-radius: 24px 24px 30px 30px;
   }
 
   .first-setup-head h2 {
