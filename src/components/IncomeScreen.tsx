@@ -1242,14 +1242,47 @@ export function IncomeScreen({
                   </button>
                 </div>
 
-                {/* Workplace */}
+                {/* Workplace — chips linked to shifts data */}
                 <label className="income-ins-label">
                   <span>{ui.insWorkplace}</span>
+                  {workplaces.length > 0 && (
+                    <div className="income-ins-wp-chips">
+                      {/* "Tất cả" chip sums all workplaces */}
+                      <button
+                        type="button"
+                        className={`income-ins-wp-chip${insForm.workplaceLabel === '__all__' ? ' active' : ''}`}
+                        onClick={() => {
+                          const base = monthlyTotal;
+                          const calc = calcIns(base, insForm.insuranceType, { health: insForm.healthRate, longCare: insForm.longCareRate, pension: insForm.pensionRate, employment: insForm.employmentRate });
+                          setInsForm(f => ({ ...f, workplaceLabel: '__all__', baseSalary: base, ...calc }));
+                        }}
+                      >
+                        <span>{isKo ? '전체' : 'Tất cả'}</span>
+                        <small>{monthlyTotal.toLocaleString()} ₩</small>
+                      </button>
+                      {workplaces.map(wp => (
+                        <button
+                          key={wp.label}
+                          type="button"
+                          className={`income-ins-wp-chip${insForm.workplaceLabel === wp.label ? ' active' : ''}`}
+                          onClick={() => {
+                            const base = wp.total;
+                            const calc = calcIns(base, insForm.insuranceType, { health: insForm.healthRate, longCare: insForm.longCareRate, pension: insForm.pensionRate, employment: insForm.employmentRate });
+                            setInsForm(f => ({ ...f, workplaceLabel: wp.label, baseSalary: base, ...calc }));
+                          }}
+                        >
+                          <span>{wp.label}</span>
+                          <small>{wp.total.toLocaleString()} ₩</small>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   <input
                     className="income-ins-input"
-                    value={insForm.workplaceLabel}
+                    style={{ marginTop: workplaces.length > 0 ? '6px' : 0 }}
+                    value={insForm.workplaceLabel === '__all__' ? (isKo ? '전체 근무지' : 'Tất cả nơi làm') : insForm.workplaceLabel}
                     onChange={e => setInsForm(f => ({ ...f, workplaceLabel: e.target.value }))}
-                    placeholder={workplaces[0]?.label ?? (isKo ? '근무지명' : 'Tên nơi làm')}
+                    placeholder={workplaces[0]?.label ?? (isKo ? '근무지명 직접 입력' : 'Nhập tên nơi làm')}
                   />
                 </label>
 
@@ -1496,23 +1529,41 @@ export function IncomeScreen({
                       <span>{rec.baseSalary.toLocaleString()} ₩</span>
                     </div>
 
+                    {/* Breakdown — 2-col grid */}
                     <div className="income-ins-card-breakdown">
-                      <span>{ui.insHealth} {rec.healthRate}%: {rec.healthAmt.toLocaleString()} ₩</span>
-                      <span>{ui.insLongCare} {rec.longCareRate}%: {rec.longCareAmt.toLocaleString()} ₩</span>
+                      <div className="income-ins-card-brow">
+                        <span className="ins-brow-name">{ui.insHealth}</span>
+                        <span className="ins-brow-rate">{rec.healthRate}%</span>
+                        <span className="ins-brow-amt">{rec.healthAmt.toLocaleString()} ₩</span>
+                      </div>
+                      <div className="income-ins-card-brow">
+                        <span className="ins-brow-name">{ui.insLongCare}</span>
+                        <span className="ins-brow-rate">{rec.longCareRate}%</span>
+                        <span className="ins-brow-amt">{rec.longCareAmt.toLocaleString()} ₩</span>
+                      </div>
                       {rec.insuranceType === '4' && (
                         <>
-                          <span>{ui.insPension} {rec.pensionRate}%: {rec.pensionAmt.toLocaleString()} ₩</span>
-                          <span>{ui.insEmployment} {rec.employmentRate}%: {rec.employmentAmt.toLocaleString()} ₩</span>
+                          <div className="income-ins-card-brow">
+                            <span className="ins-brow-name">{ui.insPension}</span>
+                            <span className="ins-brow-rate">{rec.pensionRate}%</span>
+                            <span className="ins-brow-amt">{rec.pensionAmt.toLocaleString()} ₩</span>
+                          </div>
+                          <div className="income-ins-card-brow">
+                            <span className="ins-brow-name">{ui.insEmployment}</span>
+                            <span className="ins-brow-rate">{rec.employmentRate}%</span>
+                            <span className="ins-brow-amt">{rec.employmentAmt.toLocaleString()} ₩</span>
+                          </div>
                         </>
                       )}
                     </div>
 
+                    {/* Footer — total + actions */}
                     <div className="income-ins-card-footer">
-                      <div className="income-ins-card-total">
-                        <span>{ui.insTotal}</span>
-                        <strong>−{insTotal(rec).toLocaleString()} ₩</strong>
-                      </div>
-                      <div className="income-ins-card-actions">
+                      <div className="income-ins-card-footer-top">
+                        <div className="income-ins-card-total">
+                          <span>{ui.insTotal}</span>
+                          <strong>−{insTotal(rec).toLocaleString()} ₩</strong>
+                        </div>
                         <button
                           type="button"
                           className="income-ins-del-btn"
@@ -1520,25 +1571,25 @@ export function IncomeScreen({
                         >
                           <Trash2 size={14} />
                         </button>
-                        {!rec.confirmed && (
-                          <button
-                            type="button"
-                            className="income-ins-confirm-btn"
-                            onClick={() => {
-                              updateInsRecord(rec.id, { confirmed: true });
-                              onAddExpense({
-                                category: 'health',
-                                amount: insTotal(rec),
-                                date: rec.payDate,
-                                note: ui.insExpenseNote(rec.insuranceType),
-                              });
-                            }}
-                          >
-                            <Check size={14} />
-                            {ui.insConfirm}
-                          </button>
-                        )}
                       </div>
+                      {!rec.confirmed && (
+                        <button
+                          type="button"
+                          className="income-ins-confirm-btn"
+                          onClick={() => {
+                            updateInsRecord(rec.id, { confirmed: true });
+                            onAddExpense({
+                              category: 'health',
+                              amount: insTotal(rec),
+                              date: rec.payDate,
+                              note: ui.insExpenseNote(rec.insuranceType),
+                            });
+                          }}
+                        >
+                          <Check size={14} />
+                          {ui.insConfirm}
+                        </button>
+                      )}
                     </div>
                     {rec.note ? <p className="income-ins-card-note">{rec.note}</p> : null}
                   </article>
