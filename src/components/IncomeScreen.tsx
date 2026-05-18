@@ -289,7 +289,7 @@ export function IncomeScreen({
     shifts: '회',
     insTitle: '4대보험 관리',
     insSubtitle: '월별 보험료를 계산하고 지출에 반영하세요.',
-    insAdd: '보험료 추가',
+    insAdd: '이번 달 보험료 확인',
     insType2: '2가지',
     insType4: '4가지 전부',
     insWorkplace: '근무지 (선택)',
@@ -352,7 +352,7 @@ export function IncomeScreen({
     shifts: 'ca',
     insTitle: 'Quản lý bảo hiểm 4대보험',
     insSubtitle: 'Tính tiền bảo hiểm theo tháng và tự động trừ vào chi tiêu.',
-    insAdd: 'Thêm khai bảo hiểm',
+    insAdd: 'Kiểm tra bảo hiểm tháng này',
     insType2: '2 loại',
     insType4: 'Tất cả 4 loại',
     insWorkplace: 'Nơi làm (không bắt buộc)',
@@ -423,6 +423,7 @@ export function IncomeScreen({
   const { records: allInsRecords, add: addInsRecord, update: updateInsRecord, remove: removeInsRecord } = useInsuranceRecords();
   const [isAddingIns, setIsAddingIns] = useState(false);
   const [editingInsId, setEditingInsId] = useState<string | null>(null);
+  const [expandedInsId, setExpandedInsId] = useState<string | null>(null);
   const [insDatePickerField, setInsDatePickerField] = useState<InsFormField | null>(null);
   const todayStr = new Date().toISOString().slice(0, 10);
   // insForm initialised with safe zero-defaults; populated in the "Add" click handler
@@ -1490,110 +1491,111 @@ export function IncomeScreen({
               </button>
             )}
 
-            {/* ── Record list ── */}
+            {/* ── Record list (collapsible) ── */}
             {monthInsRecords.length > 0 ? (
               <div className="income-ins-list">
-                {monthInsRecords.map(rec => (
-                  <article key={rec.id} className={`income-ins-card${rec.confirmed ? ' confirmed' : ''}`}>
-                    <div className="income-ins-card-head">
-                      <div>
-                        {rec.workplaceLabel && <strong className="income-ins-card-venue">{rec.workplaceLabel}</strong>}
-                        <span className="income-ins-card-badge">
-                          {rec.insuranceType === '4'
-                            ? (isKo ? '4가지' : '4 loại')
-                            : (isKo ? '2가지' : '2 loại')}
-                        </span>
-                        {rec.confirmed && (
-                          <span className="income-ins-confirmed-badge">
-                            <Check size={11} /> {ui.insConfirmed}
+                {monthInsRecords.map(rec => {
+                  const isOpen = expandedInsId === rec.id;
+                  return (
+                    <article key={rec.id} className={`income-ins-card${rec.confirmed ? ' confirmed' : ''}${isOpen ? ' open' : ''}`}>
+
+                      {/* ── Always-visible summary row (click to toggle) ── */}
+                      <button
+                        type="button"
+                        className="income-ins-card-summary"
+                        onClick={() => setExpandedInsId(isOpen ? null : rec.id)}
+                      >
+                        <div className="income-ins-card-summary-left">
+                          {rec.workplaceLabel && rec.workplaceLabel !== '__all__'
+                            ? <strong>{rec.workplaceLabel}</strong>
+                            : <strong>{isKo ? '전체 근무지' : 'Tất cả nơi làm'}</strong>
+                          }
+                          <span className="income-ins-card-badge">
+                            {rec.insuranceType === '4' ? (isKo ? '4가지' : '4 loại') : (isKo ? '2가지' : '2 loại')}
                           </span>
-                        )}
-                      </div>
-                      {!rec.confirmed && (
-                        <button
-                          type="button"
-                          className="income-ins-edit-btn"
-                          onClick={() => {
-                            setInsForm({ ...rec });
-                            setEditingInsId(rec.id);
-                            setIsAddingIns(false);
-                          }}
-                        >
-                          {ui.insEdit}
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="income-ins-card-dates">
-                      <span>{rec.workStartDate} → {rec.payDate}</span>
-                      <span>{rec.baseSalary.toLocaleString()} ₩</span>
-                    </div>
-
-                    {/* Breakdown — 2-col grid */}
-                    <div className="income-ins-card-breakdown">
-                      <div className="income-ins-card-brow">
-                        <span className="ins-brow-name">{ui.insHealth}</span>
-                        <span className="ins-brow-rate">{rec.healthRate}%</span>
-                        <span className="ins-brow-amt">{rec.healthAmt.toLocaleString()} ₩</span>
-                      </div>
-                      <div className="income-ins-card-brow">
-                        <span className="ins-brow-name">{ui.insLongCare}</span>
-                        <span className="ins-brow-rate">{rec.longCareRate}%</span>
-                        <span className="ins-brow-amt">{rec.longCareAmt.toLocaleString()} ₩</span>
-                      </div>
-                      {rec.insuranceType === '4' && (
-                        <>
-                          <div className="income-ins-card-brow">
-                            <span className="ins-brow-name">{ui.insPension}</span>
-                            <span className="ins-brow-rate">{rec.pensionRate}%</span>
-                            <span className="ins-brow-amt">{rec.pensionAmt.toLocaleString()} ₩</span>
-                          </div>
-                          <div className="income-ins-card-brow">
-                            <span className="ins-brow-name">{ui.insEmployment}</span>
-                            <span className="ins-brow-rate">{rec.employmentRate}%</span>
-                            <span className="ins-brow-amt">{rec.employmentAmt.toLocaleString()} ₩</span>
-                          </div>
-                        </>
-                      )}
-                    </div>
-
-                    {/* Footer — total + actions */}
-                    <div className="income-ins-card-footer">
-                      <div className="income-ins-card-footer-top">
-                        <div className="income-ins-card-total">
-                          <span>{ui.insTotal}</span>
-                          <strong>−{insTotal(rec).toLocaleString()} ₩</strong>
+                          {rec.confirmed && (
+                            <span className="income-ins-confirmed-badge">
+                              <Check size={10} /> {isKo ? '완료' : 'Đã trừ'}
+                            </span>
+                          )}
                         </div>
-                        <button
-                          type="button"
-                          className="income-ins-del-btn"
-                          onClick={() => removeInsRecord(rec.id)}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                      {!rec.confirmed && (
-                        <button
-                          type="button"
-                          className="income-ins-confirm-btn"
-                          onClick={() => {
-                            updateInsRecord(rec.id, { confirmed: true });
-                            onAddExpense({
-                              category: 'health',
-                              amount: insTotal(rec),
-                              date: rec.payDate,
-                              note: ui.insExpenseNote(rec.insuranceType),
-                            });
-                          }}
-                        >
-                          <Check size={14} />
-                          {ui.insConfirm}
-                        </button>
+                        <div className="income-ins-card-summary-right">
+                          <strong className="income-ins-card-summary-total">−{insTotal(rec).toLocaleString()} ₩</strong>
+                          <ChevronDown size={15} className={`income-ins-chevron${isOpen ? ' rotated' : ''}`} />
+                        </div>
+                      </button>
+
+                      {/* ── Expanded detail ── */}
+                      {isOpen && (
+                        <div className="income-ins-card-detail">
+                          <div className="income-ins-card-dates">
+                            <span>{rec.workStartDate} → {rec.payDate}</span>
+                            <span>{rec.baseSalary.toLocaleString()} ₩</span>
+                          </div>
+
+                          <div className="income-ins-card-breakdown">
+                            <div className="income-ins-card-brow">
+                              <span className="ins-brow-name">{ui.insHealth}</span>
+                              <span className="ins-brow-rate">{rec.healthRate}%</span>
+                              <span className="ins-brow-amt">{rec.healthAmt.toLocaleString()} ₩</span>
+                            </div>
+                            <div className="income-ins-card-brow">
+                              <span className="ins-brow-name">{ui.insLongCare}</span>
+                              <span className="ins-brow-rate">{rec.longCareRate}%</span>
+                              <span className="ins-brow-amt">{rec.longCareAmt.toLocaleString()} ₩</span>
+                            </div>
+                            {rec.insuranceType === '4' && (
+                              <>
+                                <div className="income-ins-card-brow">
+                                  <span className="ins-brow-name">{ui.insPension}</span>
+                                  <span className="ins-brow-rate">{rec.pensionRate}%</span>
+                                  <span className="ins-brow-amt">{rec.pensionAmt.toLocaleString()} ₩</span>
+                                </div>
+                                <div className="income-ins-card-brow">
+                                  <span className="ins-brow-name">{ui.insEmployment}</span>
+                                  <span className="ins-brow-rate">{rec.employmentRate}%</span>
+                                  <span className="ins-brow-amt">{rec.employmentAmt.toLocaleString()} ₩</span>
+                                </div>
+                              </>
+                            )}
+                          </div>
+
+                          {rec.note ? <p className="income-ins-card-note">{rec.note}</p> : null}
+
+                          <div className="income-ins-card-footer">
+                            <div className="income-ins-card-footer-top">
+                              <div className="income-ins-card-total">
+                                <span>{ui.insTotal}</span>
+                                <strong>−{insTotal(rec).toLocaleString()} ₩</strong>
+                              </div>
+                              <div style={{ display: 'flex', gap: '6px' }}>
+                                {!rec.confirmed && (
+                                  <button type="button" className="income-ins-edit-btn"
+                                    onClick={() => { setInsForm({ ...rec }); setEditingInsId(rec.id); setIsAddingIns(false); setExpandedInsId(null); }}
+                                  >{ui.insEdit}</button>
+                                )}
+                                <button type="button" className="income-ins-del-btn" onClick={() => removeInsRecord(rec.id)}>
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            </div>
+                            {!rec.confirmed && (
+                              <button type="button" className="income-ins-confirm-btn"
+                                onClick={() => {
+                                  updateInsRecord(rec.id, { confirmed: true });
+                                  onAddExpense({ category: 'health', amount: insTotal(rec), date: rec.payDate, note: ui.insExpenseNote(rec.insuranceType) });
+                                }}
+                              >
+                                <Check size={14} />
+                                {ui.insConfirm}
+                              </button>
+                            )}
+                          </div>
+                        </div>
                       )}
-                    </div>
-                    {rec.note ? <p className="income-ins-card-note">{rec.note}</p> : null}
-                  </article>
-                ))}
+                    </article>
+                  );
+                })}
               </div>
             ) : !isAddingIns && !editingInsId ? (
               <div className="income-empty">
