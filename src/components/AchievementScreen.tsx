@@ -27,6 +27,11 @@ import { useShallow } from 'zustand/react/shallow';
 import { calculateShiftPay, formatKrw } from '../lib/salary';
 import { supabase } from '../lib/supabase';
 import type { Expense, Shift, PersonalGoal } from '../lib/types';
+import {
+  ACHIEVEMENT_CLAIMED_CHANGE_EVENT,
+  loadAchievementClaimed,
+  saveAchievementClaimed,
+} from '../lib/achievementClaimed';
 
 // ─────────────────────────────────────────────────────
 // Types
@@ -241,15 +246,22 @@ function faceImg(progressPct: number, hasUnclaimed: boolean, totalVnd: number): 
   return 'face_sleepy';
 }
 
-function claimedKey(uid?: string | null) {
-  return `ach-claimed-${uid ?? 'guest'}`;
-}
-function loadClaimed(uid?: string | null): string[] {
-  try { return JSON.parse(localStorage.getItem(claimedKey(uid)) ?? '[]'); }
-  catch { return []; }
-}
-function saveClaimed(keys: string[], uid?: string | null) {
-  localStorage.setItem(claimedKey(uid), JSON.stringify(keys));
+function useClaimedMilestones(uid?: string | null) {
+  const [claimed, setClaimed] = useState<string[]>(() => loadAchievementClaimed(uid));
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const sync = () => setClaimed(loadAchievementClaimed(uid));
+    window.addEventListener('storage', sync);
+    window.addEventListener(ACHIEVEMENT_CLAIMED_CHANGE_EVENT, sync);
+    sync();
+    return () => {
+      window.removeEventListener('storage', sync);
+      window.removeEventListener(ACHIEVEMENT_CLAIMED_CHANGE_EVENT, sync);
+    };
+  }, [uid]);
+
+  return [claimed, setClaimed] as const;
 }
 
 function getCompanionOption(key: string | null): CompanionOption {
@@ -722,7 +734,7 @@ export function AchievementScreen({ onClose, isKo = false, inline = false }: Ach
   );
   const uid = session?.user.id ?? null;
 
-  const [claimed, setClaimed] = useState<string[]>(() => loadClaimed(uid));
+  const [claimed, setClaimed] = useClaimedMilestones(uid);
   const [giftMilestone, setGiftMilestone] = useState<Milestone | null>(null);
   const [events, setEvents] = useState<AdminEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
@@ -812,7 +824,7 @@ export function AchievementScreen({ onClose, isKo = false, inline = false }: Ach
     if (!giftMilestone) return;
     const nextClaimed = [...claimed, giftMilestone.key];
     setClaimed(nextClaimed);
-    saveClaimed(nextClaimed, uid);
+    saveAchievementClaimed(nextClaimed, uid);
     void reward;
   }, [giftMilestone, claimed, uid]);
 
@@ -1177,6 +1189,7 @@ export function AchievementBanner({
   expenses,
   rateValue,
   compact = false,
+  userId = null,
 }: {
   isKo?: boolean;
   onClick: () => void;
@@ -1184,6 +1197,7 @@ export function AchievementBanner({
   expenses: Expense[];
   rateValue: number;
   compact?: boolean;
+  userId?: string | null;
 }) {
   const [showBillionCelebration, setShowBillionCelebration] = useState(false);
   const { selectedCompanion } = useCompanionChoice();
@@ -1211,10 +1225,10 @@ export function AchievementBanner({
     return Math.min(100, (done / range) * 100);
   }, [totalVnd, nextMilestone]);
 
+  const [claimed] = useClaimedMilestones(userId);
   const unclaimedCount = useMemo(() => {
-    const claimed = loadClaimed(null);
     return NET_WORTH_MILESTONES.filter(m => totalVnd >= m.threshold && !claimed.includes(m.key)).length;
-  }, [totalVnd]);
+  }, [totalVnd, claimed]);
 
   useEffect(() => {
     if (totalVnd < FINAL_NET_MILESTONE.threshold || hasCelebratedBillion()) return;

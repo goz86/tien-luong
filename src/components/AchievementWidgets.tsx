@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { calculateShiftPay } from '../lib/salary';
 import type { Expense, Shift } from '../lib/types';
+import { ACHIEVEMENT_CLAIMED_CHANGE_EVENT, loadAchievementClaimed } from '../lib/achievementClaimed';
 
 interface CharacterStage {
   threshold: number;
@@ -125,9 +126,22 @@ function pickMotivation(exclude?: string) {
   return next;
 }
 
-function loadClaimed(uid?: string | null): string[] {
-  try { return JSON.parse(localStorage.getItem(`ach-claimed-${uid ?? 'guest'}`) ?? '[]'); }
-  catch { return []; }
+function useClaimedMilestones(userId?: string | null) {
+  const [claimed, setClaimed] = useState<string[]>(() => loadAchievementClaimed(userId));
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const sync = () => setClaimed(loadAchievementClaimed(userId));
+    window.addEventListener('storage', sync);
+    window.addEventListener(ACHIEVEMENT_CLAIMED_CHANGE_EVENT, sync);
+    sync();
+    return () => {
+      window.removeEventListener('storage', sync);
+      window.removeEventListener(ACHIEVEMENT_CLAIMED_CHANGE_EVENT, sync);
+    };
+  }, [userId]);
+
+  return claimed;
 }
 
 export function AchievementCompanionNudge({
@@ -179,6 +193,7 @@ export function AchievementBanner({
   expenses,
   rateValue,
   compact = false,
+  userId = null,
 }: {
   isKo?: boolean;
   onClick: () => void;
@@ -186,6 +201,7 @@ export function AchievementBanner({
   expenses: Expense[];
   rateValue: number;
   compact?: boolean;
+  userId?: string | null;
 }) {
   const { selectedCompanion } = useCompanionChoice();
   const totalVnd = useMemo(() => calculateNetIncomeVnd(allShifts, expenses, rateValue), [allShifts, expenses, rateValue]);
@@ -194,6 +210,7 @@ export function AchievementBanner({
   const avatarAlt = selectedCompanion.imgKey ? (isKo ? selectedCompanion.label_ko : selectedCompanion.label_vi) : stage.name_vi;
   const displayName = selectedCompanion.imgKey ? (isKo ? selectedCompanion.label_ko : selectedCompanion.label_vi) : (isKo ? stage.name_ko : stage.name_vi);
   const nextMilestone = useMemo(() => NET_WORTH_MILESTONES.find(m => totalVnd < m.threshold) ?? null, [totalVnd]);
+  const claimed = useClaimedMilestones(userId);
   const progressPct = useMemo(() => {
     if (!nextMilestone) return 100;
     const idx = NET_WORTH_MILESTONES.indexOf(nextMilestone);
@@ -203,9 +220,8 @@ export function AchievementBanner({
     return Math.min(100, (done / range) * 100);
   }, [totalVnd, nextMilestone]);
   const unclaimedCount = useMemo(() => {
-    const claimed = loadClaimed(null);
     return NET_WORTH_MILESTONES.filter(m => totalVnd >= m.threshold && !claimed.includes(m.key)).length;
-  }, [totalVnd]);
+  }, [totalVnd, claimed]);
 
   return (
     <button type="button" className={`ach-banner ${compact ? 'ach-banner--compact' : ''}`} onClick={onClick}>

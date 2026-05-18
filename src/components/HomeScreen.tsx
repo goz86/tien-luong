@@ -244,6 +244,7 @@ export function HomeScreen({
           allShifts={allShifts}
           expenses={expenses}
           rateValue={rate.value}
+          userId={myId || null}
         />
       </div>
 
@@ -635,25 +636,25 @@ export function HomeScreen({
 
 
 
-      <section className="section-block">
+      <section className="section-block recent-history-section">
         <div className="section-head">
           <div>
             <p className="section-kicker">{lang === 'ko' ? '최근 근무 내역' : 'lịch sử gần đây'}</p>
           </div>
         </div>
 
-        <div className="list-stack">
+        <div className="list-stack recent-history-card">
           {recentShifts.map((shift) => (
-            <article key={shift.id} className="list-row">
-              <div className="dot" style={{ background: getVenueColor(shift.label, venueColors) }} />
-              <div className="workplace-copy">
+            <article key={shift.id} className="list-row recent-shift-row">
+              <div className="dot recent-shift-dot" style={{ background: getVenueColor(shift.label, venueColors) }} />
+              <div className="workplace-copy recent-shift-copy">
                 <strong>{shift.label}</strong>
                 <span>
                   {formatDateChip(shift.date)} · {shift.startTime}-{shift.endTime}
-                  {shift.notes && <span style={{ display: 'block', fontStyle: 'italic', color: '#94a3b8', fontSize: '11px', marginTop: '2px' }}>{shift.notes}</span>}
+                  {shift.notes && <span className="recent-shift-note">{shift.notes}</span>}
                 </span>
               </div>
-              <strong className="workplace-amount">{formatKrw(calculateShiftPay(shift).total)}</strong>
+              <strong className="workplace-amount recent-shift-amount">{formatKrw(calculateShiftPay(shift).total)}</strong>
             </article>
           ))}
         </div>

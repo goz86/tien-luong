@@ -89,6 +89,33 @@ const WALLPAPER_THEME_VARS: Record<string, CSSProperties> = {
     '--text-soft':  '#881337',   // rose-900
     '--text-faint': '#9f1239',   // rose-800 — tương phản tốt trên nền hồng nhạt
   } as CSSProperties,
+  vietnam: {
+    '--theme-accent': '#dc2626',
+    '--theme-hero-bg': 'radial-gradient(circle at 16% 12%, rgba(255, 213, 79, 0.78) 0 8%, transparent 9%), radial-gradient(ellipse at 84% 18%, rgba(255, 255, 255, 0.52), transparent 22%), radial-gradient(ellipse at 16% 90%, rgba(16, 185, 129, 0.20), transparent 32%), linear-gradient(135deg, #b91c1c 0%, #ef4444 52%, #f59e0b 100%)',
+    '--theme-hero-sheen': 'linear-gradient(110deg, rgba(255, 255, 255, 0.24), transparent 42%)',
+    '--theme-hero-shadow': '0 18px 38px rgba(220, 38, 38, 0.20)',
+    '--text-main': '#450a0a',
+    '--text-soft': '#7f1d1d',
+    '--text-faint': '#991b1b',
+  } as CSSProperties,
+  korea: {
+    '--theme-accent': '#2563eb',
+    '--theme-hero-bg': 'radial-gradient(circle at 72% 16%, rgba(239, 68, 68, 0.34), transparent 18%), radial-gradient(circle at 28% 20%, rgba(37, 99, 235, 0.34), transparent 20%), radial-gradient(ellipse at 88% 86%, rgba(20, 184, 166, 0.20), transparent 30%), linear-gradient(135deg, #1d4ed8 0%, #60a5fa 48%, #ef4444 120%)',
+    '--theme-hero-sheen': 'linear-gradient(110deg, rgba(255, 255, 255, 0.24), transparent 44%)',
+    '--theme-hero-shadow': '0 18px 38px rgba(37, 99, 235, 0.20)',
+    '--text-main': '#172554',
+    '--text-soft': '#1e3a8a',
+    '--text-faint': '#1d4ed8',
+  } as CSSProperties,
+  futureCat: {
+    '--theme-accent': '#0284c7',
+    '--theme-hero-bg': 'radial-gradient(circle at 50% 16%, rgba(255, 255, 255, 0.74), transparent 18%), radial-gradient(circle at 15% 20%, rgba(14, 165, 233, 0.35), transparent 22%), radial-gradient(circle at 88% 74%, rgba(250, 204, 21, 0.28), transparent 22%), linear-gradient(135deg, #0284c7 0%, #38bdf8 52%, #2563eb 100%)',
+    '--theme-hero-sheen': 'linear-gradient(110deg, rgba(255, 255, 255, 0.26), transparent 44%)',
+    '--theme-hero-shadow': '0 18px 38px rgba(2, 132, 199, 0.22)',
+    '--text-main': '#082f49',
+    '--text-soft': '#075985',
+    '--text-faint': '#0369a1',
+  } as CSSProperties,
 };
 
 const REFRESH_RATE_URL = 'https://open.er-api.com/v6/latest/KRW';
