@@ -290,7 +290,7 @@ export function IncomeScreen({
     insTitle: '4대보험 관리',
     insSubtitle: '월별 보험료를 계산하고 지출에 반영하세요.',
     insAdd: '보험료 추가',
-    insType2: '2가지 (건강보험+장기요양)',
+    insType2: '2가지',
     insType4: '4가지 전부',
     insWorkplace: '근무지 (선택)',
     insStartDate: '근무 시작일',
@@ -353,8 +353,8 @@ export function IncomeScreen({
     insTitle: 'Quản lý bảo hiểm 4대보험',
     insSubtitle: 'Tính tiền bảo hiểm theo tháng và tự động trừ vào chi tiêu.',
     insAdd: 'Thêm khai bảo hiểm',
-    insType2: '2가지 (건강보험+장기요양)',
-    insType4: '4가지 전부',
+    insType2: '2 loại',
+    insType4: 'Tất cả 4 loại',
     insWorkplace: 'Nơi làm (không bắt buộc)',
     insStartDate: 'Ngày bắt đầu làm',
     insPayDate: 'Ngày nhận lương',
@@ -1227,6 +1227,7 @@ export function IncomeScreen({
                     }}
                   >
                     {ui.insType2}
+                    <span className="income-ins-type-sub">(건강보험+장기요양)</span>
                   </button>
                   <button
                     type="button"
@@ -1237,6 +1238,7 @@ export function IncomeScreen({
                     }}
                   >
                     {ui.insType4}
+                    <span className="income-ins-type-sub">(건강+장기+국민+고용)</span>
                   </button>
                 </div>
 
