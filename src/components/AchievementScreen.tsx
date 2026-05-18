@@ -19,10 +19,11 @@
  * ---------------------------------------------------
  */
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Gift, Map, ChevronRight, Calendar, Sparkles, Trophy, Plus, Trash2, CheckCircle2 } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
+import { useShallow } from 'zustand/react/shallow';
 import { calculateShiftPay, formatKrw } from '../lib/salary';
 import { supabase } from '../lib/supabase';
 import type { Expense, Shift, PersonalGoal } from '../lib/types';
@@ -566,11 +567,10 @@ function GiftModal({
 }
 
 function BillionCelebration({ isKo, onClose }: { isKo: boolean; onClose: () => void }) {
-  const petals = Array.from({ length: 42 }, (_, i) => i);
   return createPortal(
     <div className="ach-billion-bloom" onClick={onClose}>
       <div className="ach-billion-petals" aria-hidden="true">
-        {petals.map((item) => (
+        {BILLION_PETALS.map((item) => (
           <span
             key={item}
             style={{
@@ -598,6 +598,95 @@ function BillionCelebration({ isKo, onClose }: { isKo: boolean; onClose: () => v
 }
 
 // ─────────────────────────────────────────────────────
+// Memoized sub-components (tránh re-render không cần thiết)
+// ─────────────────────────────────────────────────────
+
+const BILLION_PETALS = Array.from({ length: 42 }, (_, i) => i);
+
+interface MilestoneItemProps {
+  m: typeof NET_WORTH_MILESTONES[number];
+  idx: number;
+  reached: boolean;
+  isClaimed: boolean;
+  canClaim: boolean;
+  isCurrentPos: boolean;
+  avatarImgKey: string;
+  isKo: boolean;
+  onClaim: (m: typeof NET_WORTH_MILESTONES[number]) => void;
+}
+
+const MilestoneItem = memo(function MilestoneItem({
+  m, idx, reached, isClaimed, canClaim, isCurrentPos, avatarImgKey, isKo, onClaim,
+}: MilestoneItemProps) {
+  return (
+    <div className={`ach-ms ${reached ? 'ach-ms--reached' : ''} ${canClaim ? 'ach-ms--ready' : ''} ${isCurrentPos ? 'ach-ms--current' : ''}`}>
+      <div className="ach-ms-left">
+        <div className="ach-ms-node" style={reached ? { boxShadow: `0 0 0 3px ${m.color}33` } : {}}>
+          <img src={iconUrl(m.imgKey)} alt={m.label_vi} className="ach-ms-badge-img" style={!reached ? { filter: 'grayscale(1)', opacity: 0.3 } : {}} />
+          {isCurrentPos && <img src={iconUrl(avatarImgKey)} alt="you are here" className="ach-hamster-badge-img" />}
+        </div>
+        {idx < NET_WORTH_MILESTONES.length - 1 && (
+          <div className={`ach-ms-line ${reached ? 'ach-ms-line--reached' : ''}`}
+            style={reached ? { background: `linear-gradient(to bottom, ${m.color}88, #e2e8f0)` } : {}} />
+        )}
+      </div>
+      <div className="ach-ms-right">
+        <div className="ach-ms-info">
+          <div className="ach-ms-label" style={reached ? { color: 'var(--text-main)' } : {}}>{isKo ? m.label_ko : m.label_vi}</div>
+          <div className="ach-ms-amount" style={reached ? { color: m.color } : {}}>{fmtVnd(m.threshold)}</div>
+          {reached && <div className="ach-ms-desc">{isKo ? m.desc_ko : m.desc_vi}</div>}
+        </div>
+        <div className="ach-ms-action">
+          {canClaim ? (
+            <button type="button" className="ach-claim-btn" style={{ background: m.bgColor, color: m.color, borderColor: `${m.color}44` }} onClick={() => onClaim(m)}>
+              <Gift size={13} />{isKo ? '열기' : 'Mở'}
+            </button>
+          ) : isClaimed || reached ? (
+            <span className="ach-status-chip ach-status-chip--done">✅</span>
+          ) : (
+            <span className="ach-status-chip">🔒</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+});
+
+interface PersonalGoalItemProps {
+  goal: PersonalGoal;
+  totalKrw: number;
+  totalVnd: number;
+  isKo: boolean;
+  onToggle: (id: string) => void;
+  onRemove: (id: string) => void;
+}
+
+const PersonalGoalItem = memo(function PersonalGoalItem({
+  goal, totalKrw, totalVnd, isKo, onToggle, onRemove,
+}: PersonalGoalItemProps) {
+  const current = goal.currency === 'KRW' ? totalKrw : totalVnd;
+  const pct = Math.min(100, (current / Math.max(goal.amount, 1)) * 100);
+  const reached = pct >= 100 || Boolean(goal.completedAt);
+  return (
+    <article className={`ach-goal-item ${reached ? 'ach-goal-item--done' : ''}`}>
+      <div className="ach-goal-item-icon">{goal.icon}</div>
+      <div className="ach-goal-item-main">
+        <div className="ach-goal-item-top">
+          <strong>{goal.title}</strong>
+          <span>{Math.round(pct)}%</span>
+        </div>
+        <div className="ach-goal-mini-track"><span style={{ width: `${pct}%` }} /></div>
+        <div className="ach-goal-item-meta">{formatGoalMoney(current, goal.currency)} / {formatGoalMoney(goal.amount, goal.currency)}</div>
+      </div>
+      <div className="ach-goal-actions">
+        <button type="button" onClick={() => onToggle(goal.id)} aria-label={isKo ? '완료 표시' : 'Đánh dấu hoàn thành'}><CheckCircle2 size={15} /></button>
+        <button type="button" onClick={() => onRemove(goal.id)} aria-label={isKo ? '삭제' : 'Xóa'}><Trash2 size={15} /></button>
+      </div>
+    </article>
+  );
+});
+
+// ─────────────────────────────────────────────────────
 // Main Component
 // ─────────────────────────────────────────────────────
 
@@ -618,7 +707,19 @@ export function AchievementScreen({ onClose, isKo = false, inline = false }: Ach
     addPersonalGoal,
     removePersonalGoal,
     togglePersonalGoalDone,
-  } = useAppStore();
+  } = useAppStore(
+    useShallow(s => ({
+      shifts: s.shifts,
+      expenses: s.expenses,
+      rate: s.rate,
+      session: s.session,
+      personalGoals: s.personalGoals,
+      currencyMode: s.currencyMode,
+      addPersonalGoal: s.addPersonalGoal,
+      removePersonalGoal: s.removePersonalGoal,
+      togglePersonalGoalDone: s.togglePersonalGoalDone,
+    }))
+  );
   const uid = session?.user.id ?? null;
 
   const [claimed, setClaimed] = useState<string[]>(() => loadClaimed(uid));
@@ -673,7 +774,10 @@ export function AchievementScreen({ onClose, isKo = false, inline = false }: Ach
   }, [totalVnd, nextMilestone]);
 
   // ── Unclaimed but reached milestones ──
-  const unclaimedCount = NET_WORTH_MILESTONES.filter(m => totalVnd >= m.threshold && !claimed.includes(m.key)).length;
+  const unclaimedCount = useMemo(
+    () => NET_WORTH_MILESTONES.filter(m => totalVnd >= m.threshold && !claimed.includes(m.key)).length,
+    [totalVnd, claimed]
+  );
 
   useEffect(() => {
     if (totalVnd < FINAL_NET_MILESTONE.threshold || hasCelebratedBillion()) return;
@@ -882,36 +986,17 @@ export function AchievementScreen({ onClose, isKo = false, inline = false }: Ach
                         ? '항공권, 월세, 가족 송금처럼 나만의 목표를 만들어보세요.'
                         : 'Hãy tạo một mục tiêu riêng cho bạn nhé .'}
                     </p>
-                  ) : personalGoals.map((goal) => {
-                    const current = goal.currency === 'KRW' ? totalKrw : totalVnd;
-                    const pct = Math.min(100, (current / Math.max(goal.amount, 1)) * 100);
-                    const reached = pct >= 100 || Boolean(goal.completedAt);
-                    return (
-                      <article key={goal.id} className={`ach-goal-item ${reached ? 'ach-goal-item--done' : ''}`}>
-                        <div className="ach-goal-item-icon">{goal.icon}</div>
-                        <div className="ach-goal-item-main">
-                          <div className="ach-goal-item-top">
-                            <strong>{goal.title}</strong>
-                            <span>{Math.round(pct)}%</span>
-                          </div>
-                          <div className="ach-goal-mini-track">
-                            <span style={{ width: `${pct}%` }} />
-                          </div>
-                          <div className="ach-goal-item-meta">
-                            {formatGoalMoney(current, goal.currency)} / {formatGoalMoney(goal.amount, goal.currency)}
-                          </div>
-                        </div>
-                        <div className="ach-goal-actions">
-                          <button type="button" onClick={() => togglePersonalGoalDone(goal.id)} aria-label={isKo ? '완료 표시' : 'Đánh dấu hoàn thành'}>
-                            <CheckCircle2 size={15} />
-                          </button>
-                          <button type="button" onClick={() => removePersonalGoal(goal.id)} aria-label={isKo ? '삭제' : 'Xóa'}>
-                            <Trash2 size={15} />
-                          </button>
-                        </div>
-                      </article>
-                    );
-                  })}
+                  ) : personalGoals.map((goal) => (
+                    <PersonalGoalItem
+                      key={goal.id}
+                      goal={goal}
+                      totalKrw={totalKrw}
+                      totalVnd={totalVnd}
+                      isKo={isKo}
+                      onToggle={togglePersonalGoalDone}
+                      onRemove={removePersonalGoal}
+                    />
+                  ))}
                 </div>
               </div>
             </div>
@@ -957,69 +1042,18 @@ export function AchievementScreen({ onClose, isKo = false, inline = false }: Ach
                     ? false
                     : (idx === NET_WORTH_MILESTONES.length - 1 && !nextMilestone)
                       ? true
-                      : nextMilestone && NET_WORTH_MILESTONES[NET_WORTH_MILESTONES.indexOf(nextMilestone) - 1]?.key === m.key;
+                      : !!(nextMilestone && NET_WORTH_MILESTONES[NET_WORTH_MILESTONES.indexOf(nextMilestone) - 1]?.key === m.key);
                   const canClaim = reached && !isClaimed;
-
                   return (
-                    <div key={m.key} className={`ach-ms ${reached ? 'ach-ms--reached' : ''} ${canClaim ? 'ach-ms--ready' : ''} ${isCurrentPos ? 'ach-ms--current' : ''}`}>
-                      {/* Left: icon + connector */}
-                      <div className="ach-ms-left">
-                        <div
-                          className="ach-ms-node"
-                          style={reached ? { boxShadow: `0 0 0 3px ${m.color}33` } : {}}
-                        >
-                          <img
-                            src={iconUrl(m.imgKey)}
-                            alt={m.label_vi}
-                            className="ach-ms-badge-img"
-                            style={!reached ? { filter: 'grayscale(1)', opacity: 0.3 } : {}}
-                          />
-                          {isCurrentPos && (
-                            <img src={iconUrl(avatarImgKey)} alt="you are here" className="ach-hamster-badge-img" />
-                          )}
-                        </div>
-                        {idx < NET_WORTH_MILESTONES.length - 1 && (
-                          <div className={`ach-ms-line ${reached ? 'ach-ms-line--reached' : ''}`}
-                            style={reached ? { background: `linear-gradient(to bottom, ${m.color}88, #e2e8f0)` } : {}}
-                          />
-                        )}
-                      </div>
-
-                      {/* Right: info */}
-                      <div className="ach-ms-right">
-                        <div className="ach-ms-info">
-                          <div className="ach-ms-label" style={reached ? { color: 'var(--text-main)' } : {}}>
-                            {isKo ? m.label_ko : m.label_vi}
-                          </div>
-                          <div className="ach-ms-amount" style={reached ? { color: m.color } : {}}>
-                            {fmtVnd(m.threshold)}
-                          </div>
-                          {reached && (
-                            <div className="ach-ms-desc">{isKo ? m.desc_ko : m.desc_vi}</div>
-                          )}
-                        </div>
-
-                        <div className="ach-ms-action">
-                          {canClaim ? (
-                            <button
-                              type="button"
-                              className="ach-claim-btn"
-                              style={{ background: m.bgColor, color: m.color, borderColor: `${m.color}44` }}
-                              onClick={() => handleClaim(m)}
-                            >
-                              <Gift size={13} />
-                              {isKo ? '열기' : 'Mở'}
-                            </button>
-                          ) : isClaimed ? (
-                            <span className="ach-status-chip ach-status-chip--done">✅</span>
-                          ) : reached ? (
-                            <span className="ach-status-chip ach-status-chip--done">✅</span>
-                          ) : (
-                            <span className="ach-status-chip">🔒</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
+                    <MilestoneItem
+                      key={m.key}
+                      m={m} idx={idx}
+                      reached={reached} isClaimed={isClaimed}
+                      canClaim={canClaim} isCurrentPos={isCurrentPos}
+                      avatarImgKey={avatarImgKey}
+                      isKo={isKo}
+                      onClaim={handleClaim}
+                    />
                   );
                 })}
               </div>

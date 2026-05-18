@@ -38,6 +38,56 @@ import { formatCurrencyFlowAmount } from '../lib/currency';
 import { DateWheelModal } from './shared/DateWheelModal';
 import { getVenueColor, shiftMonth, formatHoursCompact } from '../utils/helpers';
 
+// ── Companion / mascot helpers (synced with AchievementScreen) ──
+const COMPANION_STORAGE_KEY = 'duhoc-mate-ach-companion';
+const COMPANION_CHANGE_EVENT = 'duhoc-mate-ach-companion-change';
+const COMPANION_IMG_MAP: Record<string, string> = {
+  hamster: 'companion_hamster',
+  cat: 'companion_cat',
+  bunny: 'companion_bunny',
+  bear: 'companion_bear',
+  fox: 'companion_fox',
+  star: 'companion_star',
+};
+const CHARACTER_STAGE_THRESHOLDS: Array<{ threshold: number; imgKey: string }> = [
+  { threshold: 200_000_000, imgKey: 'hamster_home' },
+  { threshold: 150_000_000, imgKey: 'hamster_rich' },
+  { threshold: 80_000_000,  imgKey: 'hamster_office' },
+  { threshold: 35_000_000,  imgKey: 'hamster_student' },
+  { threshold: 10_000_000,  imgKey: 'hamster_normal' },
+  { threshold: 1_000_000,   imgKey: 'hamster_baby' },
+  { threshold: 0,           imgKey: 'hamster_egg' },
+];
+
+function resolveStageImgKey(shifts: Shift[], expenses: Expense[], rateValue: number): string {
+  const grossKrw = shifts.reduce((sum, s) => sum + calculateShiftPay(s).total, 0);
+  const expenseKrw = expenses.reduce((sum, e) => sum + e.amount, 0);
+  const totalVnd = Math.max(0, grossKrw - expenseKrw) * rateValue;
+  return (CHARACTER_STAGE_THRESHOLDS.find(s => totalVnd >= s.threshold) ?? CHARACTER_STAGE_THRESHOLDS[CHARACTER_STAGE_THRESHOLDS.length - 1]).imgKey;
+}
+
+function useShareMascotImgKey(shifts: Shift[], expenses: Expense[], rateValue: number): string {
+  const getKey = () => {
+    const stored = typeof window !== 'undefined' ? window.localStorage.getItem(COMPANION_STORAGE_KEY) : null;
+    return stored ?? 'journey';
+  };
+  const [companionKey, setCompanionKey] = useState(getKey);
+
+  useEffect(() => {
+    const sync = () => setCompanionKey(getKey());
+    const syncCustom = (e: Event) => setCompanionKey((e as CustomEvent<string>).detail ?? 'journey');
+    window.addEventListener('storage', sync);
+    window.addEventListener(COMPANION_CHANGE_EVENT, syncCustom);
+    return () => {
+      window.removeEventListener('storage', sync);
+      window.removeEventListener(COMPANION_CHANGE_EVENT, syncCustom);
+    };
+  }, []);
+
+  const imgKey = COMPANION_IMG_MAP[companionKey] ?? resolveStageImgKey(shifts, expenses, rateValue);
+  return `/icon/${imgKey}.png`;
+}
+
 type AppLang = 'vi' | 'ko';
 type IncomeTab = 'overview' | 'expenses' | 'workplaces';
 type ChartViewMode = 'day' | 'week' | 'month';
@@ -235,6 +285,10 @@ export function IncomeScreen({
   const [showShareCard, setShowShareCard] = useState(false);
   const [isExportingShare, setIsExportingShare] = useState(false);
   const shareCardRef = useRef<HTMLDivElement>(null);
+  const [shareCardTitle, setShareCardTitle] = useState('');
+  const [shareCardFooter, setShareCardFooter] = useState('');
+  const [editingShareField, setEditingShareField] = useState<'title' | 'footer' | null>(null);
+  const shareMascotSrc = useShareMascotImgKey(shifts, expenses, rate.value);
   const [expenseForm, setExpenseForm] = useState<Omit<Expense, 'id'>>({
     category: 'food',
     amount: 0,
@@ -544,7 +598,14 @@ export function IncomeScreen({
             <span>{isKo ? '공유 카드' : 'Báo cáo chia sẻ'}</span>
             <strong>{isKo ? '이번 달 기록을 예쁘게 저장' : 'Lưu lại tháng làm việc của mình'}</strong>
           </div>
-          <button type="button" onClick={() => setShowShareCard(v => !v)}>
+          <button type="button" onClick={() => {
+            if (!showShareCard) {
+              setShareCardTitle(isKo ? '이번 달도 잘 버텼어요' : 'Tháng này mình đã làm được');
+              setShareCardFooter(profileLine(isKo, saveRatio));
+              setEditingShareField(null);
+            }
+            setShowShareCard(v => !v);
+          }}>
             {showShareCard ? (isKo ? '숨기기' : 'Ẩn') : (isKo ? '보기' : 'Xem')}
           </button>
         </div>
@@ -558,10 +619,28 @@ export function IncomeScreen({
                 <span>Duhoc Mate</span>
               </div>
               <div className="income-share-mascot">
-                <img src="/icon/companion_hamster.png" alt="" />
+                <img src={shareMascotSrc} alt="" />
               </div>
               <p>{isKo ? `${chartMonthNumber}월 리포트` : `Báo cáo tháng ${chartMonthNumber}`}</p>
-              <h3>{isKo ? '이번 달도 잘 버텼어요' : 'Tháng này mình đã làm được'}</h3>
+              <h3
+                className={`income-share-editable${editingShareField === 'title' ? ' editing' : ''}`}
+                onClick={() => setEditingShareField('title')}
+                title={isKo ? '클릭하여 편집' : 'Nhấn để chỉnh sửa'}
+              >
+                {editingShareField === 'title' ? (
+                  <input
+                    autoFocus
+                    value={shareCardTitle}
+                    onChange={e => setShareCardTitle(e.target.value)}
+                    onBlur={() => setEditingShareField(null)}
+                    onKeyDown={e => { if (e.key === 'Enter') setEditingShareField(null); }}
+                    onClick={e => e.stopPropagation()}
+                    className="income-share-input"
+                  />
+                ) : (
+                  <>{shareCardTitle}<Edit2 size={12} className="income-share-edit-icon" /></>
+                )}
+              </h3>
               <div className="income-share-total">{formatMoney(netBalance)}</div>
               <div className="income-share-grid">
                 <div>
@@ -578,7 +657,25 @@ export function IncomeScreen({
                 </div>
               </div>
               <div className="income-share-footer">
-                <span>{profileLine(isKo, saveRatio)}</span>
+                <span
+                  className={`income-share-editable${editingShareField === 'footer' ? ' editing' : ''}`}
+                  onClick={() => setEditingShareField('footer')}
+                  title={isKo ? '클릭하여 편집' : 'Nhấn để chỉnh sửa'}
+                >
+                  {editingShareField === 'footer' ? (
+                    <input
+                      autoFocus
+                      value={shareCardFooter}
+                      onChange={e => setShareCardFooter(e.target.value)}
+                      onBlur={() => setEditingShareField(null)}
+                      onKeyDown={e => { if (e.key === 'Enter') setEditingShareField(null); }}
+                      onClick={e => e.stopPropagation()}
+                      className="income-share-input"
+                    />
+                  ) : (
+                    <>{shareCardFooter}<Edit2 size={10} className="income-share-edit-icon" /></>
+                  )}
+                </span>
                 <small>duhocmate.com</small>
               </div>
             </div>
@@ -670,6 +767,29 @@ export function IncomeScreen({
                   </div>
                 ))}
               </div>
+            </section>
+
+            <section className="income-snapshot-grid">
+              <article>
+                <Coins size={20} />
+                <span>{ui.avgHourly}</span>
+                <strong>{formatMoney(averageHourly)}</strong>
+              </article>
+              <article>
+                <CalendarDays size={20} />
+                <span>{ui.shiftCount}</span>
+                <strong>{monthShifts.length} {ui.shifts}</strong>
+              </article>
+              <article>
+                <Clock size={20} />
+                <span>{ui.bestHours}</span>
+                <strong>{formatHoursCompact(maxHoursInDay)}</strong>
+              </article>
+              <article className="gold">
+                <Trophy size={20} />
+                <span>{ui.bestDay}</span>
+                <strong>{bestDayData ? new Date(bestDayData[0]).getDate() + '/' + (new Date(bestDayData[0]).getMonth() + 1) : '--'}</strong>
+              </article>
             </section>
 
             <section className="income-chart-panel monthly">
@@ -773,28 +893,6 @@ export function IncomeScreen({
               </div>
             </section>
 
-            <section className="income-snapshot-grid">
-              <article>
-                <Coins size={20} />
-                <span>{ui.avgHourly}</span>
-                <strong>{formatMoney(averageHourly)}</strong>
-              </article>
-              <article>
-                <CalendarDays size={20} />
-                <span>{ui.shiftCount}</span>
-                <strong>{monthShifts.length} {ui.shifts}</strong>
-              </article>
-              <article>
-                <Clock size={20} />
-                <span>{ui.bestHours}</span>
-                <strong>{formatHoursCompact(maxHoursInDay)}</strong>
-              </article>
-              <article className="gold">
-                <Trophy size={20} />
-                <span>{ui.bestDay}</span>
-                <strong>{bestDayData ? new Date(bestDayData[0]).getDate() + '/' + (new Date(bestDayData[0]).getMonth() + 1) : '--'}</strong>
-              </article>
-            </section>
           </>
         ) : null}
 

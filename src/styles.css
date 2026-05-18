@@ -710,6 +710,7 @@ select {
   font-size: 28px;
   letter-spacing: -0.04em;
   line-height: 1;
+  color: #08162b !important;
   flex: 1 1 auto;
   min-width: 0;
   white-space: nowrap;
@@ -903,7 +904,7 @@ select {
   background: rgba(255, 255, 255, 0.84);
   color: var(--text-main);
   box-shadow: 0 12px 28px rgba(28, 43, 76, 0.1);
-  backdrop-filter: blur(14px);
+  backdrop-filter: blur(8px);
   transition: transform 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
 }
 
@@ -941,7 +942,7 @@ select {
   border: 1px solid rgba(255, 255, 255, 0.72);
   border-radius: 28px;
   box-shadow: var(--shadow-soft);
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(8px);
 }
 
 .hero-balance-card {
@@ -2444,7 +2445,7 @@ button.ticker-inner {
   transform: translateX(-50%);
   pointer-events: auto;
   overflow: hidden;
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(8px);
 }
 
 .tab-item {
@@ -4017,6 +4018,43 @@ button.ticker-inner {
 .income-share-footer span {
   color: #08162b;
   font-size: 12px;
+  display: inline-flex !important;
+  align-items: center;
+  gap: 4px;
+}
+
+.income-share-editable {
+  cursor: pointer;
+  display: inline-flex !important;
+  align-items: center;
+  gap: 4px;
+  border-radius: 4px;
+  transition: background 0.15s;
+  width: fit-content;
+}
+.income-share-editable:hover {
+  background: rgba(99, 102, 241, 0.08);
+}
+.income-share-editable.editing {
+  background: transparent;
+  width: 100%;
+}
+.income-share-edit-icon {
+  opacity: 0.35;
+  flex-shrink: 0;
+  vertical-align: middle;
+  margin-top: -1px;
+}
+.income-share-input {
+  background: transparent;
+  border: none;
+  border-bottom: 1.5px solid rgba(99, 102, 241, 0.6);
+  outline: none;
+  font: inherit;
+  color: inherit;
+  width: 100%;
+  min-width: 80px;
+  padding: 0;
 }
 
 .income-share-export {
@@ -5476,7 +5514,20 @@ button.ticker-inner {
   line-height: 1;
   letter-spacing: -0.04em;
   font-weight: 900;
-  color: var(--text-main);
+  color: #08162b !important;
+  position: relative;
+  padding-bottom: 7px;
+}
+.cm-wordmark::after {
+  content: "";
+  position: absolute;
+  left: 1px;
+  bottom: 1px;
+  width: 30px;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--theme-accent, var(--blue-700)), rgba(255, 255, 255, 0.12));
+  box-shadow: 0 5px 12px var(--theme-accent, var(--blue-700));
 }
 
 .cm-header-actions {
@@ -7193,7 +7244,7 @@ button.ticker-inner {
   width: 280px;
   max-height: 400px;
   background: var(--bg-card);
-  backdrop-filter: blur(20px);
+  backdrop-filter: blur(10px);
   border: 1px solid var(--line);
   border-radius: 20px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
@@ -8313,7 +8364,7 @@ button.ticker-inner {
   margin: 12px 6px;
   border: 1px solid var(--line);
   box-shadow: var(--shadow-soft);
-  backdrop-filter: blur(20px);
+  backdrop-filter: blur(10px);
 }
 
 .pf-auth-header {
@@ -8600,7 +8651,7 @@ button.ticker-inner {
   background:
     radial-gradient(circle at 18% 14%, rgba(215, 255, 95, 0.34), transparent 28%),
     linear-gradient(135deg, rgba(226, 240, 255, 0.96), rgba(214, 245, 255, 0.96));
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(8px);
 }
 
 .app-lock-card {

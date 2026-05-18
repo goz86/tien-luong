@@ -42,36 +42,52 @@ const WALLPAPER_THEME_VARS: Record<string, CSSProperties> = {
     '--theme-hero-bg': 'radial-gradient(circle at 86% 12%, rgba(215, 255, 95, 0.34), transparent 24%), radial-gradient(circle at 12% 100%, rgba(38, 217, 164, 0.24), transparent 32%), linear-gradient(135deg, #253adf 0%, #4f73ff 54%, #6b5cf6 100%)',
     '--theme-hero-sheen': 'linear-gradient(110deg, rgba(255, 255, 255, 0.18), transparent 42%)',
     '--theme-hero-shadow': '0 18px 38px rgba(39, 82, 255, 0.18)',
+    // default inherits global --text-* vars
   } as CSSProperties,
   ocean: {
     '--theme-accent': '#0284c7',
     '--theme-hero-bg': 'radial-gradient(circle at 86% 12%, rgba(240, 249, 255, 0.58), transparent 25%), radial-gradient(circle at 10% 96%, rgba(125, 211, 252, 0.24), transparent 32%), linear-gradient(135deg, #0369a1 0%, #38bdf8 56%, #0f8fc8 100%)',
     '--theme-hero-sheen': 'linear-gradient(110deg, rgba(255, 255, 255, 0.22), transparent 44%)',
     '--theme-hero-shadow': '0 18px 38px rgba(14, 165, 233, 0.18)',
+    '--text-main':  '#082f49',   // xanh biển rất tối
+    '--text-soft':  '#0c4a6e',   // sky-900
+    '--text-faint': '#075985',   // sky-800 — đủ tương phản trên nền cyan nhạt
   } as CSSProperties,
   sunset: {
     '--theme-accent': '#d97706',
     '--theme-hero-bg': 'radial-gradient(circle at 84% 14%, rgba(255, 247, 237, 0.58), transparent 25%), radial-gradient(circle at 12% 100%, rgba(251, 146, 60, 0.22), transparent 32%), linear-gradient(135deg, #c2410c 0%, #f59e0b 54%, #ea580c 100%)',
     '--theme-hero-sheen': 'linear-gradient(110deg, rgba(255, 255, 255, 0.22), transparent 44%)',
     '--theme-hero-shadow': '0 18px 38px rgba(217, 119, 6, 0.18)',
+    '--text-main':  '#431407',   // orange-950
+    '--text-soft':  '#7c2d12',   // orange-900
+    '--text-faint': '#92400e',   // amber-800 — ấm, tương phản tốt trên nền vàng-cam
   } as CSSProperties,
   forest: {
     '--theme-accent': '#059669',
     '--theme-hero-bg': 'radial-gradient(circle at 86% 12%, rgba(240, 253, 244, 0.58), transparent 25%), radial-gradient(circle at 12% 100%, rgba(74, 222, 128, 0.22), transparent 32%), linear-gradient(135deg, #047857 0%, #22c55e 55%, #0f9f6e 100%)',
     '--theme-hero-sheen': 'linear-gradient(110deg, rgba(255, 255, 255, 0.22), transparent 44%)',
     '--theme-hero-shadow': '0 18px 38px rgba(5, 150, 105, 0.18)',
+    '--text-main':  '#052e16',   // green-950
+    '--text-soft':  '#14532d',   // green-900
+    '--text-faint': '#166534',   // green-800 — tương phản tốt trên nền xanh lá nhạt
   } as CSSProperties,
   lavender: {
     '--theme-accent': '#7c3aed',
     '--theme-hero-bg': 'radial-gradient(circle at 86% 12%, rgba(250, 245, 255, 0.56), transparent 25%), radial-gradient(circle at 12% 100%, rgba(167, 139, 250, 0.22), transparent 32%), linear-gradient(135deg, #6d28d9 0%, #a78bfa 54%, #7c3aed 100%)',
     '--theme-hero-sheen': 'linear-gradient(110deg, rgba(255, 255, 255, 0.2), transparent 44%)',
     '--theme-hero-shadow': '0 18px 38px rgba(124, 58, 237, 0.18)',
+    '--text-main':  '#2e1065',   // violet-950
+    '--text-soft':  '#4c1d95',   // violet-900
+    '--text-faint': '#5b21b6',   // violet-800 — tương phản tốt trên nền tím nhạt
   } as CSSProperties,
   rose: {
     '--theme-accent': '#be123c',
     '--theme-hero-bg': 'radial-gradient(circle at 86% 12%, rgba(255, 241, 242, 0.58), transparent 25%), radial-gradient(circle at 12% 100%, rgba(251, 113, 133, 0.2), transparent 32%), linear-gradient(135deg, #be123c 0%, #fb7185 54%, #db2777 100%)',
     '--theme-hero-sheen': 'linear-gradient(110deg, rgba(255, 255, 255, 0.22), transparent 44%)',
     '--theme-hero-shadow': '0 18px 38px rgba(190, 18, 60, 0.18)',
+    '--text-main':  '#4c0519',   // rose-950
+    '--text-soft':  '#881337',   // rose-900
+    '--text-faint': '#9f1239',   // rose-800 — tương phản tốt trên nền hồng nhạt
   } as CSSProperties,
 };
 
