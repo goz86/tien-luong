@@ -17250,10 +17250,10 @@ button.admin-stat-card {
   white-space: nowrap;
 }
 .income-ins-rate-input {
-  width: 54px;
+  width: 70px;
   border: 1px solid rgba(39,82,255,.3);
   border-radius: 8px;
-  padding: 5px 6px;
+  padding: 5px 7px;
   font-size: 12px;
   font-weight: 700;
   color: #2752ff;
