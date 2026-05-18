@@ -30,6 +30,7 @@ import {
   HeartPulse,
   Music,
   ChevronDown,
+  CalendarCheck,
   type LucideIcon,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
@@ -90,7 +91,7 @@ function useShareMascotImgKey(shifts: Shift[], expenses: Expense[], rateValue: n
 }
 
 type AppLang = 'vi' | 'ko';
-type IncomeTab = 'overview' | 'expenses' | 'workplaces' | 'insurance';
+type IncomeTab = 'overview' | 'expenses' | 'workplaces' | 'insurance' | 'juhyu';
 type ChartViewMode = 'day' | 'week' | 'month';
 type IconComponent = LucideIcon;
 
@@ -99,6 +100,7 @@ const incomeTabs: Array<{ id: IncomeTab; icon: IconComponent }> = [
   { id: 'expenses', icon: ReceiptText },
   { id: 'workplaces', icon: Building2 },
   { id: 'insurance', icon: ShieldCheck },
+  { id: 'juhyu', icon: CalendarCheck },
 ];
 
 // ─── Insurance 4대보험 ────────────────────────────────────────
@@ -170,6 +172,58 @@ function useInsuranceRecords() {
     set(loadInsRecords().map(r => r.id === id ? { ...r, ...patch } : r));
   };
   const remove = (id: string) => set(loadInsRecords().filter(r => r.id !== id));
+  return { records, add, update, remove };
+}
+
+// ─── 주휴수당 ────────────────────────────────────────────────────
+interface JuhyuRecord {
+  id: string;
+  month: string;              // 'YYYY-MM'
+  workplaceLabel: string;
+  weeklyHours: number;        // 주 소정근로시간 (scheduled hrs/week)
+  workDays: number;           // 주 근무일수 (days/week, 1-7)
+  hourlyRate: number;         // 시급 ₩
+  juhyuHoursPerWeek: number;  // = weeklyHours / workDays (daily avg → 주휴 시간)
+  juhyuPerWeek: number;       // = juhyuHoursPerWeek × hourlyRate
+  juhyuPerMonth: number;      // = juhyuPerWeek × 4.345
+  qualifies: boolean;         // weeklyHours >= 15
+  payDate: string;            // 'YYYY-MM-DD'
+  confirmed: boolean;
+  note: string;
+}
+
+const JUHYU_STORAGE_KEY = 'duhoc-mate-juhyu';
+const WEEKS_PER_MONTH = 4.345;
+
+function calcJuhyu(weeklyHours: number, workDays: number, hourlyRate: number) {
+  const qualifies = weeklyHours >= 15 && workDays > 0;
+  const juhyuHoursPerWeek = workDays > 0 ? weeklyHours / workDays : 0;
+  const juhyuPerWeek = qualifies ? Math.round(juhyuHoursPerWeek * hourlyRate) : 0;
+  const juhyuPerMonth = qualifies ? Math.round(juhyuPerWeek * WEEKS_PER_MONTH) : 0;
+  return { qualifies, juhyuHoursPerWeek, juhyuPerWeek, juhyuPerMonth };
+}
+
+function loadJuhyuRecords(): JuhyuRecord[] {
+  try {
+    const raw = window.localStorage.getItem(JUHYU_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as JuhyuRecord[]) : [];
+  } catch { return []; }
+}
+function saveJuhyuRecords(records: JuhyuRecord[]) {
+  window.localStorage.setItem(JUHYU_STORAGE_KEY, JSON.stringify(records));
+}
+function useJuhyuRecords() {
+  const [records, setRaw] = useState<JuhyuRecord[]>(loadJuhyuRecords);
+  const set = (next: JuhyuRecord[]) => { saveJuhyuRecords(next); setRaw(next); };
+  const add = (rec: Omit<JuhyuRecord, 'id'>) => {
+    const r = { ...rec, id: `juhyu-${Date.now()}-${Math.random().toString(16).slice(2)}` };
+    set([...loadJuhyuRecords(), r]);
+    return r;
+  };
+  const update = (id: string, patch: Partial<JuhyuRecord>) => {
+    set(loadJuhyuRecords().map(r => r.id === id ? { ...r, ...patch } : r));
+  };
+  const remove = (id: string) => set(loadJuhyuRecords().filter(r => r.id !== id));
   return { records, add, update, remove };
 }
 
@@ -249,7 +303,7 @@ export function IncomeScreen({
   const isKo = lang === 'ko';
   const locale = isKo ? 'ko-KR' : 'vi-VN';
   const ui = isKo ? {
-    tabs: { overview: '요약', expenses: '지출', workplaces: '근무지', insurance: '보험' },
+    tabs: { overview: '요약', expenses: '지출', workplaces: '근무지', insurance: '보험', juhyu: '주휴' },
     netIncome: '월 순수입',
     grossIncome: '총 급여',
     expenses: '지출',
@@ -311,8 +365,25 @@ export function IncomeScreen({
     insEmpty: '이달 보험료 기록 없음',
     insEmptyHint: '보험료를 추가하면 월별 순수입에 자동 반영됩니다.',
     insExpenseNote: (type: string) => `4대보험 (${type === '4' ? '4가지' : '2가지'})`,
+    juhyuTitle: '주휴수당 관리',
+    juhyuSubtitle: '주 15시간 이상 근무 시 받을 수 있는 유급 주휴수당을 확인하세요.',
+    juhyuAdd: '이번 달 주휴수당 계산',
+    juhyuWorkplace: '근무지 (선택)',
+    juhyuWeeklyHours: '주 소정근로시간 (시간)',
+    juhyuWorkDays: '주 근무일수',
+    juhyuHourlyRate: '시급 (₩)',
+    juhyuPayDate: '급여일',
+    juhyuNote: '메모',
+    juhyuTotal: '월 주휴수당 예상',
+    juhyuPerWeek: '주당',
+    juhyuConfirm: '받은 것으로 확인',
+    juhyuConfirmed: '수령 확인됨',
+    juhyuEmpty: '이달 주휴수당 기록 없음',
+    juhyuEmptyHint: '주 근무 정보를 추가하면 주휴수당을 자동 계산해드려요.',
+    juhyuWarn15h: '주 15시간 미만 — 주휴수당 미해당',
+    juhyuQualifies: '주휴수당 해당',
   } : {
-    tabs: { overview: 'Tổng quan', expenses: 'Chi tiêu', workplaces: 'Nơi làm', insurance: 'Bảo hiểm' },
+    tabs: { overview: 'Tổng quan', expenses: 'Chi tiêu', workplaces: 'Nơi làm', insurance: 'Bảo hiểm', juhyu: '주휴' },
     netIncome: 'Thu nhập ròng / tháng',
     grossIncome: 'Tổng lương',
     expenses: 'Chi tiêu',
@@ -374,6 +445,23 @@ export function IncomeScreen({
     insEmpty: 'Chưa có khai bảo hiểm tháng này',
     insEmptyHint: 'Thêm khai bảo hiểm để tự động trừ vào thu nhập ròng.',
     insExpenseNote: (type: string) => `Bảo hiểm 4대보험 (${type === '4' ? '4 loại' : '2 loại'})`,
+    juhyuTitle: 'Quản lý 주휴수당',
+    juhyuSubtitle: 'Làm ≥ 15h/tuần? Bạn được hưởng phụ cấp ngày nghỉ. Tính toán và kiểm tra ở đây.',
+    juhyuAdd: 'Tính 주휴수당 tháng này',
+    juhyuWorkplace: 'Nơi làm (không bắt buộc)',
+    juhyuWeeklyHours: 'Giờ làm mỗi tuần',
+    juhyuWorkDays: 'Số ngày làm/tuần',
+    juhyuHourlyRate: 'Lương giờ (₩)',
+    juhyuPayDate: 'Ngày nhận lương',
+    juhyuNote: 'Ghi chú',
+    juhyuTotal: 'Dự kiến nhận/tháng',
+    juhyuPerWeek: '/tuần',
+    juhyuConfirm: 'Xác nhận đã nhận',
+    juhyuConfirmed: 'Đã nhận',
+    juhyuEmpty: 'Chưa có tính toán 주휴수당',
+    juhyuEmptyHint: 'Thêm để biết bạn có đang nhận đủ lương hay không.',
+    juhyuWarn15h: 'Dưới 15h/tuần — không đủ điều kiện',
+    juhyuQualifies: 'Đủ điều kiện nhận',
   };
   const categoryLabels: Record<Expense['category'], string> = isKo ? {
     rent: '월세',
@@ -445,6 +533,35 @@ export function IncomeScreen({
     confirmed: false,
     note: '',
   });
+
+  // ── 주휴수당 tab state ──
+  const { records: allJuhyuRecords, add: addJuhyuRecord, update: updateJuhyuRecord, remove: removeJuhyuRecord } = useJuhyuRecords();
+  const [isAddingJuhyu, setIsAddingJuhyu] = useState(false);
+  const [editingJuhyuId, setEditingJuhyuId] = useState<string | null>(null);
+  const [expandedJuhyuId, setExpandedJuhyuId] = useState<string | null>(null);
+  const [juhyuDatePickerOpen, setJuhyuDatePickerOpen] = useState(false);
+  const [juhyuForm, setJuhyuForm] = useState<Omit<JuhyuRecord, 'id'>>({
+    month: '',
+    workplaceLabel: '',
+    weeklyHours: 25,
+    workDays: 5,
+    hourlyRate: 10320,
+    juhyuHoursPerWeek: 5,
+    juhyuPerWeek: 51600,
+    juhyuPerMonth: 224322,
+    qualifies: true,
+    payDate: todayStr,
+    confirmed: false,
+    note: '',
+  });
+
+  function applyJuhyuCalc(patch: Partial<Omit<JuhyuRecord, 'id'>>) {
+    setJuhyuForm(f => {
+      const merged = { ...f, ...patch };
+      const calc = calcJuhyu(merged.weeklyHours, merged.workDays, merged.hourlyRate);
+      return { ...merged, ...calc };
+    });
+  }
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent | TouchEvent) => {
@@ -555,6 +672,11 @@ export function IncomeScreen({
   const monthInsRecords = useMemo(
     () => allInsRecords.filter(r => r.month === selectedMonthKey),
     [allInsRecords, selectedMonthKey]
+  );
+
+  const monthJuhyuRecords = useMemo(
+    () => allJuhyuRecords.filter(r => r.month === selectedMonthKey),
+    [allJuhyuRecords, selectedMonthKey]
   );
 
   const dailyAggregated = useMemo(() => {
@@ -1602,6 +1724,306 @@ export function IncomeScreen({
                 <ShieldCheck size={34} />
                 <strong>{ui.insEmpty}</strong>
                 <p>{ui.insEmptyHint}</p>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+
+        {/* ── 주휴수당 Tab ── */}
+        {activeTab === 'juhyu' ? (
+          <section className="income-insurance-panel">
+            <div className="income-section-head">
+              <div>
+                <p>{isKo ? '주휴수당 관리' : '주휴수당'}</p>
+                <h2>{ui.juhyuTitle}</h2>
+              </div>
+              <CalendarCheck size={22} />
+            </div>
+            <p className="income-ins-subtitle">{ui.juhyuSubtitle}</p>
+
+            {/* ── Add / Edit form ── */}
+            {isAddingJuhyu || editingJuhyuId ? (
+              <div className="income-ins-form">
+
+                {/* Workplace chips */}
+                <label className="income-ins-label">
+                  <span>{ui.juhyuWorkplace}</span>
+                  {workplaces.length > 0 && (
+                    <div className="income-ins-wp-chips">
+                      {workplaces.map(wp => (
+                        <button
+                          key={wp.label}
+                          type="button"
+                          className={`income-ins-wp-chip${juhyuForm.workplaceLabel === wp.label ? ' active' : ''}`}
+                          onClick={() => {
+                            const hr = wp.hours > 0 ? Math.round(wp.total / wp.hours) : juhyuForm.hourlyRate;
+                            applyJuhyuCalc({ workplaceLabel: wp.label, hourlyRate: hr });
+                          }}
+                        >
+                          <span>{wp.label}</span>
+                          <small>{wp.hours > 0 ? `${Math.round(wp.total / wp.hours).toLocaleString()} ₩/h` : ''}</small>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <input
+                    className="income-ins-input"
+                    style={{ marginTop: workplaces.length > 0 ? '6px' : 0 }}
+                    value={juhyuForm.workplaceLabel}
+                    onChange={e => applyJuhyuCalc({ workplaceLabel: e.target.value })}
+                    placeholder={workplaces[0]?.label ?? (isKo ? '근무지명 직접 입력' : 'Nhập tên nơi làm')}
+                  />
+                </label>
+
+                {/* Inputs row */}
+                <div className="income-juhyu-inputs">
+                  <label className="income-ins-label">
+                    <span>{ui.juhyuWeeklyHours}</span>
+                    <div className="income-ins-input-wrap">
+                      <input
+                        className="income-ins-input"
+                        type="number"
+                        inputMode="decimal"
+                        step="0.5"
+                        min="0"
+                        max="84"
+                        value={juhyuForm.weeklyHours || ''}
+                        onChange={e => applyJuhyuCalc({ weeklyHours: Number(e.target.value) || 0 })}
+                      />
+                      <span className="income-ins-unit">h</span>
+                    </div>
+                  </label>
+
+                  <label className="income-ins-label">
+                    <span>{ui.juhyuWorkDays}</span>
+                    <div className="income-juhyu-stepper">
+                      <button type="button" onClick={() => applyJuhyuCalc({ workDays: Math.max(1, juhyuForm.workDays - 1) })}>−</button>
+                      <span>{juhyuForm.workDays}{isKo ? '일' : ' ngày'}</span>
+                      <button type="button" onClick={() => applyJuhyuCalc({ workDays: Math.min(7, juhyuForm.workDays + 1) })}>+</button>
+                    </div>
+                  </label>
+                </div>
+
+                <label className="income-ins-label">
+                  <span>{ui.juhyuHourlyRate}</span>
+                  <div className="income-ins-input-wrap">
+                    <input
+                      className="income-ins-input"
+                      type="number"
+                      inputMode="numeric"
+                      value={juhyuForm.hourlyRate || ''}
+                      onChange={e => applyJuhyuCalc({ hourlyRate: Number(e.target.value) || 0 })}
+                    />
+                    <span className="income-ins-unit">₩/h</span>
+                  </div>
+                </label>
+
+                {/* Pay date */}
+                <label className="income-ins-label">
+                  <span>{ui.juhyuPayDate}</span>
+                  <button type="button" className="income-ins-date-btn" onClick={() => setJuhyuDatePickerOpen(true)}>
+                    {juhyuForm.payDate}
+                  </button>
+                </label>
+
+                {/* ── Qualification + calculation preview ── */}
+                <div className={`income-juhyu-preview${juhyuForm.qualifies ? ' qualifies' : ' warn'}`}>
+                  {juhyuForm.qualifies ? (
+                    <>
+                      <div className="income-juhyu-preview-badge good">
+                        <Check size={11} /> {ui.juhyuQualifies}
+                      </div>
+                      <div className="income-juhyu-calc">
+                        <div className="income-juhyu-calc-row">
+                          <span>{isKo ? '주휴시간' : 'Giờ phụ cấp'}</span>
+                          <strong>{juhyuForm.weeklyHours}h ÷ {juhyuForm.workDays} = {juhyuForm.juhyuHoursPerWeek.toFixed(2)}h</strong>
+                        </div>
+                        <div className="income-juhyu-calc-row">
+                          <span>{isKo ? '주당 주휴수당' : 'Mỗi tuần'}</span>
+                          <strong>{juhyuForm.juhyuHoursPerWeek.toFixed(2)}h × {juhyuForm.hourlyRate.toLocaleString()} = {juhyuForm.juhyuPerWeek.toLocaleString()} ₩</strong>
+                        </div>
+                        <div className="income-juhyu-calc-row total">
+                          <span>{isKo ? '월 주휴수당 (×4.345)' : 'Mỗi tháng (×4.345)'}</span>
+                          <strong>{juhyuForm.juhyuPerMonth.toLocaleString()} ₩</strong>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="income-juhyu-preview-badge warn">
+                      <AlertTriangle size={11} /> {ui.juhyuWarn15h}
+                    </div>
+                  )}
+                </div>
+
+                {/* Note */}
+                <label className="income-ins-label">
+                  <span>{ui.juhyuNote}</span>
+                  <input
+                    className="income-ins-input"
+                    value={juhyuForm.note}
+                    onChange={e => applyJuhyuCalc({ note: e.target.value })}
+                    placeholder={isKo ? '예: GS25 5월 급여일 포함' : 'VD: GS25 tháng 5'}
+                  />
+                </label>
+
+                {/* Actions */}
+                <div className="income-ins-form-actions">
+                  <button type="button" className="income-ins-cancel-btn"
+                    onClick={() => { setIsAddingJuhyu(false); setEditingJuhyuId(null); }}
+                  >{ui.insCancel}</button>
+                  <button type="button" className="income-ins-save-btn"
+                    onClick={() => {
+                      if (editingJuhyuId) {
+                        updateJuhyuRecord(editingJuhyuId, juhyuForm);
+                        setEditingJuhyuId(null);
+                      } else {
+                        addJuhyuRecord({ ...juhyuForm, month: selectedMonthKey, confirmed: false });
+                        setIsAddingJuhyu(false);
+                      }
+                    }}
+                  >{ui.insSave}</button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="income-ins-add-btn"
+                onClick={() => {
+                  const wp = workplaces[0];
+                  const hr = wp && wp.hours > 0 ? Math.round(wp.total / wp.hours) : 10320;
+                  const calc = calcJuhyu(25, 5, hr);
+                  setJuhyuForm({
+                    month: selectedMonthKey,
+                    workplaceLabel: wp?.label ?? '',
+                    weeklyHours: 25,
+                    workDays: 5,
+                    hourlyRate: hr,
+                    ...calc,
+                    payDate: todayStr,
+                    confirmed: false,
+                    note: '',
+                  });
+                  setIsAddingJuhyu(true);
+                }}
+              >
+                <Plus size={16} />
+                {ui.juhyuAdd}
+              </button>
+            )}
+
+            {/* ── Record list (collapsible) ── */}
+            {monthJuhyuRecords.length > 0 ? (
+              <div className="income-ins-list">
+                {monthJuhyuRecords.map(rec => {
+                  const isOpen = expandedJuhyuId === rec.id;
+                  return (
+                    <article key={rec.id} className={`income-ins-card${rec.confirmed ? ' confirmed' : ''}${isOpen ? ' open' : ''}`}>
+
+                      {/* Summary row */}
+                      <button
+                        type="button"
+                        className="income-ins-card-summary"
+                        onClick={() => setExpandedJuhyuId(isOpen ? null : rec.id)}
+                      >
+                        <div className="income-ins-card-summary-left">
+                          <strong>
+                            {rec.workplaceLabel || (isKo ? '전체 근무지' : 'Tất cả nơi làm')}
+                          </strong>
+                          {rec.qualifies ? (
+                            <span className="income-ins-card-badge income-juhyu-badge-ok">
+                              {rec.weeklyHours}h/{isKo ? '주' : 'tuần'}
+                            </span>
+                          ) : (
+                            <span className="income-ins-card-badge income-juhyu-badge-warn">
+                              {'< 15h'}
+                            </span>
+                          )}
+                          {rec.confirmed && (
+                            <span className="income-ins-confirmed-badge">
+                              <Check size={10} /> {isKo ? '완료' : 'Đã nhận'}
+                            </span>
+                          )}
+                        </div>
+                        <div className="income-ins-card-summary-right">
+                          <strong className="income-juhyu-summary-total">
+                            {rec.qualifies ? `+${rec.juhyuPerMonth.toLocaleString()} ₩` : '0 ₩'}
+                          </strong>
+                          <ChevronDown size={15} className={`income-ins-chevron${isOpen ? ' rotated' : ''}`} />
+                        </div>
+                      </button>
+
+                      {/* Expanded detail */}
+                      {isOpen && (
+                        <div className="income-ins-card-detail">
+                          <div className="income-ins-card-dates">
+                            <span>{isKo ? '급여일' : 'Ngày lương'}: {rec.payDate}</span>
+                            <span>{rec.hourlyRate.toLocaleString()} ₩/h</span>
+                          </div>
+
+                          <div className="income-ins-card-breakdown">
+                            <div className="income-ins-card-brow">
+                              <span className="ins-brow-name">{isKo ? '근무 시간/일수' : 'Giờ / Ngày'}</span>
+                              <span className="ins-brow-rate">{rec.weeklyHours}h</span>
+                              <span className="ins-brow-amt">{rec.workDays}{isKo ? '일' : ' ngày'}</span>
+                            </div>
+                            <div className="income-ins-card-brow">
+                              <span className="ins-brow-name">{isKo ? '주휴시간 (일평균)' : 'Giờ phụ cấp/tuần'}</span>
+                              <span className="ins-brow-rate">{rec.juhyuHoursPerWeek.toFixed(2)}h</span>
+                              <span className="ins-brow-amt">{rec.juhyuPerWeek.toLocaleString()} ₩/{isKo ? '주' : 'tuần'}</span>
+                            </div>
+                            <div className="income-ins-card-brow">
+                              <span className="ins-brow-name">{isKo ? '월 환산 (×4.345)' : 'Tháng (×4.345)'}</span>
+                              <span className="ins-brow-rate">×4.345</span>
+                              <span className="ins-brow-amt">{rec.juhyuPerMonth.toLocaleString()} ₩</span>
+                            </div>
+                          </div>
+
+                          {rec.note ? <p className="income-ins-card-note">{rec.note}</p> : null}
+
+                          <div className="income-ins-card-footer">
+                            <div className="income-ins-card-footer-top">
+                              <div className="income-ins-card-total">
+                                <span>{ui.juhyuTotal}</span>
+                                <strong className="income-juhyu-summary-total">
+                                  {rec.qualifies ? `+${rec.juhyuPerMonth.toLocaleString()} ₩` : '0 ₩'}
+                                </strong>
+                              </div>
+                              <div style={{ display: 'flex', gap: '6px' }}>
+                                {!rec.confirmed && (
+                                  <button type="button" className="income-ins-edit-btn"
+                                    onClick={() => {
+                                      setJuhyuForm({ ...rec });
+                                      setEditingJuhyuId(rec.id);
+                                      setIsAddingJuhyu(false);
+                                      setExpandedJuhyuId(null);
+                                    }}
+                                  >{ui.insEdit}</button>
+                                )}
+                                <button type="button" className="income-ins-del-btn" onClick={() => removeJuhyuRecord(rec.id)}>
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            </div>
+                            {!rec.confirmed && rec.qualifies && (
+                              <button type="button" className="income-ins-confirm-btn income-juhyu-confirm-btn"
+                                onClick={() => updateJuhyuRecord(rec.id, { confirmed: true })}
+                              >
+                                <Check size={14} />
+                                {ui.juhyuConfirm}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </article>
+                  );
+                })}
+              </div>
+            ) : !isAddingJuhyu && !editingJuhyuId ? (
+              <div className="income-empty">
+                <CalendarCheck size={34} />
+                <strong>{ui.juhyuEmpty}</strong>
+                <p>{ui.juhyuEmptyHint}</p>
               </div>
             ) : null}
           </section>

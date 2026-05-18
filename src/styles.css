@@ -418,6 +418,171 @@ select {
   background: radial-gradient(circle, rgba(255, 107, 122, 0.14), transparent 70%);
 }
 
+.wallpaper-art {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.wallpaper-art::before,
+.wallpaper-art::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.phone-shell[data-wallpaper="vietnam"] .wallpaper-art::before {
+  left: 22px;
+  top: 24px;
+  width: 126px;
+  height: 80px;
+  border-radius: 16px 16px 22px 16px;
+  background:
+    linear-gradient(135deg, rgba(153, 27, 27, 0.74), rgba(239, 68, 68, 0.62));
+  box-shadow: 0 20px 42px rgba(185, 28, 28, 0.2);
+  opacity: 0.5;
+  transform: rotate(-7deg);
+}
+
+.phone-shell[data-wallpaper="vietnam"] .wallpaper-art::after {
+  left: 68px;
+  top: 45px;
+  width: 36px;
+  height: 36px;
+  background: #facc15;
+  clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 56%, 79% 91%, 50% 70%, 21% 91%, 32% 56%, 2% 35%, 39% 35%);
+  filter: drop-shadow(0 7px 14px rgba(250, 204, 21, 0.28));
+  opacity: 0.9;
+  transform: rotate(-7deg);
+}
+
+.phone-shell[data-wallpaper="vietnam"]::before {
+  inset: 150px -62px auto auto;
+  width: 264px;
+  height: 162px;
+  border-radius: 999px 999px 42px 42px;
+  background:
+    radial-gradient(ellipse at 24% 75%, rgba(255, 255, 255, 0.4) 0 18%, transparent 19%),
+    radial-gradient(ellipse at 47% 66%, rgba(255, 255, 255, 0.32) 0 17%, transparent 18%),
+    radial-gradient(ellipse at 70% 72%, rgba(255, 255, 255, 0.26) 0 14%, transparent 15%),
+    linear-gradient(180deg, rgba(16, 185, 129, 0.16), rgba(22, 163, 74, 0.04));
+  opacity: 0.68;
+  transform: rotate(-4deg);
+}
+
+.phone-shell[data-wallpaper="vietnam"]::after {
+  left: -72px;
+  top: 430px;
+  width: 184px;
+  height: 124px;
+  border-radius: 50% 50% 18% 18%;
+  border-top: 18px solid rgba(255, 255, 255, 0.34);
+  background:
+    radial-gradient(ellipse at 50% 100%, rgba(236, 253, 245, 0.5), transparent 55%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.38), rgba(254, 226, 226, 0.18));
+  opacity: 0.6;
+  transform: rotate(13deg);
+}
+
+.phone-shell[data-wallpaper="korea"] .wallpaper-art::before {
+  right: 18px;
+  top: 26px;
+  width: 132px;
+  height: 86px;
+  background: url("./assets/korea-flag-mini.svg") center / contain no-repeat;
+  box-shadow: 0 18px 44px rgba(37, 99, 235, 0.14);
+  opacity: 0.82;
+  transform: rotate(-6deg);
+}
+
+.phone-shell[data-wallpaper="korea"] .wallpaper-art::after {
+  left: -28px;
+  top: 154px;
+  width: 238px;
+  height: 88px;
+  clip-path: polygon(0 42%, 18% 18%, 36% 34%, 54% 10%, 72% 34%, 92% 18%, 100% 32%, 100% 50%, 0 50%, 0 100%, 100% 100%, 100% 76%, 0 76%);
+  background:
+    linear-gradient(90deg, rgba(15, 23, 42, 0.12), rgba(239, 68, 68, 0.12), rgba(37, 99, 235, 0.12)),
+    rgba(255, 255, 255, 0.22);
+  opacity: 0.64;
+}
+
+.phone-shell[data-wallpaper="korea"]::before {
+  inset: 278px auto auto 26px;
+  width: 66px;
+  height: 190px;
+  border-radius: 999px 999px 14px 14px;
+  background:
+    radial-gradient(circle at 50% 18%, rgba(248, 250, 252, 0.62) 0 19%, transparent 20%),
+    linear-gradient(90deg, transparent 41%, rgba(15, 23, 42, 0.12) 42% 58%, transparent 59%),
+    linear-gradient(180deg, rgba(59, 130, 246, 0.12), rgba(15, 23, 42, 0.03));
+  opacity: 0.58;
+}
+
+.phone-shell[data-wallpaper="korea"]::after {
+  right: -72px;
+  top: 420px;
+  width: 220px;
+  height: 102px;
+  border-radius: 999px;
+  background:
+    repeating-linear-gradient(135deg, rgba(239, 68, 68, 0.18) 0 10px, rgba(37, 99, 235, 0.15) 10px 20px, rgba(34, 197, 94, 0.12) 20px 30px, rgba(250, 204, 21, 0.12) 30px 40px),
+    rgba(255, 255, 255, 0.16);
+  opacity: 0.5;
+  transform: rotate(-18deg);
+}
+
+.phone-shell[data-wallpaper="futureCat"] .wallpaper-art::before {
+  right: 4px;
+  top: 18px;
+  width: 134px;
+  height: 134px;
+  background: url("./assets/future-cat-mini.svg") center / contain no-repeat;
+  filter: drop-shadow(0 22px 34px rgba(37, 99, 235, 0.18));
+  opacity: 0.76;
+  transform: rotate(-5deg);
+}
+
+.phone-shell[data-wallpaper="futureCat"] .wallpaper-art::after {
+  right: 46px;
+  top: 148px;
+  width: 42px;
+  height: 42px;
+  border-radius: 50% 50% 46% 46%;
+  background:
+    radial-gradient(circle at 50% 38%, rgba(255, 255, 255, 0.94) 0 16%, transparent 17%),
+    linear-gradient(180deg, rgba(250, 204, 21, 0.92), rgba(245, 158, 11, 0.76));
+  box-shadow: 0 12px 26px rgba(245, 158, 11, 0.18);
+  opacity: 0.7;
+}
+
+.phone-shell[data-wallpaper="futureCat"]::before {
+  inset: 238px auto auto -54px;
+  width: 172px;
+  height: 172px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 36% 34%, rgba(255, 255, 255, 0.54) 0 7%, transparent 8%),
+    radial-gradient(circle at 66% 58%, rgba(255, 255, 255, 0.42) 0 9%, transparent 10%),
+    radial-gradient(circle, rgba(125, 211, 252, 0.22), transparent 70%);
+  opacity: 0.66;
+}
+
+.phone-shell[data-wallpaper="futureCat"]::after {
+  right: -58px;
+  top: 476px;
+  width: 216px;
+  height: 92px;
+  border-radius: 999px;
+  background:
+    radial-gradient(ellipse at 26% 50%, rgba(255, 255, 255, 0.48) 0 20%, transparent 21%),
+    linear-gradient(90deg, rgba(250, 204, 21, 0.46), rgba(255, 255, 255, 0));
+  opacity: 0.55;
+  transform: rotate(-28deg);
+}
+
 .status-strip {
   position: relative;
   z-index: 1;
@@ -645,6 +810,269 @@ select {
   color: #94a3b8;
 }
 
+.first-setup-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 5400;
+  display: grid;
+  place-items: center;
+  padding: 22px 14px;
+  background:
+    radial-gradient(circle at 20% 10%, rgba(255, 255, 255, 0.46), transparent 26%),
+    radial-gradient(circle at 82% 18%, rgba(39, 82, 255, 0.26), transparent 25%),
+    rgba(15, 23, 42, 0.48);
+  backdrop-filter: blur(14px);
+}
+
+.first-setup-card {
+  position: relative;
+  width: min(402px, calc(100vw - 28px));
+  max-height: min(780px, calc(100svh - 36px));
+  overflow: hidden auto;
+  border-radius: 34px;
+  padding: 24px 18px 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.9)),
+    radial-gradient(circle at 90% 0%, rgba(39, 82, 255, 0.14), transparent 30%);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  box-shadow: 0 28px 72px rgba(15, 23, 42, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.86);
+  scrollbar-width: none;
+}
+
+.first-setup-card::-webkit-scrollbar {
+  display: none;
+}
+
+.first-setup-orbit {
+  position: absolute;
+  right: -44px;
+  top: -46px;
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 44% 44%, rgba(255, 255, 255, 0.9) 0 18%, transparent 19%),
+    conic-gradient(from 210deg, rgba(39, 82, 255, 0.18), rgba(38, 217, 164, 0.18), rgba(250, 204, 21, 0.18), rgba(39, 82, 255, 0.18));
+  opacity: 0.88;
+  pointer-events: none;
+}
+
+.first-setup-head {
+  position: relative;
+  padding: 2px 6px 14px;
+}
+
+.first-setup-kicker {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(39, 82, 255, 0.08);
+  color: var(--theme-accent, #2752ff);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.first-setup-head h2 {
+  margin: 14px 0 8px;
+  color: var(--text-main, #0f172a);
+  font-size: 26px;
+  line-height: 1.08;
+  letter-spacing: 0;
+}
+
+.first-setup-head p {
+  margin: 0;
+  max-width: 286px;
+  color: var(--text-soft, #64748b);
+  font-size: 14px;
+  line-height: 1.55;
+  font-weight: 700;
+}
+
+.first-setup-section {
+  position: relative;
+  padding: 14px 0 2px;
+}
+
+.first-setup-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 6px 10px;
+  color: var(--text-main, #0f172a);
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.first-setup-companions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.first-setup-wallpapers {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 1px 2px 8px;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+}
+
+.first-setup-wallpapers::-webkit-scrollbar {
+  display: none;
+}
+
+.first-setup-companion,
+.first-setup-wallpaper {
+  position: relative;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(255, 255, 255, 0.68);
+  color: var(--text-main, #0f172a);
+  cursor: pointer;
+  font-family: inherit;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.first-setup-companion {
+  min-height: 104px;
+  border-radius: 22px;
+  padding: 10px 7px 9px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 900;
+  text-align: center;
+}
+
+.first-setup-companion-img {
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.92), transparent 58%),
+    rgba(241, 245, 249, 0.84);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.14);
+}
+
+.first-setup-companion-img img {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+}
+
+.first-setup-wallpaper {
+  flex: 0 0 104px;
+  min-height: 122px;
+  border-radius: 20px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  align-items: center;
+  font-size: 10.5px;
+  font-weight: 900;
+  scroll-snap-align: start;
+}
+
+.first-setup-wallpaper-preview {
+  width: 100%;
+  aspect-ratio: 1 / 1.02;
+  border-radius: 15px;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.1);
+}
+
+.first-setup-companion.active,
+.first-setup-wallpaper.active {
+  border-color: color-mix(in srgb, var(--theme-accent, #2752ff) 58%, #ffffff);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--theme-accent, #2752ff) 12%, transparent), 0 16px 28px rgba(39, 82, 255, 0.12);
+  transform: translateY(-2px);
+}
+
+.first-setup-check {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  width: 22px;
+  height: 22px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--theme-accent, #2752ff);
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(39, 82, 255, 0.24);
+}
+
+.first-setup-actions {
+  position: sticky;
+  bottom: -18px;
+  display: grid;
+  grid-template-columns: 0.9fr 1.4fr;
+  gap: 10px;
+  margin: 16px -2px 0;
+  padding: 12px 0 0;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0), rgba(248, 250, 252, 0.96) 28%);
+}
+
+.first-setup-actions button {
+  min-height: 54px;
+  border: 0;
+  border-radius: 18px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.first-setup-secondary {
+  color: var(--text-soft, #64748b);
+  background: rgba(226, 232, 240, 0.74);
+}
+
+.first-setup-primary {
+  color: #fff;
+  background: linear-gradient(135deg, var(--theme-accent, #2752ff), #5b5cf6);
+  box-shadow: 0 16px 30px color-mix(in srgb, var(--theme-accent, #2752ff) 26%, transparent);
+}
+
+.dark .first-setup-card {
+  background:
+    linear-gradient(180deg, rgba(30, 41, 59, 0.96), rgba(15, 23, 42, 0.94)),
+    radial-gradient(circle at 90% 0%, rgba(96, 165, 250, 0.16), transparent 30%);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.dark .first-setup-companion,
+.dark .first-setup-wallpaper {
+  background: rgba(15, 23, 42, 0.74);
+  border-color: rgba(148, 163, 184, 0.18);
+}
+
+.dark .first-setup-companion.active,
+.dark .first-setup-wallpaper.active {
+  background: rgba(30, 41, 59, 0.95);
+}
+
+.dark .first-setup-companion-img {
+  background: rgba(30, 41, 59, 0.88);
+}
+
+.dark .first-setup-actions {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0), rgba(15, 23, 42, 0.96) 28%);
+}
+
+.dark .first-setup-secondary {
+  background: rgba(51, 65, 85, 0.84);
+}
+
 @media (max-width: 380px) {
   .admin-entry-announcement {
     width: calc(100svw - 28px);
@@ -669,6 +1097,26 @@ select {
 
   .admin-entry-announcement-actions {
     padding-top: 20px;
+  }
+
+  .first-setup-card {
+    padding: 22px 14px 16px;
+    border-radius: 30px;
+  }
+
+  .first-setup-head h2 {
+    font-size: 23px;
+  }
+
+  .first-setup-companion {
+    min-height: 98px;
+    font-size: 10px;
+  }
+
+  .first-setup-wallpaper {
+    flex-basis: 98px;
+    min-height: 116px;
+    font-size: 9.8px;
   }
 }
 
@@ -6938,6 +7386,77 @@ button.ticker-inner {
   height: 90px;
   background: var(--theme-hero-bg, linear-gradient(135deg, #2752ff 0%, #6366f1 50%, #a78bfa 100%));
   border-radius: 24px 24px 0 0;
+  overflow: hidden;
+}
+
+.pf-hero-bg::before,
+.pf-hero-bg::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.phone-shell[data-wallpaper="vietnam"] .pf-hero-bg::before {
+  right: 24px;
+  top: 18px;
+  width: 54px;
+  height: 54px;
+  background: rgba(250, 204, 21, 0.95);
+  clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 56%, 79% 91%, 50% 70%, 21% 91%, 32% 56%, 2% 35%, 39% 35%);
+  opacity: 0.92;
+}
+
+.phone-shell[data-wallpaper="vietnam"] .pf-hero-bg::after {
+  left: -18px;
+  bottom: -24px;
+  width: 150px;
+  height: 72px;
+  border-radius: 50% 50% 16px 16px;
+  border-top: 12px solid rgba(255, 255, 255, 0.42);
+  background: rgba(255, 255, 255, 0.16);
+  transform: rotate(-10deg);
+}
+
+.phone-shell[data-wallpaper="korea"] .pf-hero-bg::before {
+  right: 18px;
+  top: 13px;
+  width: 112px;
+  height: 58px;
+  background: url("./assets/korea-flag-mini.svg") center / contain no-repeat;
+  opacity: 0.86;
+  transform: rotate(-5deg);
+}
+
+.phone-shell[data-wallpaper="korea"] .pf-hero-bg::after {
+  left: 18px;
+  bottom: -18px;
+  width: 160px;
+  height: 58px;
+  clip-path: polygon(0 48%, 22% 18%, 42% 34%, 58% 12%, 78% 34%, 100% 18%, 100% 100%, 0 100%);
+  background: rgba(15, 23, 42, 0.16);
+}
+
+.phone-shell[data-wallpaper="futureCat"] .pf-hero-bg::before {
+  left: 26px;
+  top: 6px;
+  width: 82px;
+  height: 82px;
+  background: url("./assets/future-cat-mini.svg") center / contain no-repeat;
+  filter: drop-shadow(0 14px 22px rgba(3, 105, 161, 0.2));
+  opacity: 0.84;
+  transform: rotate(-4deg);
+}
+
+.phone-shell[data-wallpaper="futureCat"] .pf-hero-bg::after {
+  left: 18px;
+  bottom: -22px;
+  width: 150px;
+  height: 56px;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 22% 50%, rgba(255, 255, 255, 0.58) 0 15%, transparent 16%),
+    linear-gradient(90deg, rgba(250, 204, 21, 0.42), rgba(255, 255, 255, 0));
+  transform: rotate(-16deg);
 }
 
 .pf-avatar-container {
@@ -9316,76 +9835,81 @@ button.ticker-inner {
 
 .pf-wallpaper-preview--vietnam {
   background:
-    radial-gradient(circle at 20% 22%, #facc15 0 12%, transparent 13%),
-    linear-gradient(135deg, #ef4444 0%, #f97316 48%, #fef3c7 68%, #22c55e 100%) !important;
+    linear-gradient(135deg, #dc2626 0%, #ef4444 34%, #fef3c7 64%, #22c55e 100%) !important;
 }
 
 .pf-wallpaper-preview--vietnam::before {
-  left: 18%;
-  top: 34%;
-  width: 58%;
-  height: 30%;
-  border-radius: 50% 50% 12% 12%;
-  border-top: 10px solid rgba(255, 255, 255, 0.72);
-  transform: rotate(-18deg);
+  left: 15%;
+  top: 12%;
+  width: 28%;
+  height: 22%;
+  background: #facc15;
+  clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 56%, 79% 91%, 50% 70%, 21% 91%, 32% 56%, 2% 35%, 39% 35%);
+  filter: drop-shadow(0 4px 8px rgba(250, 204, 21, 0.32));
 }
 
 .pf-wallpaper-preview--vietnam::after {
-  right: 10%;
-  bottom: 8%;
-  width: 34%;
-  height: 18%;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.42);
-  box-shadow: -12px -4px 0 rgba(255, 255, 255, 0.22);
+  right: 8%;
+  bottom: 10%;
+  width: 60%;
+  height: 32%;
+  border-radius: 50% 50% 12% 12%;
+  border-top: 9px solid rgba(255, 255, 255, 0.72);
+  background:
+    radial-gradient(ellipse at 26% 72%, rgba(255, 255, 255, 0.48) 0 18%, transparent 19%),
+    radial-gradient(ellipse at 58% 68%, rgba(255, 255, 255, 0.34) 0 15%, transparent 16%);
   transform: rotate(-12deg);
 }
 
 .pf-wallpaper-preview--korea {
   background:
-    radial-gradient(circle at 34% 38%, #ef4444 0 18%, transparent 19%),
-    radial-gradient(circle at 60% 58%, #2563eb 0 18%, transparent 19%),
     linear-gradient(135deg, #f8fafc 0%, #dbeafe 52%, #93c5fd 100%) !important;
 }
 
 .pf-wallpaper-preview--korea::before {
   left: 12%;
-  right: 12%;
-  top: 12%;
-  height: 3px;
-  border-radius: 99px;
-  background: rgba(15, 23, 42, 0.16);
-  box-shadow:
-    0 12px 0 rgba(15, 23, 42, 0.10),
-    0 68px 0 rgba(15, 23, 42, 0.10),
-    0 80px 0 rgba(15, 23, 42, 0.16);
+  top: 16%;
+  width: 76%;
+  height: 52%;
+  background: url("./assets/korea-flag-mini.svg") center / contain no-repeat;
+  box-shadow: 0 5px 12px rgba(37, 99, 235, 0.12);
+  transform: rotate(-5deg);
+}
+
+.pf-wallpaper-preview--korea::after {
+  left: 10%;
+  right: 10%;
+  bottom: 8%;
+  height: 24%;
+  clip-path: polygon(0 46%, 20% 18%, 40% 34%, 56% 10%, 76% 34%, 100% 18%, 100% 100%, 0 100%);
+  background:
+    repeating-linear-gradient(135deg, rgba(239, 68, 68, 0.3) 0 6px, rgba(37, 99, 235, 0.26) 6px 12px, rgba(34, 197, 94, 0.18) 12px 18px),
+    rgba(15, 23, 42, 0.08);
 }
 
 .pf-wallpaper-preview--futureCat {
   background:
-    radial-gradient(circle at 52% 30%, #ffffff 0 16%, transparent 17%),
     linear-gradient(135deg, #38bdf8 0%, #2563eb 70%, #facc15 100%) !important;
 }
 
 .pf-wallpaper-preview--futureCat::before {
-  left: 28%;
-  top: 15%;
-  width: 44%;
-  height: 34%;
-  border-radius: 50%;
-  border: 3px solid rgba(255, 255, 255, 0.52);
-  box-shadow:
-    0 28px 0 -12px rgba(255, 255, 255, 0.88),
-    0 36px 0 -17px rgba(239, 68, 68, 0.84);
+  left: 17%;
+  top: 8%;
+  width: 66%;
+  height: 58%;
+  background: url("./assets/future-cat-mini.svg") center / contain no-repeat;
+  filter: drop-shadow(0 8px 12px rgba(3, 105, 161, 0.18));
 }
 
 .pf-wallpaper-preview--futureCat::after {
-  right: 8%;
+  right: 10%;
   bottom: 10%;
   width: 48%;
   height: 20%;
   border-radius: 99px;
-  background: linear-gradient(90deg, rgba(250, 204, 21, 0.78), rgba(255, 255, 255, 0));
+  background:
+    radial-gradient(circle at 20% 50%, rgba(255, 255, 255, 0.72) 0 16%, transparent 17%),
+    linear-gradient(90deg, rgba(250, 204, 21, 0.78), rgba(255, 255, 255, 0));
   transform: rotate(-36deg);
 }
 

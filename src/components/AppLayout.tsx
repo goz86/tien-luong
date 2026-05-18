@@ -1,11 +1,11 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { CalendarDays, House, MessageCircleMore, UserRound, WalletCards, Bell, ThumbsUp, MessageCircle, X, Megaphone, Users, MessageSquare } from 'lucide-react';
+import { CalendarDays, House, MessageCircleMore, UserRound, WalletCards, Bell, ThumbsUp, MessageCircle, X, Megaphone, Users, MessageSquare, Check } from 'lucide-react';
 import { hasSupabaseConfig, supabase as supabaseClient } from '../lib/supabase';
 import { useAppStore } from '../store/appStore';
 import { HomeScreen } from './HomeScreen';
-import { WALLPAPERS } from '../lib/wallpapers';
+import { WALLPAPERS, type WallpaperKey } from '../lib/wallpapers';
 import { AppLockOverlay } from './AppLockOverlay';
 import { timeAgo } from '../data/communityData';
 import { shiftMonth } from '../utils/helpers';
@@ -34,7 +34,6 @@ const tabIcons: Array<{ id: Exclude<Tab, 'admin'>; icon: typeof House }> = [
 ];
 
 type AppLang = 'vi' | 'ko';
-type WallpaperKey = string;
 
 const WALLPAPER_THEME_VARS: Record<string, CSSProperties> = {
   default: {
@@ -124,14 +123,52 @@ const ANNOUNCEMENT_PERM_HIDE_KEY = 'duhocmate-announcement-perm-hide'; // user b
 const ANNOUNCEMENT_SESSION_DISMISS_KEY = 'duhocmate-announcement-session-dismissed';
 const ANNOUNCEMENT_AUTO_DISMISS_MS = 12000;
 const ANNOUNCEMENT_TTL_MS = 24 * 60 * 60 * 1000; // 24h kể từ created_at
+const FIRST_SETUP_KEY = 'duhoc-mate-first-setup-v1';
+const COMPANION_STORAGE_KEY = 'duhoc-mate-ach-companion';
+const COMPANION_CHANGE_EVENT = 'duhoc-mate-ach-companion-change';
+
+const FIRST_SETUP_COMPANIONS = [
+  { key: 'hamster', imgKey: 'companion_hamster', label_vi: 'Mầm Non', label_ko: '새싹 친구' },
+  { key: 'cat', imgKey: 'companion_cat', label_vi: 'Mèo Thần Tài', label_ko: '지갑 고양이' },
+  { key: 'bunny', imgKey: 'companion_bunny', label_vi: 'Thỏ Tiết Kiệm', label_ko: '저축 토끼' },
+  { key: 'bear', imgKey: 'companion_bear', label_vi: 'Gấu Chăm Chỉ', label_ko: '성실한 곰' },
+  { key: 'fox', imgKey: 'companion_fox', label_vi: 'Cáo Nhanh Nhẹn', label_ko: '계획 여우' },
+  { key: 'star', imgKey: 'companion_star', label_vi: 'Sao May Mắn', label_ko: '행운 별' },
+];
+
+const FIRST_SETUP_WALLPAPER_KEYS: WallpaperKey[] = ['default', 'futureCat', 'vietnam', 'korea', 'ocean', 'sunset', 'forest', 'lavender', 'rose'];
+
+function iconUrl(name: string) {
+  return `${import.meta.env.BASE_URL}icon/${name}.png?v=20260518-ach`;
+}
+
+function getStoredCompanionKey() {
+  if (typeof window === 'undefined') return 'fox';
+  const stored = window.localStorage.getItem(COMPANION_STORAGE_KEY);
+  return FIRST_SETUP_COMPANIONS.some((option) => option.key === stored) ? stored! : 'fox';
+}
 
 export default function AppLayout() {
   const store = useAppStore();
   const suppressPopstate = useRef(false);
   const [activeBanner, setActiveBanner] = useState<{ id: string; title: string; body: string; severity: string; created_at: string } | null>(null);
   const [communityTargetPostId, setCommunityTargetPostId] = useState<string | null>(null);
+  const [showFirstSetup, setShowFirstSetup] = useState(() => (
+    typeof window !== 'undefined' ? window.localStorage.getItem(FIRST_SETUP_KEY) !== '1' : false
+  ));
+  const [setupCompanion, setSetupCompanion] = useState(() => getStoredCompanionKey());
+  const [setupWallpaper, setSetupWallpaper] = useState<WallpaperKey>(() => store.wallpaper || 'default');
 
-  // Ping visitor tracking — ghi nhận lượt truy cập (guest + registered)
+  const finishFirstSetup = useCallback((markSkipped = false) => {
+    const companionKey = FIRST_SETUP_COMPANIONS.some((option) => option.key === setupCompanion) ? setupCompanion : 'fox';
+    window.localStorage.setItem(COMPANION_STORAGE_KEY, companionKey);
+    window.dispatchEvent(new CustomEvent(COMPANION_CHANGE_EVENT, { detail: companionKey }));
+    if (!markSkipped) store.setWallpaper(setupWallpaper);
+    window.localStorage.setItem(FIRST_SETUP_KEY, '1');
+    setShowFirstSetup(false);
+  }, [setupCompanion, setupWallpaper, store]);
+
+  // Ping visitor tracking – ghi nhận lượt truy cập (guest + registered)
   useEffect(() => {
     void recordAppVisit(store.session?.user.id ?? null);
   }, [store.session]);
@@ -600,10 +637,14 @@ export default function AppLayout() {
     ...(WALLPAPER_THEME_VARS[store.wallpaper] ?? WALLPAPER_THEME_VARS.default),
     ...(store.wallpaper !== 'default' && activeWallpaper?.gradient ? { background: activeWallpaper.gradient } : {}),
   } as CSSProperties;
+  const setupWallpaperOptions = FIRST_SETUP_WALLPAPER_KEYS
+    .map((key) => WALLPAPERS.find((w: any) => w.key === key))
+    .filter(Boolean) as typeof WALLPAPERS;
 
   return (
     <div className="app-stage">
-      <div className="phone-shell" style={wallpaperStyle}>
+      <div className="phone-shell" data-wallpaper={store.wallpaper} style={wallpaperStyle}>
+        <div className="wallpaper-art" aria-hidden="true" />
         {/* Admin announcement entry popup */}
         <AnimatePresence>
           {activeBanner ? (
@@ -668,6 +709,94 @@ export default function AppLayout() {
                 </div>
               </motion.section>
             </>
+          ) : null}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {showFirstSetup ? (
+            <motion.section
+              className="first-setup-backdrop"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="first-setup-title"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              <motion.div
+                className="first-setup-card"
+                initial={{ opacity: 0, y: 24, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 18, scale: 0.96 }}
+                transition={{ type: 'spring', damping: 24, stiffness: 260 }}
+              >
+                <div className="first-setup-orbit" aria-hidden="true" />
+                <div className="first-setup-head">
+                  <span className="first-setup-kicker">{store.lang === 'ko' ? '처음 설정' : 'Lần đầu vào app'}</span>
+                  <h2 id="first-setup-title">{store.lang === 'ko' ? '나만의 친구를 골라요' : 'Chọn người bạn đồng hành'}</h2>
+                  <p>{store.lang === 'ko' ? '캐릭터와 배경을 먼저 정해볼까요.' : 'Chọn linh vật và màu nền cho không gian của bạn.'}</p>
+                </div>
+
+                <div className="first-setup-section">
+                  <div className="first-setup-section-title">
+                    <span>{store.lang === 'ko' ? '동반자' : 'Linh vật'}</span>
+                  </div>
+                  <div className="first-setup-companions" aria-label={store.lang === 'ko' ? '동반자 선택' : 'Chọn linh vật'}>
+                    {FIRST_SETUP_COMPANIONS.map((option) => {
+                      const active = setupCompanion === option.key;
+                      return (
+                        <button
+                          key={option.key}
+                          type="button"
+                          className={`first-setup-companion ${active ? 'active' : ''}`}
+                          onClick={() => setSetupCompanion(option.key)}
+                          aria-pressed={active}
+                        >
+                          <span className="first-setup-companion-img">
+                            <img src={iconUrl(option.imgKey)} alt="" />
+                          </span>
+                          <span>{store.lang === 'ko' ? option.label_ko : option.label_vi}</span>
+                          {active ? <Check size={15} className="first-setup-check" /> : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="first-setup-section">
+                  <div className="first-setup-section-title">
+                    <span>{store.lang === 'ko' ? '배경' : 'Hình nền'}</span>
+                  </div>
+                  <div className="first-setup-wallpapers" aria-label={store.lang === 'ko' ? '배경 선택' : 'Chọn hình nền'}>
+                    {setupWallpaperOptions.map((wallpaper) => {
+                      const active = setupWallpaper === wallpaper.key;
+                      return (
+                        <button
+                          key={wallpaper.key}
+                          type="button"
+                          className={`first-setup-wallpaper ${active ? 'active' : ''}`}
+                          onClick={() => setSetupWallpaper(wallpaper.key)}
+                          aria-pressed={active}
+                        >
+                          <span className={`first-setup-wallpaper-preview pf-wallpaper-preview pf-wallpaper-preview--${wallpaper.key}`} style={{ background: wallpaper.preview }} />
+                          <span>{store.lang === 'ko' ? wallpaper.label_ko : wallpaper.label_vi}</span>
+                          {active ? <Check size={14} className="first-setup-check" /> : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="first-setup-actions">
+                  <button type="button" className="first-setup-secondary" onClick={() => finishFirstSetup(true)}>
+                    {store.lang === 'ko' ? '나중에' : 'Để sau'}
+                  </button>
+                  <button type="button" className="first-setup-primary" onClick={() => finishFirstSetup(false)}>
+                    {store.lang === 'ko' ? '시작하기' : 'Bắt đầu'}
+                  </button>
+                </div>
+              </motion.div>
+            </motion.section>
           ) : null}
         </AnimatePresence>
 
