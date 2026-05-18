@@ -2007,8 +2007,8 @@ select {
 
 .day-sheet {
   width: 100%;
-  max-height: min(85vh, 720px);
-  height: min(68svh, calc(100svh - 40px), 640px);
+  max-height: min(92vh, 780px);
+  height: min(82svh, calc(100svh - 22px), 760px);
   overflow-y: auto;
   scrollbar-width: none;
   border-radius: 32px 32px 0 0;
@@ -6609,7 +6609,9 @@ button.ticker-inner {
 /* Hero Card */
 .pf-hero {
   position: relative;
-  background: var(--bg-card);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.82) 0%, rgba(255,255,255,0.96) 54%, var(--bg-card) 100%),
+    var(--theme-hero-bg, var(--bg-card));
   border-radius: 24px;
   padding: 60px 24px 24px;
   margin: 0 0 16px;
@@ -6785,7 +6787,7 @@ button.ticker-inner {
   left: 0;
   right: 0;
   height: 90px;
-  background: linear-gradient(135deg, #2752ff 0%, #6366f1 50%, #a78bfa 100%);
+  background: var(--theme-hero-bg, linear-gradient(135deg, #2752ff 0%, #6366f1 50%, #a78bfa 100%));
   border-radius: 24px 24px 0 0;
 }
 
@@ -9018,6 +9020,12 @@ button.ticker-inner {
 .dark .pf-card {
   background: var(--surface);
   border-color: rgba(255, 255, 255, 0.06);
+}
+
+.dark .pf-hero {
+  background:
+    linear-gradient(180deg, rgba(15,23,42,0.58) 0%, rgba(15,23,42,0.9) 58%, var(--surface) 100%),
+    var(--theme-hero-bg, var(--surface));
 }
 
 .dark .pf-badge2.locked {
@@ -15353,6 +15361,16 @@ button.admin-stat-card {
   100% { transform: scale(1) rotate(0deg); opacity: 1; }
 }
 
+@keyframes ach-culture-ring {
+  0%   { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: -44; }
+}
+
+@keyframes ach-icon-float {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50%      { transform: translateY(-2px) scale(1.02); }
+}
+
 @keyframes ach-confetti-fly {
   0%   { transform: translate(0, 0) rotate(0deg) scale(1); opacity: 1; }
   100% { transform: translate(calc(cos(calc(var(--i) * 30deg)) * 80px), calc(sin(calc(var(--i) * 30deg)) * -80px)) rotate(720deg) scale(0); opacity: 0; }
@@ -16042,15 +16060,16 @@ button.admin-stat-card {
 }
 
 .ach-gift-box-btn {
-  font-size: 80px;
   line-height: 1;
   background: none;
   border: none;
   cursor: pointer;
-  display: block;
+  display: grid;
+  place-items: center;
   transition: transform 0.15s;
-  margin: 8px 0;
-  filter: drop-shadow(0 8px 16px rgba(0,0,0,0.2));
+  margin: 8px 0 2px;
+  padding: 0;
+  filter: drop-shadow(0 10px 18px rgba(0,0,0,0.18));
 }
 
 .ach-gift-box-btn:active {
@@ -16105,6 +16124,54 @@ button.admin-stat-card {
   font-size: 14px;
   color: var(--text-soft, #64748b);
   font-weight: 600;
+}
+
+.ach-gift-motivation-icon {
+  width: 82px;
+  height: 82px;
+  margin: 4px 0 4px;
+  border-radius: 28px;
+  background: linear-gradient(145deg, #ffffff, #f8fafc 48%, #fff7ed);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  display: grid;
+  place-items: center;
+  box-shadow:
+    0 16px 32px rgba(15, 23, 42, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  animation: ach-burst-pop 0.42s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.ach-gift-reward-mark {
+  width: 76px;
+  height: 76px;
+  display: block;
+  overflow: visible;
+  filter: drop-shadow(0 10px 16px rgba(8, 22, 43, 0.12));
+}
+
+.ach-gift-reward-mark--vn {
+  filter: drop-shadow(0 10px 16px rgba(220, 38, 38, 0.14));
+}
+
+.ach-gift-reward-mark--kr {
+  filter: drop-shadow(0 10px 16px rgba(37, 99, 235, 0.14));
+}
+
+.ach-gift-icon-shape {
+  transform-origin: 48px 52px;
+  animation: ach-icon-float 4.6s ease-in-out infinite;
+}
+
+.ach-gift-motivation-quote {
+  width: 100%;
+  margin: 2px 0 4px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(39, 82, 255, 0.08), rgba(20, 184, 166, 0.1));
+  color: var(--text-main, #08162b);
+  font-size: 15px;
+  font-weight: 850;
+  line-height: 1.45;
 }
 
 .ach-gift-done-btn {
@@ -16557,6 +16624,10 @@ button.admin-stat-card {
 .dark .ach-gift-hint   { color: #94a3b8; }
 .dark .ach-gift-subtitle { color: #94a3b8; }
 .dark .ach-gift-reward-label { color: #94a3b8; }
+.dark .ach-gift-motivation-icon {
+  background: linear-gradient(145deg, rgba(15,23,42,0.96), rgba(30,41,59,0.96));
+  border-color: rgba(125, 211, 252, 0.16);
+}
 
 .dark .ach-banner {
   background: #111a2d;
@@ -16606,6 +16677,15 @@ button.admin-stat-card {
   width: 110px;
   height: 110px;
   object-fit: contain;
+  display: block;
+  background: transparent;
+  filter: drop-shadow(0 10px 18px rgba(8, 22, 43, 0.16));
+}
+
+.ach-gift-box-img.opened {
+  width: 86px;
+  height: 86px;
+  margin-top: -4px;
 }
 
 .ach-ms-badge-img {

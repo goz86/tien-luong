@@ -185,14 +185,14 @@ export default function AppLayout() {
     history.pushState({ tab: nextTab }, '');
   }, []);
 
-  const navigateToDate = useCallback((date: string) => {
-    useAppStore.getState().navigateToDate(date);
+  const navigateToDate = useCallback((date: string, venue?: string) => {
     suppressPopstate.current = true;
+    useAppStore.getState().navigateToDate(date, venue);
     history.pushState({ modal: 'daysheet' }, '');
   }, []);
 
-  const openAddToday = useCallback(() => {
-    navigateToDate(new Date().toISOString().slice(0, 10));
+  const openAddToday = useCallback((venue?: string) => {
+    navigateToDate(new Date().toISOString().slice(0, 10), venue);
   }, [navigateToDate]);
 
   const openCommunityPost = useCallback((postId: string) => {

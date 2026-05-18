@@ -482,15 +482,27 @@ export function IncomeScreen({
     if (!shareCardRef.current) return;
     setIsExportingShare(true);
     try {
-      const dataUrl = await toPng(shareCardRef.current, {
+      const el = shareCardRef.current;
+      const dataUrl = await toPng(el, {
         cacheBust: true,
-        pixelRatio: 2,
+        pixelRatio: 3,
         backgroundColor: '#eef6ff',
+        width: el.offsetWidth,
+        height: el.offsetHeight,
       });
+
+      const res = await fetch(dataUrl);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.href = dataUrl;
+      link.href = blobUrl;
       link.download = `duhoc-mate-${selectedMonthKey}-report.png`;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+    } catch (error) {
+      console.error('Unable to export income share card:', error);
     } finally {
       setIsExportingShare(false);
     }

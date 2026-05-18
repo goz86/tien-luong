@@ -1,4 +1,4 @@
-import { FormEvent, useState, useRef, useEffect } from 'react';
+import { FormEvent, useState, useRef, useEffect, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import {
   LogIn,
@@ -67,6 +67,15 @@ const WALLPAPERS: { key: WallpaperKey; label_vi: string; label_ko: string; gradi
 ];
 
 export { WALLPAPERS };
+
+const PROFILE_HERO_BACKGROUNDS: Record<WallpaperKey, string> = {
+  default: 'radial-gradient(circle at 86% 12%, rgba(215, 255, 95, 0.34), transparent 24%), radial-gradient(circle at 12% 100%, rgba(38, 217, 164, 0.24), transparent 32%), linear-gradient(135deg, #253adf 0%, #4f73ff 54%, #6b5cf6 100%)',
+  ocean: 'radial-gradient(circle at 86% 12%, rgba(240, 249, 255, 0.58), transparent 25%), radial-gradient(circle at 10% 96%, rgba(125, 211, 252, 0.24), transparent 32%), linear-gradient(135deg, #0369a1 0%, #38bdf8 56%, #0f8fc8 100%)',
+  sunset: 'radial-gradient(circle at 84% 14%, rgba(255, 247, 237, 0.58), transparent 25%), radial-gradient(circle at 12% 100%, rgba(251, 146, 60, 0.22), transparent 32%), linear-gradient(135deg, #c2410c 0%, #f59e0b 54%, #ea580c 100%)',
+  forest: 'radial-gradient(circle at 86% 12%, rgba(240, 253, 244, 0.58), transparent 25%), radial-gradient(circle at 12% 100%, rgba(74, 222, 128, 0.22), transparent 32%), linear-gradient(135deg, #047857 0%, #22c55e 55%, #0f9f6e 100%)',
+  lavender: 'radial-gradient(circle at 86% 12%, rgba(250, 245, 255, 0.56), transparent 25%), radial-gradient(circle at 12% 100%, rgba(167, 139, 250, 0.22), transparent 32%), linear-gradient(135deg, #6d28d9 0%, #a78bfa 54%, #7c3aed 100%)',
+  rose: 'radial-gradient(circle at 86% 12%, rgba(255, 241, 242, 0.58), transparent 25%), radial-gradient(circle at 12% 100%, rgba(251, 113, 133, 0.2), transparent 32%), linear-gradient(135deg, #be123c 0%, #fb7185 54%, #db2777 100%)',
+};
 
 export function ProfileScreen({
   profile,
@@ -599,12 +608,21 @@ export function ProfileScreen({
     setRegSchoolSuggestions([]);
   };
 
+  const profileHeroBackground = PROFILE_HERO_BACKGROUNDS[wallpaper] ?? PROFILE_HERO_BACKGROUNDS.default;
+  const profileHeroStyle: CSSProperties = {
+    position: 'relative',
+    background: `${isDarkMode
+      ? 'linear-gradient(180deg, rgba(15,23,42,0.58) 0%, rgba(15,23,42,0.9) 58%, var(--surface) 100%)'
+      : 'linear-gradient(180deg, rgba(255,255,255,0.82) 0%, rgba(255,255,255,0.96) 54%, var(--bg-card) 100%)'}, ${profileHeroBackground}`,
+  };
+  const profileHeroBgStyle: CSSProperties = { background: profileHeroBackground };
+
   return (
     <div className="profile-wrapper">
       {/* ===== HEADER / HERO SECTION (Only when logged in) ===== */}
       {session?.user.email ? (
         <>
-          <div className="pf-hero" style={{ position: 'relative' }}>
+          <div className="pf-hero" style={profileHeroStyle}>
             {/* Top-right action buttons */}
             <div className="pf-hero-actions">
               {canOpenAdmin && (
@@ -626,7 +644,7 @@ export function ProfileScreen({
                 <Settings size={17} />
               </button>
             </div>
-            <div className="pf-hero-bg" />
+            <div className="pf-hero-bg" style={profileHeroBgStyle} />
 
             <input
               type="file"

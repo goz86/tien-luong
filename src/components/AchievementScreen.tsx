@@ -145,11 +145,26 @@ const GOAL_PRESETS = [
   { icon: '💌', title_vi: 'Gửi về gia đình', title_ko: '가족에게 송금', amount: 10_000_000, currency: 'VND' as const },
 ];
 
-const REWARD_POOL = [
-  '⭐', '🌟', '💫', '✨', '🎖️', '🏆', '🎀', '🌸',
-  '🦋', '🌈', '🎵', '🍀', '🌙', '☀️', '🎊', '💎',
-  '🌺', '🦄', '🔮', '🌠',
-];
+const MOTIVATION_POOL = {
+  vi: [
+    'Bạn đang đi xa hơn mình nghĩ.',
+    'Mỗi ca làm hôm nay là một bước gần hơn tới mục tiêu.',
+    'Chậm cũng được, miễn là bạn vẫn tiếp tục.',
+    'Tiền tiết kiệm nhỏ hôm nay sẽ thành lựa chọn lớn ngày mai.',
+    'Bạn không bắt đầu lại từ đầu, bạn bắt đầu từ kinh nghiệm.',
+    'Một ngày chăm chỉ nữa đã được cộng vào hành trình của bạn.',
+    'Giữ nhịp này, phiên bản tự do hơn của bạn đang tới.',
+    'Tự hào vì bạn vẫn cố gắng, kể cả những ngày mệt.',
+  ],
+  ko: [
+    '생각보다 더 멀리 오고 있어요.',
+    '오늘의 한 시간이 목표에 더 가까워지는 한 걸음이에요.',
+    '천천히 가도 괜찮아요. 계속 가고 있으니까요.',
+    '오늘의 작은 저축이 내일의 큰 선택지가 돼요.',
+    '처음부터 다시가 아니라, 경험 위에서 다시 시작하는 거예요.',
+    '오늘의 노력도 당신의 여정에 더해졌어요.',
+  ],
+};
 
 const NET_WORTH_MILESTONES: Milestone[] = [
   { key: 'start', threshold: 0, emoji: '🌱', imgKey: 'net_start', label_vi: 'Lv.0: Sang Hàn Làm Lại Từ Đầu', label_ko: 'Lv.0: 한국에서 다시 시작', desc_vi: 'Từ con số nhỏ, mình bắt đầu giữ lại từng đồng ròng.', desc_ko: '작은 금액부터 차곡차곡 모으는 시작점.', color: '#14b8a6', bgColor: '#f0fdfa' },
@@ -213,7 +228,7 @@ function markBillionCelebrated() {
 }
 
 function iconUrl(name: string) {
-  return `${import.meta.env.BASE_URL}icon/${name}.png`;
+  return `${import.meta.env.BASE_URL}icon/${name}.png?v=20260518-ach`;
 }
 
 function faceImg(progressPct: number, hasUnclaimed: boolean, totalVnd: number): string {
@@ -296,6 +311,178 @@ function pickMotivation(exclude?: string) {
 // Sub-components
 // ─────────────────────────────────────────────────────
 
+type GiftIconKey = 'vn_flag' | 'vn_nonla' | 'vn_pho' | 'vn_lotus' | 'kr_lotto' | 'kr_kimchi' | 'kr_hanbok';
+
+const GIFT_ICON_POOL: GiftIconKey[] = ['vn_flag', 'vn_nonla', 'vn_pho', 'vn_lotus', 'kr_lotto', 'kr_kimchi', 'kr_hanbok'];
+
+function pickGiftIcon(exclude?: GiftIconKey): GiftIconKey {
+  if (GIFT_ICON_POOL.length <= 1) return GIFT_ICON_POOL[0];
+  let next = GIFT_ICON_POOL[Math.floor(Math.random() * GIFT_ICON_POOL.length)];
+  if (exclude && next === exclude) {
+    const currentIndex = GIFT_ICON_POOL.indexOf(next);
+    next = GIFT_ICON_POOL[(currentIndex + 1) % GIFT_ICON_POOL.length];
+  }
+  return next;
+}
+
+function GiftRewardIcon({ icon }: { icon: GiftIconKey }) {
+  const isVietnam = icon.startsWith('vn_');
+
+  return (
+    <svg className={`ach-gift-reward-mark ach-gift-reward-mark--${isVietnam ? 'vn' : 'kr'}`} viewBox="0 0 96 96" aria-hidden="true" focusable="false">
+      <defs>
+        <linearGradient id="achGiftVnBg" x1="14" y1="10" x2="82" y2="86" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#fff7ed" />
+          <stop offset="0.52" stopColor="#fee2e2" />
+          <stop offset="1" stopColor="#dcfce7" />
+        </linearGradient>
+        <linearGradient id="achGiftKrBg" x1="14" y1="10" x2="82" y2="86" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#eff6ff" />
+          <stop offset="0.5" stopColor="#f8fafc" />
+          <stop offset="1" stopColor="#fef3c7" />
+        </linearGradient>
+        <linearGradient id="achGiftLotus" x1="30" y1="48" x2="66" y2="78" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#fb7185" />
+          <stop offset="0.54" stopColor="#f97316" />
+          <stop offset="1" stopColor="#facc15" />
+        </linearGradient>
+        <linearGradient id="achGiftHanbok" x1="28" y1="31" x2="70" y2="78" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#f9a8d4" />
+          <stop offset="0.48" stopColor="#60a5fa" />
+          <stop offset="1" stopColor="#fde68a" />
+        </linearGradient>
+      </defs>
+      <rect x="6" y="6" width="84" height="84" rx="28" fill={isVietnam ? 'url(#achGiftVnBg)' : 'url(#achGiftKrBg)'} />
+
+      {icon === 'vn_flag' && (
+        <g className="ach-gift-icon-shape">
+          <path d="M25 25v45" stroke="#0f172a" strokeWidth="4" strokeLinecap="round" />
+          <path d="M29 24c14-7 27 8 42 1v31c-15 7-28-8-42-1Z" fill="#dc2626" />
+          <polygon points="50,34 53.5,42 62,42.5 55.6,47.8 57.6,56 50,51.6 42.4,56 44.4,47.8 38,42.5 46.5,42" fill="#facc15" />
+          <path d="M25 72h26" stroke="#0f766e" strokeWidth="4" strokeLinecap="round" />
+        </g>
+      )}
+
+      {icon === 'vn_nonla' && (
+        <g className="ach-gift-icon-shape">
+          <path d="M18 58c14-22 45-30 60 0-16 12-43 12-60 0Z" fill="#fde68a" />
+          <path d="M28 57c12-10 28-16 40 0" fill="none" stroke="#92400e" strokeWidth="3" strokeLinecap="round" />
+          <path d="M48 30v31" stroke="#f59e0b" strokeWidth="3" strokeLinecap="round" />
+          <path d="M38 64c7 6 14 6 21 0" stroke="#dc2626" strokeWidth="5" strokeLinecap="round" />
+          <path d="M25 72c12 5 33 5 46 0" stroke="#16a34a" strokeWidth="4" strokeLinecap="round" />
+        </g>
+      )}
+
+      {icon === 'vn_pho' && (
+        <g className="ach-gift-icon-shape">
+          <path d="M30 30c-7 9 6 11 0 20M48 26c-8 9 7 12 0 21M66 30c-7 8 5 10 0 19" fill="none" stroke="#94a3b8" strokeWidth="3" strokeLinecap="round" />
+          <path d="M22 50h52c-2 18-12 27-26 27S24 68 22 50Z" fill="#fff7ed" stroke="#0f172a" strokeWidth="3" />
+          <path d="M29 55c8 7 30 7 39 0" fill="none" stroke="#f97316" strokeWidth="4" strokeLinecap="round" />
+          <path d="M34 62c8 4 20 4 28 0" fill="none" stroke="#facc15" strokeWidth="3" strokeLinecap="round" />
+          <path d="M64 43l17-13M68 48l18-14" stroke="#92400e" strokeWidth="3" strokeLinecap="round" />
+          <circle cx="39" cy="56" r="3" fill="#22c55e" />
+          <circle cx="57" cy="56" r="3" fill="#22c55e" />
+        </g>
+      )}
+
+      {icon === 'vn_lotus' && (
+        <g className="ach-gift-icon-shape">
+          <path d="M48 27c8 8 12 25 0 42-12-17-8-34 0-42Z" fill="url(#achGiftLotus)" />
+          <path d="M32 39c12 2 20 11 16 30-15-6-21-16-16-30Z" fill="#fb7185" />
+          <path d="M64 39c-12 2-20 11-16 30 15-6 21-16 16-30Z" fill="#f97316" />
+          <path d="M21 56c13-3 25 1 27 14-15 4-25-1-27-14Z" fill="#facc15" />
+          <path d="M75 56c-13-3-25 1-27 14 15 4 25-1 27-14Z" fill="#22c55e" />
+          <path d="M30 76h36" stroke="#0f766e" strokeWidth="4" strokeLinecap="round" />
+        </g>
+      )}
+
+      {icon === 'kr_lotto' && (
+        <g className="ach-gift-icon-shape">
+          <path d="M25 28h46a7 7 0 0 1 7 7v11a8 8 0 0 0 0 16v7a7 7 0 0 1-7 7H25a7 7 0 0 1-7-7v-7a8 8 0 0 0 0-16V35a7 7 0 0 1 7-7Z" fill="#fff" stroke="#0f172a" strokeWidth="3" />
+          <circle cx="34" cy="43" r="7" fill="#ef4444" />
+          <circle cx="50" cy="43" r="7" fill="#2563eb" />
+          <circle cx="66" cy="43" r="7" fill="#facc15" />
+          <circle cx="42" cy="61" r="7" fill="#22c55e" />
+          <circle cx="58" cy="61" r="7" fill="#f97316" />
+          <path d="M27 70h42" stroke="#94a3b8" strokeWidth="3" strokeLinecap="round" strokeDasharray="3 5" />
+        </g>
+      )}
+
+      {icon === 'kr_kimchi' && (
+        <g className="ach-gift-icon-shape">
+          <path d="M31 38h34l-4 36H35Z" fill="#fff7ed" stroke="#0f172a" strokeWidth="3" />
+          <path d="M35 31h26l5 9H30Z" fill="#ef4444" stroke="#0f172a" strokeWidth="3" strokeLinejoin="round" />
+          <path d="M38 49c8-10 21-8 23 5-8-2-16 1-23-5Z" fill="#f97316" />
+          <path d="M38 61c7-7 18-8 23 2-8 0-14 5-23-2Z" fill="#dc2626" />
+          <path d="M43 48c-2 9 2 16 12 22" stroke="#16a34a" strokeWidth="4" strokeLinecap="round" />
+          <circle cx="60" cy="32" r="4" fill="#facc15" />
+        </g>
+      )}
+
+      {icon === 'kr_hanbok' && (
+        <g className="ach-gift-icon-shape">
+          <circle cx="48" cy="27" r="9" fill="#f8d8b8" stroke="#0f172a" strokeWidth="3" />
+          <path d="M31 44c9-15 25-15 34 0l9 32H22Z" fill="url(#achGiftHanbok)" stroke="#0f172a" strokeWidth="3" strokeLinejoin="round" />
+          <path d="M39 43l9 12 9-12" fill="#fff" stroke="#0f172a" strokeWidth="3" strokeLinejoin="round" />
+          <path d="M48 55v20" stroke="#ef4444" strokeWidth="4" strokeLinecap="round" />
+          <path d="M30 55c10 7 25 7 36 0" stroke="#facc15" strokeWidth="4" strokeLinecap="round" />
+          <path d="M40 22c3-7 13-7 16 0" stroke="#111827" strokeWidth="5" strokeLinecap="round" />
+        </g>
+      )}
+    </svg>
+  );
+}
+
+function GiftBoxIcon({ open, className }: { open?: boolean; className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 128 128" aria-hidden="true" focusable="false">
+      <defs>
+        <linearGradient id="achGiftBoxBody" x1="26" y1="34" x2="104" y2="112" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#fff7db" />
+          <stop offset="0.5" stopColor="#f6e8bf" />
+          <stop offset="1" stopColor="#d9c08c" />
+        </linearGradient>
+        <linearGradient id="achGiftBoxRibbon" x1="40" y1="22" x2="88" y2="106" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#fbbf24" />
+          <stop offset="0.55" stopColor="#d97706" />
+          <stop offset="1" stopColor="#92400e" />
+        </linearGradient>
+        <linearGradient id="achGiftBoxGlow" x1="18" y1="12" x2="112" y2="118" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#ffffff" stopOpacity="0.96" />
+          <stop offset="1" stopColor="#fef3c7" stopOpacity="0.2" />
+        </linearGradient>
+      </defs>
+      {open ? (
+        <g className="ach-gift-box-svg-open">
+          <ellipse cx="64" cy="111" rx="31" ry="7" fill="rgba(8,22,43,0.1)" />
+          <path d="M29 60 64 78v34L29 94Z" fill="url(#achGiftBoxBody)" stroke="#8a6b32" strokeWidth="3" strokeLinejoin="round" />
+          <path d="M64 78 99 60v34l-35 18Z" fill="#ead39c" stroke="#8a6b32" strokeWidth="3" strokeLinejoin="round" />
+          <path d="M55 74 73 64v38l-18 9Z" fill="url(#achGiftBoxRibbon)" opacity="0.9" />
+          <path d="M30 51 64 33l34 18-34 18Z" fill="#fff2c8" stroke="#8a6b32" strokeWidth="3" strokeLinejoin="round" />
+          <path d="M33 36c11-14 23-8 31 9-17 2-28-2-31-9Z" fill="#f7d56c" stroke="#8a6b32" strokeWidth="3" />
+          <path d="M95 36c-11-14-23-8-31 9 17 2 28-2 31-9Z" fill="#f7d56c" stroke="#8a6b32" strokeWidth="3" />
+          <path d="M45 25c8 2 15 8 19 21" fill="none" stroke="url(#achGiftBoxRibbon)" strokeWidth="7" strokeLinecap="round" />
+          <path d="M83 25c-8 2-15 8-19 21" fill="none" stroke="url(#achGiftBoxRibbon)" strokeWidth="7" strokeLinecap="round" />
+          <circle cx="64" cy="47" r="7" fill="#f59e0b" stroke="#8a6b32" strokeWidth="3" />
+        </g>
+      ) : (
+        <g className="ach-gift-box-svg-closed">
+          <ellipse cx="64" cy="113" rx="38" ry="8" fill="rgba(8,22,43,0.12)" />
+          <path d="M25 56h78v51a8 8 0 0 1-8 8H33a8 8 0 0 1-8-8Z" fill="url(#achGiftBoxBody)" stroke="#8a6b32" strokeWidth="3" strokeLinejoin="round" />
+          <path d="M20 43h88v20H20Z" fill="#fff2c8" stroke="#8a6b32" strokeWidth="3" strokeLinejoin="round" />
+          <path d="M56 43h17v72H56Z" fill="url(#achGiftBoxRibbon)" />
+          <path d="M20 52h88" stroke="url(#achGiftBoxGlow)" strokeWidth="6" strokeLinecap="round" opacity="0.65" />
+          <path d="M31 31c11-17 24-9 31 13-18 1-30-4-31-13Z" fill="#f7d56c" stroke="#8a6b32" strokeWidth="3" />
+          <path d="M93 31c-11-17-24-9-31 13 18 1 30-4 31-13Z" fill="#f7d56c" stroke="#8a6b32" strokeWidth="3" />
+          <path d="M43 20c9 1 16 8 20 24" fill="none" stroke="url(#achGiftBoxRibbon)" strokeWidth="7" strokeLinecap="round" />
+          <path d="M85 20c-9 1-16 8-21 24" fill="none" stroke="url(#achGiftBoxRibbon)" strokeWidth="7" strokeLinecap="round" />
+          <circle cx="64" cy="44" r="8" fill="#f59e0b" stroke="#8a6b32" strokeWidth="3" />
+        </g>
+      )}
+    </svg>
+  );
+}
+
 function GiftModal({
   milestone,
   isKo,
@@ -309,17 +496,21 @@ function GiftModal({
 }) {
   const [phase, setPhase] = useState<'idle' | 'shaking' | 'opened'>('idle');
   const [reward, setReward] = useState('');
+  const [rewardIcon, setRewardIcon] = useState<GiftIconKey>(() => pickGiftIcon());
 
   const handleTap = useCallback(() => {
     if (phase !== 'idle') return;
     setPhase('shaking');
     setTimeout(() => {
-      const r = REWARD_POOL[Math.floor(Math.random() * REWARD_POOL.length)];
+      const pool = isKo ? MOTIVATION_POOL.ko : MOTIVATION_POOL.vi;
+      const r = pool[Math.floor(Math.random() * pool.length)];
+      const nextIcon = pickGiftIcon(rewardIcon);
       setReward(r);
+      setRewardIcon(nextIcon);
       setPhase('opened');
       onClaim(r);
     }, 700);
-  }, [phase, onClaim]);
+  }, [phase, isKo, onClaim, rewardIcon]);
 
   return createPortal(
     <div className="ach-gift-overlay" onClick={phase === 'opened' ? onClose : undefined}>
@@ -336,8 +527,9 @@ function GiftModal({
               className={`ach-gift-box-btn ${phase === 'shaking' ? 'shaking' : ''}`}
               onClick={handleTap}
               disabled={phase === 'shaking'}
+              aria-label={isKo ? '선물 상자 열기' : 'Mở hộp quà'}
             >
-              <img src={iconUrl('box_closed')} alt="gift box" className="ach-gift-box-img" />
+              <GiftBoxIcon className="ach-gift-box-img" />
             </button>
             {phase === 'idle' && (
               <p className="ach-gift-tap-hint">{isKo ? '👆 탭하기' : '👆 Nhấn vào đây'}</p>
@@ -353,17 +545,17 @@ function GiftModal({
                 } as React.CSSProperties} />
               ))}
             </div>
-            <img src={iconUrl('box_open')} alt="opened box" className="ach-gift-box-img" />
-            <div className="ach-gift-reward-emoji">{reward}</div>
-            <div className="ach-gift-title">{isKo ? '축하해요! 🎉' : 'Chúc mừng! 🎉'}</div>
+            <GiftBoxIcon open className="ach-gift-box-img opened" />
+            <div className="ach-gift-motivation-icon" aria-hidden="true">
+              <GiftRewardIcon icon={rewardIcon} />
+            </div>
+            <div className="ach-gift-title">{isKo ? '오늘의 응원' : 'Một lời nhắn cho bạn'}</div>
             <div className="ach-gift-subtitle">
-              {isKo ? '새 아이콘을 획득했어요!' : 'Bạn nhận được icon đặc biệt!'}
+              {isKo ? '선물 상자에서 작은 동기부여를 찾았어요.' : 'Hộp quà này gửi bạn một chút động lực.'}
             </div>
-            <div className="ach-gift-reward-label">
-              {isKo ? '획득한 아이콘:' : 'Icon vừa nhận:'} <strong>{reward}</strong>
-            </div>
+            <blockquote className="ach-gift-motivation-quote">{reward}</blockquote>
             <button type="button" className="ach-gift-done-btn" onClick={onClose}>
-              {isKo ? '닫기 ✓' : 'Đóng ✓'}
+              {isKo ? '닫기' : 'Đóng'}
             </button>
           </>
         )}

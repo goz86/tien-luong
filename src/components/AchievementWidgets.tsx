@@ -75,7 +75,7 @@ const COMPANION_MOTIVATIONS = [
 ];
 
 function iconUrl(name: string) {
-  return `${import.meta.env.BASE_URL}icon/${name}.png`;
+  return `${import.meta.env.BASE_URL}icon/${name}.png?v=20260518-ach`;
 }
 
 function calculateNetIncomeVnd(shifts: Shift[], expenses: Expense[], rateValue: number) {

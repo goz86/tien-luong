@@ -1,7 +1,6 @@
-const CACHE_VERSION = 'duhoc-mate-v5-app-icon';
+const CACHE_VERSION = 'duhoc-mate-v6-cache-reset';
 const APP_SHELL = [
   '/',
-  '/index.html',
   '/manifest.webmanifest',
   '/offline.html',
   '/favicon.ico',
@@ -31,6 +30,15 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
+
+  if (
+    self.location.hostname === 'localhost' ||
+    self.location.hostname === '127.0.0.1' ||
+    self.location.hostname === '::1'
+  ) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
 
   // Vite/dev source modules must always be network-first. Caching these is what
   // makes localhost appear to "go back" to old React code after refresh.

@@ -198,8 +198,8 @@ export interface AppState {
   // Tab / navigation
   setTab: (t: Tab) => void;
   changeTab: (t: Tab) => void;
-  openAddToday: () => void;
-  navigateToDate: (date: string) => void;
+  openAddToday: (venue?: string) => void;
+  navigateToDate: (date: string, venue?: string) => void;
 
   // Auth
   setSession: (s: Session | null) => void;
@@ -397,14 +397,21 @@ export const useAppStore = create<AppState>((set, get) => {
         return { tab: nextTab, isDaySheetOpen: nextTab !== 'calendar' ? false : s.isDaySheetOpen };
       });
     },
-    openAddToday: () => {
-      get().navigateToDate(todayIso);
+    openAddToday: (venue) => {
+      get().navigateToDate(todayIso, venue);
     },
-    navigateToDate: (date) => {
+    navigateToDate: (date, venue) => {
+      const trimmedVenue = venue?.trim();
+      const nextDraft = {
+        ...get().draft,
+        date,
+        note: '',
+        ...(trimmedVenue ? { venue: trimmedVenue } : {}),
+      };
       set({
         selectedDate: date,
         calendarMonth: startOfMonth(date),
-        draft: { ...get().draft, date, note: '' },
+        draft: nextDraft,
         isDaySheetOpen: true,
         tab: 'calendar',
         editingShiftId: null,

@@ -38,6 +38,38 @@
     <meta name="description" content="Ứng dụng tính lương, theo dõi thu nhập và kết nối cộng đồng du học sinh Việt Nam tại Hàn Quốc. Miễn phí, không cần cài đặt." />
   </head>
   <body>
+    <script>
+      (function () {
+        var isLocal =
+          location.hostname === 'localhost' ||
+          location.hostname === '127.0.0.1' ||
+          location.hostname === '::1';
+        if (!isLocal || !('serviceWorker' in navigator)) return;
+
+        var resetKey = 'duhoc-mate-local-cache-reset-v2';
+        var alreadyReset = sessionStorage.getItem(resetKey) === '1';
+        var clearCaches = 'caches' in window
+          ? caches.keys().then(function (keys) {
+              return Promise.all(keys.map(function (key) { return caches.delete(key); }));
+            })
+          : Promise.resolve();
+
+        navigator.serviceWorker.getRegistrations()
+          .then(function (registrations) {
+            return Promise.all(registrations.map(function (registration) {
+              return registration.unregister();
+            }));
+          })
+          .then(function () { return clearCaches; })
+          .then(function () {
+            if (navigator.serviceWorker.controller && !alreadyReset) {
+              sessionStorage.setItem(resetKey, '1');
+              location.replace(location.pathname + location.search + location.hash);
+            }
+          })
+          .catch(function () {});
+      })();
+    </script>
     <!-- ── Splash Screen ── -->
     <div id="splash" style="
       position: fixed;

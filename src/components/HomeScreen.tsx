@@ -48,7 +48,7 @@ export function HomeScreen({
   expenses: Expense[];
   venueColors: VenueColors;
   onRefresh: () => void;
-  onOpenAdd: () => void;
+  onOpenAdd: (venue?: string) => void;
   onEditShift: (shift: Shift) => void;
   onDeleteShift: (id: string) => void;
   currentMonth: string;
@@ -199,7 +199,7 @@ export function HomeScreen({
           <FinanceMetric label={ui.exchangeRate} value={rate.source === 'live' ? `${rate.value.toFixed(2)} VND` : ui.cachedRate} />
         </div>
 
-        <button type="button" className="primary-cta" onClick={onOpenAdd}>
+        <button type="button" className="primary-cta" onClick={() => onOpenAdd()}>
           <Plus size={18} />
           {ui.addShift}
         </button>
@@ -509,7 +509,7 @@ export function HomeScreen({
                 type="button" 
                 className="workplace-history-add"
                 onClick={() => {
-                  onOpenAdd();
+                  onOpenAdd(selectedWorkplace);
                   setSelectedWorkplace(null);
                 }}
               >
