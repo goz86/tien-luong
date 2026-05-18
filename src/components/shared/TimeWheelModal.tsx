@@ -23,6 +23,15 @@ export function TimeWheelModal({ initialTime, onClose, onConfirm, title }: TimeW
     }
   }, [initialTime]);
 
+  // ── Android back button ──
+  useEffect(() => {
+    history.pushState({ modal: 'time-wheel' }, '');
+    function handlePopstate() { onClose(); }
+    window.addEventListener('popstate', handlePopstate);
+    return () => window.removeEventListener('popstate', handlePopstate);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleConfirm = () => {
     const hStr = String(selectedHour).padStart(2, '0');
     const mStr = String(selectedMinute).padStart(2, '0');

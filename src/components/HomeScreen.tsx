@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useState, useEffect } from 'react';
 import { Plus, ChevronLeft, ChevronRight, X, Edit3, Trash2, Bell, TrendingUp, ShieldCheck } from 'lucide-react';
 import { formatKrw, calculateShiftPay, shiftHours } from '../lib/salary';
 import { CurrencyMode, Expense, RateState, Shift, VenueColors } from '../lib/types';
@@ -110,6 +110,36 @@ export function HomeScreen({
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [isVND, setIsVND] = useState(false);
   const [showAchievement, setShowAchievement] = useState(false);
+  // ── Android back button: workplace history modal ──
+  useEffect(() => {
+    if (selectedWorkplace) {
+      history.pushState({ modal: 'workplace' }, '');
+    }
+  }, [selectedWorkplace]);
+
+  useEffect(() => {
+    function handlePopstate() {
+      if (selectedWorkplace) setSelectedWorkplace(null);
+    }
+    window.addEventListener('popstate', handlePopstate);
+    return () => window.removeEventListener('popstate', handlePopstate);
+  }, [selectedWorkplace]);
+
+  // ── Android back button: achievement screen ──
+  useEffect(() => {
+    if (showAchievement) {
+      history.pushState({ modal: 'achievement' }, '');
+    }
+  }, [showAchievement]);
+
+  useEffect(() => {
+    function handlePopstate() {
+      if (showAchievement) setShowAchievement(false);
+    }
+    window.addEventListener('popstate', handlePopstate);
+    return () => window.removeEventListener('popstate', handlePopstate);
+  }, [showAchievement]);
+
   const monthNumber = new Date(`${currentMonth}T00:00:00`).getMonth() + 1;
 
   const workplaceShifts = allShifts.filter(s => s.label === selectedWorkplace)

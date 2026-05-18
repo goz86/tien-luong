@@ -28,6 +28,15 @@ export function DateWheelModal({ initialDate, onClose, onConfirm, title }: DateW
     }
   }, [initialDate]);
 
+  // ── Android back button ──
+  useEffect(() => {
+    history.pushState({ modal: 'date-wheel' }, '');
+    function handlePopstate() { onClose(); }
+    window.addEventListener('popstate', handlePopstate);
+    return () => window.removeEventListener('popstate', handlePopstate);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Handle day overflow when month changes
   const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
   const dayOptions = Array.from({ length: daysInMonth }, (_, i) => i + 1);

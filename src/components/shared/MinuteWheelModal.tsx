@@ -21,6 +21,15 @@ export function MinuteWheelModal({ initialMinutes, onClose, onConfirm, title }: 
     setSelectedMinute(safeValue);
   }, [initialMinutes]);
 
+  // ── Android back button ──
+  useEffect(() => {
+    history.pushState({ modal: 'minute-wheel' }, '');
+    function handlePopstate() { onClose(); }
+    window.addEventListener('popstate', handlePopstate);
+    return () => window.removeEventListener('popstate', handlePopstate);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleConfirm = () => {
     onConfirm(selectedMinute);
   };
