@@ -110,29 +110,38 @@ interface InsuranceRecord {
   payDate: string;         // 'YYYY-MM-DD'
   baseSalary: number;      // KRW
   insuranceType: '2' | '4';
-  healthAmt: number;       // 건강보험 employee share (editable)
-  longCareAmt: number;     // 장기요양 (editable)
-  pensionAmt: number;      // 국민연금 employee share (editable, 0 if '2')
-  employmentAmt: number;   // 고용보험 employee share (editable, 0 if '2')
+  // Rates stored as % values (e.g. 3.545, not 0.03545) — user-editable
+  healthRate: number;
+  longCareRate: number;    // applied to healthAmt
+  pensionRate: number;
+  employmentRate: number;
+  // Computed/editable KRW amounts
+  healthAmt: number;
+  longCareAmt: number;
+  pensionAmt: number;      // 0 if '2'
+  employmentAmt: number;   // 0 if '2'
   confirmed: boolean;
   note: string;
 }
 type InsFormField = 'workStartDate' | 'payDate';
 
 const INS_STORAGE_KEY = 'duhoc-mate-insurance';
-// 2025-2026 rates — employee share
-const INS_RATES = {
-  health: 0.03545,     // 건강보험 3.545%
-  longCare: 0.1295,    // 장기요양 = healthAmt × 12.95%
-  pension: 0.045,      // 국민연금 4.5%
-  employment: 0.009,   // 고용보험 0.9%
-};
+// Default 2025-2026 rates as %-values (employee share)
+const INS_RATES = { health: 3.545, longCare: 12.95, pension: 4.5, employment: 0.9 };
 
-function calcIns(base: number, type: '2' | '4') {
-  const healthAmt = Math.round(base * INS_RATES.health);
-  const longCareAmt = Math.round(healthAmt * INS_RATES.longCare);
-  const pensionAmt = type === '4' ? Math.round(base * INS_RATES.pension) : 0;
-  const employmentAmt = type === '4' ? Math.round(base * INS_RATES.employment) : 0;
+function calcIns(
+  base: number,
+  type: '2' | '4',
+  rates?: { health?: number; longCare?: number; pension?: number; employment?: number },
+) {
+  const h  = rates?.health      ?? INS_RATES.health;
+  const lc = rates?.longCare    ?? INS_RATES.longCare;
+  const p  = rates?.pension     ?? INS_RATES.pension;
+  const e  = rates?.employment  ?? INS_RATES.employment;
+  const healthAmt     = Math.round(base * h / 100);
+  const longCareAmt   = Math.round(healthAmt * lc / 100);
+  const pensionAmt    = type === '4' ? Math.round(base * p / 100) : 0;
+  const employmentAmt = type === '4' ? Math.round(base * e / 100) : 0;
   return { healthAmt, longCareAmt, pensionAmt, employmentAmt };
 }
 
@@ -286,11 +295,11 @@ export function IncomeScreen({
     insWorkplace: '근무지 (선택)',
     insStartDate: '근무 시작일',
     insPayDate: '급여일',
-    insSalaryBase: '기준 급여 (₩)',
-    insHealth: '건강보험 (3.545%)',
-    insLongCare: '장기요양 (12.95%)',
-    insPension: '국민연금 (4.5%)',
-    insEmployment: '고용보험 (0.9%)',
+    insSalaryBase: '해당 급여 (₩)',
+    insHealth: '건강보험',
+    insLongCare: '장기요양',
+    insPension: '국민연금',
+    insEmployment: '고용보험',
     insTotal: '납부 예상액',
     insConfirm: '확인 — 지출에 반영',
     insConfirmed: '지출에 반영됨',
@@ -349,11 +358,11 @@ export function IncomeScreen({
     insWorkplace: 'Nơi làm (không bắt buộc)',
     insStartDate: 'Ngày bắt đầu làm',
     insPayDate: 'Ngày nhận lương',
-    insSalaryBase: 'Lương cơ sở (₩)',
-    insHealth: '건강보험 (3.545%)',
-    insLongCare: '장기요양 (12.95%)',
-    insPension: '국민연금 (4.5%)',
-    insEmployment: '고용보험 (0.9%)',
+    insSalaryBase: 'Lương tương ứng (₩)',
+    insHealth: '건강보험',
+    insLongCare: '장기요양',
+    insPension: '국민연금',
+    insEmployment: '고용보험',
     insTotal: 'Tổng phải đóng',
     insConfirm: 'Xác nhận — trừ vào Chi tiêu',
     insConfirmed: 'Đã trừ vào Chi tiêu',
@@ -410,24 +419,31 @@ export function IncomeScreen({
   });
   const prevTotalRef = useRef<number | null>(null);
 
-  // ── Insurance tab state ──
+  // ── Insurance tab state (moved below memoized values — see further down) ──
   const { records: allInsRecords, add: addInsRecord, update: updateInsRecord, remove: removeInsRecord } = useInsuranceRecords();
   const [isAddingIns, setIsAddingIns] = useState(false);
   const [editingInsId, setEditingInsId] = useState<string | null>(null);
   const [insDatePickerField, setInsDatePickerField] = useState<InsFormField | null>(null);
   const todayStr = new Date().toISOString().slice(0, 10);
-  const defaultInsForm = (): Omit<InsuranceRecord, 'id'> => ({
-    month: selectedMonthKey,
-    workplaceLabel: workplaces[0]?.label ?? '',
-    workStartDate: `${selectedMonthKey}-01`,
+  // insForm initialised with safe zero-defaults; populated in the "Add" click handler
+  const [insForm, setInsForm] = useState<Omit<InsuranceRecord, 'id'>>({
+    month: '',
+    workplaceLabel: '',
+    workStartDate: todayStr,
     payDate: todayStr,
-    baseSalary: monthlyTotal,
+    baseSalary: 0,
     insuranceType: '2',
-    ...calcIns(monthlyTotal, '2'),
+    healthRate: INS_RATES.health,
+    longCareRate: INS_RATES.longCare,
+    pensionRate: INS_RATES.pension,
+    employmentRate: INS_RATES.employment,
+    healthAmt: 0,
+    longCareAmt: 0,
+    pensionAmt: 0,
+    employmentAmt: 0,
     confirmed: false,
     note: '',
   });
-  const [insForm, setInsForm] = useState<Omit<InsuranceRecord, 'id'>>(defaultInsForm);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent | TouchEvent) => {
@@ -1206,7 +1222,7 @@ export function IncomeScreen({
                     type="button"
                     className={`income-ins-type-btn${insForm.insuranceType === '2' ? ' active' : ''}`}
                     onClick={() => {
-                      const calc = calcIns(insForm.baseSalary, '2');
+                      const calc = calcIns(insForm.baseSalary, '2', { health: insForm.healthRate, longCare: insForm.longCareRate, pension: insForm.pensionRate, employment: insForm.employmentRate });
                       setInsForm(f => ({ ...f, insuranceType: '2', ...calc }));
                     }}
                   >
@@ -1216,7 +1232,7 @@ export function IncomeScreen({
                     type="button"
                     className={`income-ins-type-btn${insForm.insuranceType === '4' ? ' active' : ''}`}
                     onClick={() => {
-                      const calc = calcIns(insForm.baseSalary, '4');
+                      const calc = calcIns(insForm.baseSalary, '4', { health: insForm.healthRate, longCare: insForm.longCareRate, pension: insForm.pensionRate, employment: insForm.employmentRate });
                       setInsForm(f => ({ ...f, insuranceType: '4', ...calc }));
                     }}
                   >
@@ -1269,56 +1285,91 @@ export function IncomeScreen({
                     value={insForm.baseSalary || ''}
                     onChange={e => {
                       const base = Number(e.target.value) || 0;
-                      const calc = calcIns(base, insForm.insuranceType);
+                      const calc = calcIns(base, insForm.insuranceType, { health: insForm.healthRate, longCare: insForm.longCareRate, pension: insForm.pensionRate, employment: insForm.employmentRate });
                       setInsForm(f => ({ ...f, baseSalary: base, ...calc }));
                     }}
                   />
                 </label>
 
-                {/* Breakdown — all editable */}
+                {/* Breakdown — rates + amounts all editable */}
                 <div className="income-ins-breakdown">
-                  <div className="income-ins-breakdown-title">{isKo ? '보험료 내역 (수정 가능)' : 'Chi tiết bảo hiểm (có thể sửa)'}</div>
+                  <div className="income-ins-breakdown-title">{isKo ? '보험료 내역 (% · 금액 모두 수정 가능)' : 'Chi tiết bảo hiểm (% và ₩ đều có thể sửa)'}</div>
+
+                  {/* 건강보험 */}
                   <div className="income-ins-row">
-                    <span>{ui.insHealth}</span>
-                    <input
-                      className="income-ins-amt"
-                      type="number"
-                      inputMode="numeric"
+                    <span className="income-ins-name">{ui.insHealth}</span>
+                    <input className="income-ins-rate-input" type="number" inputMode="decimal" step="0.001"
+                      value={insForm.healthRate}
+                      onChange={e => {
+                        const rate = Number(e.target.value) || 0;
+                        const healthAmt = Math.round(insForm.baseSalary * rate / 100);
+                        const longCareAmt = Math.round(healthAmt * insForm.longCareRate / 100);
+                        setInsForm(f => ({ ...f, healthRate: rate, healthAmt, longCareAmt }));
+                      }}
+                    />
+                    <span className="income-ins-unit">%&nbsp;=</span>
+                    <input className="income-ins-amt" type="number" inputMode="numeric"
                       value={insForm.healthAmt || ''}
-                      onChange={e => setInsForm(f => ({ ...f, healthAmt: Number(e.target.value) || 0 }))}
+                      onChange={e => {
+                        const healthAmt = Number(e.target.value) || 0;
+                        const longCareAmt = Math.round(healthAmt * insForm.longCareRate / 100);
+                        setInsForm(f => ({ ...f, healthAmt, longCareAmt }));
+                      }}
                     />
                     <span className="income-ins-unit">₩</span>
                   </div>
+
+                  {/* 장기요양 */}
                   <div className="income-ins-row">
-                    <span>{ui.insLongCare}</span>
-                    <input
-                      className="income-ins-amt"
-                      type="number"
-                      inputMode="numeric"
+                    <span className="income-ins-name">{ui.insLongCare}</span>
+                    <input className="income-ins-rate-input" type="number" inputMode="decimal" step="0.01"
+                      value={insForm.longCareRate}
+                      onChange={e => {
+                        const rate = Number(e.target.value) || 0;
+                        const longCareAmt = Math.round(insForm.healthAmt * rate / 100);
+                        setInsForm(f => ({ ...f, longCareRate: rate, longCareAmt }));
+                      }}
+                    />
+                    <span className="income-ins-unit">%&nbsp;=</span>
+                    <input className="income-ins-amt" type="number" inputMode="numeric"
                       value={insForm.longCareAmt || ''}
                       onChange={e => setInsForm(f => ({ ...f, longCareAmt: Number(e.target.value) || 0 }))}
                     />
                     <span className="income-ins-unit">₩</span>
                   </div>
+
+                  {/* 국민연금 + 고용보험 — only for 4-type */}
                   {insForm.insuranceType === '4' && (
                     <>
                       <div className="income-ins-row">
-                        <span>{ui.insPension}</span>
-                        <input
-                          className="income-ins-amt"
-                          type="number"
-                          inputMode="numeric"
+                        <span className="income-ins-name">{ui.insPension}</span>
+                        <input className="income-ins-rate-input" type="number" inputMode="decimal" step="0.01"
+                          value={insForm.pensionRate}
+                          onChange={e => {
+                            const rate = Number(e.target.value) || 0;
+                            const pensionAmt = Math.round(insForm.baseSalary * rate / 100);
+                            setInsForm(f => ({ ...f, pensionRate: rate, pensionAmt }));
+                          }}
+                        />
+                        <span className="income-ins-unit">%&nbsp;=</span>
+                        <input className="income-ins-amt" type="number" inputMode="numeric"
                           value={insForm.pensionAmt || ''}
                           onChange={e => setInsForm(f => ({ ...f, pensionAmt: Number(e.target.value) || 0 }))}
                         />
                         <span className="income-ins-unit">₩</span>
                       </div>
                       <div className="income-ins-row">
-                        <span>{ui.insEmployment}</span>
-                        <input
-                          className="income-ins-amt"
-                          type="number"
-                          inputMode="numeric"
+                        <span className="income-ins-name">{ui.insEmployment}</span>
+                        <input className="income-ins-rate-input" type="number" inputMode="decimal" step="0.01"
+                          value={insForm.employmentRate}
+                          onChange={e => {
+                            const rate = Number(e.target.value) || 0;
+                            const employmentAmt = Math.round(insForm.baseSalary * rate / 100);
+                            setInsForm(f => ({ ...f, employmentRate: rate, employmentAmt }));
+                          }}
+                        />
+                        <span className="income-ins-unit">%&nbsp;=</span>
+                        <input className="income-ins-amt" type="number" inputMode="numeric"
                           value={insForm.employmentAmt || ''}
                           onChange={e => setInsForm(f => ({ ...f, employmentAmt: Number(e.target.value) || 0 }))}
                         />
@@ -1326,14 +1377,15 @@ export function IncomeScreen({
                       </div>
                     </>
                   )}
+
                   <div className="income-ins-row income-ins-total-row">
                     <span>{ui.insTotal}</span>
                     <strong>{insTotal(insForm).toLocaleString()} ₩</strong>
                   </div>
                   <p className="income-ins-employer-note">
                     {isKo
-                      ? '산재보험은 사업주가 100% 부담하므로 포함되지 않습니다.'
-                      : '산재보험 (tai nạn lao động) do chủ đóng 100%, không tính vào đây.'}
+                      ? '산재보험은 사업주가 100% 부담합니다.'
+                      : '산재보험 (tai nạn lao động) do chủ đóng 100%.'}
                   </p>
                 </div>
 
@@ -1379,7 +1431,22 @@ export function IncomeScreen({
                 type="button"
                 className="income-ins-add-btn"
                 onClick={() => {
-                  setInsForm(defaultInsForm());
+                  const base = monthlyTotal;
+                  setInsForm({
+                    month: selectedMonthKey,
+                    workplaceLabel: workplaces[0]?.label ?? '',
+                    workStartDate: `${selectedMonthKey}-01`,
+                    payDate: todayStr,
+                    baseSalary: base,
+                    insuranceType: '2',
+                    healthRate: INS_RATES.health,
+                    longCareRate: INS_RATES.longCare,
+                    pensionRate: INS_RATES.pension,
+                    employmentRate: INS_RATES.employment,
+                    ...calcIns(base, '2'),
+                    confirmed: false,
+                    note: '',
+                  });
                   setIsAddingIns(true);
                 }}
               >
@@ -1428,12 +1495,12 @@ export function IncomeScreen({
                     </div>
 
                     <div className="income-ins-card-breakdown">
-                      <span>{ui.insHealth}: {rec.healthAmt.toLocaleString()} ₩</span>
-                      <span>{ui.insLongCare}: {rec.longCareAmt.toLocaleString()} ₩</span>
+                      <span>{ui.insHealth} {rec.healthRate}%: {rec.healthAmt.toLocaleString()} ₩</span>
+                      <span>{ui.insLongCare} {rec.longCareRate}%: {rec.longCareAmt.toLocaleString()} ₩</span>
                       {rec.insuranceType === '4' && (
                         <>
-                          <span>{ui.insPension}: {rec.pensionAmt.toLocaleString()} ₩</span>
-                          <span>{ui.insEmployment}: {rec.employmentAmt.toLocaleString()} ₩</span>
+                          <span>{ui.insPension} {rec.pensionRate}%: {rec.pensionAmt.toLocaleString()} ₩</span>
+                          <span>{ui.insEmployment} {rec.employmentRate}%: {rec.employmentAmt.toLocaleString()} ₩</span>
                         </>
                       )}
                     </div>

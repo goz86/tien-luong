@@ -1176,6 +1176,99 @@ select {
   letter-spacing: -0.01em;
 }
 
+.recent-history-section {
+  margin-top: 20px;
+}
+
+.recent-history-section .section-head {
+  margin-bottom: -2px;
+}
+
+.recent-history-section .section-kicker {
+  color: rgba(8, 22, 43, 0.66);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+}
+
+.recent-history-card {
+  gap: 0;
+  padding: 8px 14px;
+  border-radius: 26px;
+  border: 1px solid rgba(255, 255, 255, 0.66);
+  background:
+    radial-gradient(circle at 94% 0%, rgba(255, 255, 255, 0.72), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.38));
+  box-shadow: 0 18px 42px rgba(18, 84, 126, 0.12);
+  backdrop-filter: blur(10px);
+}
+
+.recent-shift-row {
+  min-height: 72px;
+  padding: 13px 0;
+  align-items: center;
+}
+
+.recent-shift-row+.recent-shift-row {
+  border-top: 1px solid rgba(112, 129, 159, 0.14);
+}
+
+.recent-shift-dot {
+  width: 13px;
+  height: 13px;
+  box-shadow:
+    0 0 0 5px rgba(255, 255, 255, 0.94),
+    0 8px 18px rgba(14, 165, 233, 0.18);
+}
+
+.recent-shift-copy strong {
+  font-size: 16px;
+  letter-spacing: -0.02em;
+}
+
+.recent-shift-copy span {
+  color: rgba(8, 22, 43, 0.68);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.recent-shift-note {
+  display: block;
+  margin-top: 4px;
+  color: rgba(100, 116, 139, 0.78);
+  font-size: 11px;
+  font-style: italic;
+  font-weight: 700;
+}
+
+.recent-shift-amount {
+  align-self: flex-start;
+  padding-top: 2px;
+  color: var(--text-main);
+  font-size: 15px;
+  font-feature-settings: "tnum";
+}
+
+.dark .recent-history-section .section-kicker {
+  color: rgba(226, 232, 240, 0.72);
+}
+
+.dark .recent-history-card {
+  border-color: rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(circle at 94% 0%, rgba(79, 115, 255, 0.14), transparent 36%),
+    linear-gradient(180deg, rgba(30, 41, 59, 0.92), rgba(15, 23, 42, 0.72));
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.24);
+}
+
+.dark .recent-shift-copy span {
+  color: rgba(203, 213, 225, 0.72);
+}
+
+.dark .recent-shift-note {
+  color: rgba(148, 163, 184, 0.72);
+}
+
 .calendar-toolbar {
   display: flex;
   align-items: center;
@@ -16976,6 +17069,24 @@ button.admin-stat-card {
   }
 }
 
+/* ── Income subtabs: 4-tab layout fits on screen ── */
+.income-subtabs {
+  display: flex;
+  flex-wrap: nowrap;
+}
+.income-subtabs button {
+  flex: 1 1 0 !important;
+  min-width: 0 !important;
+  padding: 8px 6px !important;
+  font-size: 12px !important;
+  gap: 4px !important;
+}
+.income-subtabs button svg {
+  flex-shrink: 0;
+  width: 14px !important;
+  height: 14px !important;
+}
+
 /* ══════════════════════════════════════════
    INSURANCE TAB  —  4대보험 / Bảo hiểm
    ══════════════════════════════════════════ */
@@ -17126,21 +17237,37 @@ button.admin-stat-card {
 .income-ins-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
   font-size: 13px;
   color: var(--text-main);
+  flex-wrap: nowrap;
 }
-.income-ins-row > span:first-child {
+.income-ins-name {
   flex: 1;
-  color: var(--text-soft);
   font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-soft);
+  white-space: nowrap;
 }
+.income-ins-rate-input {
+  width: 54px;
+  border: 1px solid rgba(39,82,255,.3);
+  border-radius: 8px;
+  padding: 5px 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #2752ff;
+  background: rgba(39,82,255,.06);
+  text-align: center;
+  outline: none;
+}
+.income-ins-rate-input:focus { border-color: #2752ff; background: rgba(39,82,255,.1); }
 .income-ins-amt {
-  width: 96px;
+  width: 82px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 5px 8px;
-  font-size: 13px;
+  padding: 5px 7px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--text-main);
   background: rgba(39,82,255,.04);
@@ -17149,9 +17276,9 @@ button.admin-stat-card {
 }
 .income-ins-amt:focus { border-color: #2752ff; }
 .income-ins-unit {
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--text-faint);
-  min-width: 14px;
+  white-space: nowrap;
 }
 .income-ins-total-row {
   border-top: 1px solid var(--line);
