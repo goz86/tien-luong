@@ -18235,3 +18235,157 @@ button.admin-stat-card {
   padding-top: 2px;
   border-top: 1px solid var(--line);
 }
+
+/* ══════════════════════════════════════════
+   주휴수당 TAB  — specific additions
+   (reuses most insurance classes)
+   ══════════════════════════════════════════ */
+
+/* Input with unit suffix */
+.income-ins-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.income-ins-input-wrap .income-ins-input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Two-column inputs row */
+.income-juhyu-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+/* +/− stepper for workDays */
+.income-juhyu-stepper {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  height: 42px;
+}
+.income-juhyu-stepper button {
+  width: 38px;
+  height: 100%;
+  background: var(--bg-page);
+  border: none;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-soft);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.12s, color 0.12s;
+}
+.income-juhyu-stepper button:active { background: var(--line); color: var(--text-main); }
+.income-juhyu-stepper span {
+  flex: 1;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+/* Qualification + preview box */
+.income-juhyu-preview {
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.income-juhyu-preview.qualifies {
+  background: rgba(13,155,114,.07);
+  border: 1.5px solid rgba(13,155,114,.2);
+}
+.income-juhyu-preview.warn {
+  background: rgba(245,158,11,.07);
+  border: 1.5px solid rgba(245,158,11,.25);
+}
+.income-juhyu-preview-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  font-weight: 700;
+  border-radius: 20px;
+  padding: 3px 10px;
+  width: fit-content;
+}
+.income-juhyu-preview-badge.good {
+  color: #0d9b72;
+  background: rgba(13,155,114,.15);
+}
+.income-juhyu-preview-badge.warn {
+  color: #d97706;
+  background: rgba(245,158,11,.15);
+  border: none;
+  padding: 6px 10px;
+}
+
+/* Calculation rows inside preview */
+.income-juhyu-calc {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.income-juhyu-calc-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.income-juhyu-calc-row > span {
+  font-size: 12px;
+  color: var(--text-soft);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.income-juhyu-calc-row > strong {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-main);
+  text-align: right;
+}
+.income-juhyu-calc-row.total {
+  border-top: 1px solid rgba(13,155,114,.2);
+  padding-top: 6px;
+  margin-top: 2px;
+}
+.income-juhyu-calc-row.total > span {
+  font-size: 12.5px;
+  color: var(--text-main);
+  font-weight: 700;
+}
+.income-juhyu-calc-row.total > strong {
+  font-size: 16px;
+  font-weight: 800;
+  color: #0d9b72;
+}
+
+/* Card summary total — green (income) vs insurance red (deduction) */
+.income-juhyu-summary-total {
+  font-size: 15px;
+  font-weight: 800;
+  color: #0d9b72;
+}
+
+/* Badge variants on card */
+.income-juhyu-badge-ok {
+  color: #0d9b72 !important;
+  background: rgba(13,155,114,.12) !important;
+}
+.income-juhyu-badge-warn {
+  color: #d97706 !important;
+  background: rgba(245,158,11,.12) !important;
+}
+
+/* Confirm button — green for income (vs dark for insurance) */
+.income-juhyu-confirm-btn {
+  background: #0d9b72 !important;
+}
+.income-juhyu-confirm-btn:active { opacity: .75; }

@@ -2054,6 +2054,18 @@ export function IncomeScreen({
           }}
         />
       )}
+      {/* 주휴수당 date picker */}
+      {juhyuDatePickerOpen && (
+        <DateWheelModal
+          title={ui.juhyuPayDate}
+          initialDate={juhyuForm.payDate}
+          onClose={() => setJuhyuDatePickerOpen(false)}
+          onConfirm={(date) => {
+            applyJuhyuCalc({ payDate: date });
+            setJuhyuDatePickerOpen(false);
+          }}
+        />
+      )}
     </>
   );
 }
