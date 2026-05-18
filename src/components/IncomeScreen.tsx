@@ -39,6 +39,7 @@ import type { CurrencyMode, Expense, RateState, Shift, VenueColors } from '../li
 import { formatCurrencyFlowAmount } from '../lib/currency';
 import { DateWheelModal } from './shared/DateWheelModal';
 import { getVenueColor, shiftMonth, formatHoursCompact } from '../utils/helpers';
+import { localDateStr } from '../lib/localDate';
 
 // ── Companion / mascot helpers (synced with AchievementScreen) ──
 const COMPANION_STORAGE_KEY = 'duhoc-mate-ach-companion';
@@ -91,14 +92,13 @@ function useShareMascotImgKey(shifts: Shift[], expenses: Expense[], rateValue: n
 }
 
 type AppLang = 'vi' | 'ko';
-type IncomeTab = 'overview' | 'expenses' | 'workplaces' | 'insurance' | 'juhyu';
+type IncomeTab = 'overview' | 'expenses' | 'insurance' | 'juhyu';
 type ChartViewMode = 'day' | 'week' | 'month';
 type IconComponent = LucideIcon;
 
 const incomeTabs: Array<{ id: IncomeTab; icon: IconComponent }> = [
   { id: 'overview', icon: BarChart3 },
   { id: 'expenses', icon: ReceiptText },
-  { id: 'workplaces', icon: Building2 },
   { id: 'insurance', icon: ShieldCheck },
   { id: 'juhyu', icon: CalendarCheck },
 ];
@@ -111,7 +111,7 @@ interface InsuranceRecord {
   workStartDate: string;   // 'YYYY-MM-DD'
   payDate: string;         // 'YYYY-MM-DD'
   baseSalary: number;      // KRW
-  insuranceType: '2' | '4';
+  insuranceType: '2' | 'partial' | '4';
   // Rates stored as % values (e.g. 3.545, not 0.03545) — user-editable
   healthRate: number;
   longCareRate: number;    // applied to healthAmt
@@ -133,18 +133,31 @@ const INS_RATES = { health: 3.545, longCare: 12.95, pension: 4.5, employment: 0.
 
 function calcIns(
   base: number,
-  type: '2' | '4',
+  type: '2' | 'partial' | '4',
   rates?: { health?: number; longCare?: number; pension?: number; employment?: number },
 ) {
   const h  = rates?.health      ?? INS_RATES.health;
   const lc = rates?.longCare    ?? INS_RATES.longCare;
   const p  = rates?.pension     ?? INS_RATES.pension;
   const e  = rates?.employment  ?? INS_RATES.employment;
-  const healthAmt     = Math.round(base * h / 100);
-  const longCareAmt   = Math.round(healthAmt * lc / 100);
-  const pensionAmt    = type === '4' ? Math.round(base * p / 100) : 0;
-  const employmentAmt = type === '4' ? Math.round(base * e / 100) : 0;
-  return { healthAmt, longCareAmt, pensionAmt, employmentAmt };
+  if (type === '4') {
+    // Làm đủ tháng: đóng đủ 4 loại
+    const healthAmt     = Math.round(base * h / 100);
+    const longCareAmt   = Math.round(healthAmt * lc / 100);
+    const pensionAmt    = Math.round(base * p / 100);
+    const employmentAmt = Math.round(base * e / 100);
+    return { healthAmt, longCareAmt, pensionAmt, employmentAmt };
+  } else if (type === 'partial') {
+    // Nghỉ giữa tháng (상실): 국민연금 + 건강보험 + 장기요양 KHÔNG tính.
+    // Chỉ đóng 고용보험 (0.9%) dựa trên thu nhập thực tế tháng đó.
+    const employmentAmt = Math.round(base * e / 100);
+    return { healthAmt: 0, longCareAmt: 0, pensionAmt: 0, employmentAmt };
+  } else {
+    // 2 loại: chỉ 건강보험 + 장기요양 (lao động ngắn hạn không đủ điều kiện 국민연금/고용보험)
+    const healthAmt   = Math.round(base * h / 100);
+    const longCareAmt = Math.round(healthAmt * lc / 100);
+    return { healthAmt, longCareAmt, pensionAmt: 0, employmentAmt: 0 };
+  }
 }
 
 function insTotal(rec: Pick<InsuranceRecord, 'healthAmt' | 'longCareAmt' | 'pensionAmt' | 'employmentAmt'>) {
@@ -176,31 +189,95 @@ function useInsuranceRecords() {
 }
 
 // ─── 주휴수당 ────────────────────────────────────────────────────
+interface JuhyuWeek {
+  weekStart: string;    // YYYY-MM-DD (Monday T2)
+  weekEnd: string;      // YYYY-MM-DD (Sunday CN)
+  weeklyHours: number;  // actual hours worked at this workplace this week
+  workDays: number;     // actual days worked this week
+  juhyuHours: number;   // weeklyHours / workDays
+  qualifies: boolean;   // full Mon-Sun AND weeklyHours >= 15
+  amount: number;
+}
+
 interface JuhyuRecord {
   id: string;
   month: string;              // 'YYYY-MM'
   workplaceLabel: string;
-  weeklyHours: number;        // 주 소정근로시간 (scheduled hrs/week)
-  workDays: number;           // 주 근무일수 (days/week, 1-7)
+  startDate: string;          // 'YYYY-MM-DD'
+  endDate: string;            // 'YYYY-MM-DD'
   hourlyRate: number;         // 시급 ₩
-  juhyuHoursPerWeek: number;  // = weeklyHours / workDays (daily avg → 주휴 시간)
-  juhyuPerWeek: number;       // = juhyuHoursPerWeek × hourlyRate
-  juhyuPerMonth: number;      // = juhyuPerWeek × 4.345
-  qualifies: boolean;         // weeklyHours >= 15
-  payDate: string;            // 'YYYY-MM-DD'
+  juhyuHoursPerWeek: number;  // avg across qualifying weeks
+  juhyuPerWeek: number;       // avg weekly amount
+  juhyuPerMonth: number;      // sum of qualifying week amounts
+  weeks: JuhyuWeek[];
+  qualifies: boolean;         // at least one qualifying week
   confirmed: boolean;
   note: string;
 }
 
 const JUHYU_STORAGE_KEY = 'duhoc-mate-juhyu';
-const WEEKS_PER_MONTH = 4.345;
 
-function calcJuhyu(weeklyHours: number, workDays: number, hourlyRate: number) {
-  const qualifies = weeklyHours >= 15 && workDays > 0;
-  const juhyuHoursPerWeek = workDays > 0 ? weeklyHours / workDays : 0;
-  const juhyuPerWeek = qualifies ? Math.round(juhyuHoursPerWeek * hourlyRate) : 0;
-  const juhyuPerMonth = qualifies ? Math.round(juhyuPerWeek * WEEKS_PER_MONTH) : 0;
-  return { qualifies, juhyuHoursPerWeek, juhyuPerWeek, juhyuPerMonth };
+// Compute week-by-week breakdown from actual shift calendar data (T2→CN).
+// Includes partial weeks at start/end — only checks hours >= 15, not full-week requirement.
+function calcJuhyuWeeksFromShifts(
+  startDate: string,
+  endDate: string,
+  workplaceLabel: string,
+  shifts: Shift[],
+  hourlyRate: number,
+): JuhyuWeek[] {
+  // Use local date formatting — toISOString() returns UTC and shifts the date in UTC+7/+9
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const sd = new Date(startDate + 'T00:00:00');
+  const ed = new Date(endDate + 'T00:00:00');
+
+  // Find the Monday (T2) of the week that contains startDate (go back if needed)
+  let mon = new Date(sd);
+  const dow = mon.getDay(); // 0=CN,1=T2...6=T7
+  if (dow !== 1) mon.setDate(mon.getDate() - (dow === 0 ? 6 : dow - 1));
+
+  const weeks: JuhyuWeek[] = [];
+
+  while (mon <= ed) {
+    const sun = new Date(mon);
+    sun.setDate(sun.getDate() + 6);
+
+    const weekStartStr = fmt(mon);
+    const weekEndStr = fmt(sun);
+
+    // Only count shifts within [startDate, endDate] — partial weeks at edges are OK
+    const effectiveFrom = weekStartStr < startDate ? startDate : weekStartStr;
+    const effectiveTo   = weekEndStr   > endDate   ? endDate   : weekEndStr;
+
+    const weekShifts = shifts.filter(s => {
+      const matchLabel = workplaceLabel ? s.label === workplaceLabel : true;
+      return matchLabel && s.date >= effectiveFrom && s.date <= effectiveTo;
+    });
+
+    const weeklyHours = weekShifts.reduce((sum, s) => sum + calculateShiftPay(s).hours, 0);
+    const workDays = new Set(weekShifts.map(s => s.date)).size;
+    const juhyuHours = workDays > 0 ? weeklyHours / workDays : 0;
+    const qualifies = weeklyHours >= 15;  // only hours matter, not full-week
+    const amount = qualifies ? Math.round(juhyuHours * hourlyRate) : 0;
+
+    weeks.push({ weekStart: weekStartStr, weekEnd: weekEndStr, weeklyHours, workDays, juhyuHours, qualifies, amount });
+
+    mon = new Date(mon);
+    mon.setDate(mon.getDate() + 7);
+  }
+  return weeks;
+}
+
+function buildJuhyuCalc(weeks: JuhyuWeek[], hourlyRate: number) {
+  const qualifying = weeks.filter(w => w.qualifies);
+  const qualifies = qualifying.length > 0;
+  const juhyuPerMonth = weeks.reduce((s, w) => s + w.amount, 0);
+  const juhyuHoursPerWeek = qualifying.length > 0
+    ? qualifying.reduce((s, w) => s + w.juhyuHours, 0) / qualifying.length : 0;
+  const juhyuPerWeek = qualifying.length > 0
+    ? Math.round(juhyuHoursPerWeek * hourlyRate) : 0;
+  return { qualifies, juhyuHoursPerWeek, juhyuPerWeek, juhyuPerMonth, weeks };
 }
 
 function loadJuhyuRecords(): JuhyuRecord[] {
@@ -227,15 +304,17 @@ function useJuhyuRecords() {
   return { records, add, update, remove };
 }
 
-const categoryMeta: Record<Expense['category'], { label: string; icon: any; tone: string }> = {
-  rent: { label: 'Tiền nhà', icon: Home, tone: 'blue' },
-  phone: { label: 'Điện thoại', icon: Smartphone, tone: 'green' },
-  food: { label: 'Ăn uống', icon: Utensils, tone: 'orange' },
-  transport: { label: 'Di chuyển', icon: Bus, tone: 'purple' },
-  shopping: { label: 'Mua sắm', icon: ShoppingBag, tone: 'pink' },
-  health: { label: 'Sức khỏe', icon: HeartPulse, tone: 'red' },
-  entertainment: { label: 'Giải trí', icon: Music, tone: 'cyan' },
-  other: { label: 'Khác', icon: ReceiptText, tone: 'gray' },
+const categoryMeta: Record<Expense['category'], { label: string; icon: any; tone: string; entryType: 'thu' | 'chi' }> = {
+  rent:           { label: 'Tiền nhà',      icon: Home,         tone: 'blue',    entryType: 'chi' },
+  phone:          { label: 'Điện thoại',    icon: Smartphone,   tone: 'green',   entryType: 'chi' },
+  food:           { label: 'Ăn uống',       icon: Utensils,     tone: 'orange',  entryType: 'chi' },
+  transport:      { label: 'Di chuyển',     icon: Bus,          tone: 'purple',  entryType: 'chi' },
+  shopping:       { label: 'Mua sắm',       icon: ShoppingBag,  tone: 'pink',    entryType: 'chi' },
+  health:         { label: 'Sức khỏe',      icon: HeartPulse,   tone: 'red',     entryType: 'chi' },
+  entertainment:  { label: 'Giải trí',      icon: Music,        tone: 'cyan',    entryType: 'chi' },
+  other:          { label: 'Khác',          icon: ReceiptText,  tone: 'gray',    entryType: 'chi' },
+  juhyu_income:   { label: '주휴수당',       icon: CalendarCheck, tone: 'emerald', entryType: 'thu' },
+  other_income:   { label: 'Thu nhập khác', icon: TrendingUp,   tone: 'emerald', entryType: 'thu' },
 };
 
 const weekdayLabels = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
@@ -303,7 +382,7 @@ export function IncomeScreen({
   const isKo = lang === 'ko';
   const locale = isKo ? 'ko-KR' : 'vi-VN';
   const ui = isKo ? {
-    tabs: { overview: '요약', expenses: '지출', workplaces: '근무지', insurance: '보험', juhyu: '주휴' },
+    tabs: { overview: '요약', expenses: '지출', insurance: '보험', juhyu: '주휴' },
     netIncome: '월 순수입',
     grossIncome: '총 급여',
     expenses: '지출',
@@ -324,17 +403,21 @@ export function IncomeScreen({
     shiftCount: '이번 달 근무 수',
     bestHours: '최대 근무 시간',
     bestDay: '최고 수입일',
-    expenseManage: '지출 관리',
-    expenseRecords: '기록된 지출',
-    addExpense: '지출 추가',
+    expenseManage: '수입/지출 관리',
+    expenseRecords: '가계부',
+    addExpense: '항목 추가',
     category: '카테고리',
     amount: '금액',
-    expenseDate: '지출일',
+    expenseDate: '날짜',
     note: '메모',
     notePlaceholder: '예: 이번 주 식비',
-    saveExpense: '지출 저장',
-    noExpense: '지출 내역이 없습니다',
-    noExpenseHint: '월세, 식비, 통신비를 기록하면 순수입을 더 정확히 볼 수 있어요.',
+    saveExpense: '저장',
+    noExpense: '기록된 내역이 없습니다',
+    noExpenseHint: '주휴수당, 월세, 식비를 기록해 순수입을 정확히 파악하세요.',
+    thuLabel: '수입',
+    chiLabel: '지출',
+    addThu: '수입 추가',
+    addChi: '지출 추가',
     workplace: '근무지',
     byIncome: '수입순 정렬',
     noWorkplace: '근무지가 없습니다',
@@ -345,7 +428,8 @@ export function IncomeScreen({
     insSubtitle: '월별 보험료를 계산하고 지출에 반영하세요.',
     insAdd: '이번 달 보험료 확인',
     insType2: '2가지',
-    insType4: '4가지 전부',
+    insTypePartial: '중도 퇴사',
+    insType4: '풀 1달',
     insWorkplace: '근무지 (선택)',
     insStartDate: '근무 시작일',
     insPayDate: '급여일',
@@ -364,7 +448,7 @@ export function IncomeScreen({
     insEdit: '수정',
     insEmpty: '이달 보험료 기록 없음',
     insEmptyHint: '보험료를 추가하면 월별 순수입에 자동 반영됩니다.',
-    insExpenseNote: (type: string) => `4대보험 (${type === '4' ? '4가지' : '2가지'})`,
+    insExpenseNote: (type: string) => `4대보험 (${type === '4' ? '전체 4가지' : type === 'partial' ? '고용보험만 · 중도퇴사' : '건강+장기요양'})`,
     juhyuTitle: '주휴수당 관리',
     juhyuSubtitle: '주 15시간 이상 근무 시 받을 수 있는 유급 주휴수당을 확인하세요.',
     juhyuAdd: '이번 달 주휴수당 계산',
@@ -383,7 +467,7 @@ export function IncomeScreen({
     juhyuWarn15h: '주 15시간 미만 — 주휴수당 미해당',
     juhyuQualifies: '주휴수당 해당',
   } : {
-    tabs: { overview: 'Tổng quan', expenses: 'Chi tiêu', workplaces: 'Nơi làm', insurance: 'Bảo hiểm', juhyu: '주휴' },
+    tabs: { overview: 'Tổng quan', expenses: 'Thu chi', insurance: 'Bảo hiểm', juhyu: '주휴' },
     netIncome: 'Thu nhập ròng / tháng',
     grossIncome: 'Tổng lương',
     expenses: 'Chi tiêu',
@@ -404,17 +488,21 @@ export function IncomeScreen({
     shiftCount: 'Số ca làm',
     bestHours: 'Kỷ lục giờ làm',
     bestDay: 'Ngày làm nhiều nhất',
-    expenseManage: 'Quản lý chi tiêu',
-    expenseRecords: 'Khoản đã chi',
-    addExpense: 'Thêm chi tiêu',
+    expenseManage: 'Quản lý thu chi',
+    expenseRecords: 'Sổ thu chi',
+    addExpense: 'Thêm mục',
     category: 'Hạng mục',
     amount: 'Số tiền',
-    expenseDate: 'Ngày chi',
+    expenseDate: 'Ngày',
     note: 'Ghi chú',
     notePlaceholder: 'Ví dụ: tiền ăn tuần này',
-    saveExpense: 'Lưu chi tiêu',
-    noExpense: 'Chưa có chi tiêu',
-    noExpenseHint: 'Ghi tiền nhà, ăn uống và điện thoại để biết thu nhập ròng chính xác hơn.',
+    saveExpense: 'Lưu',
+    noExpense: 'Chưa có thu chi',
+    noExpenseHint: 'Ghi 주휴수당, tiền nhà, ăn uống để biết thu nhập ròng chính xác.',
+    thuLabel: 'Thu nhập',
+    chiLabel: 'Chi tiêu',
+    addThu: 'Thêm thu nhập',
+    addChi: 'Thêm chi tiêu',
     workplace: 'Nơi làm',
     byIncome: 'Xếp theo thu nhập',
     noWorkplace: 'Chưa có nơi làm',
@@ -425,7 +513,8 @@ export function IncomeScreen({
     insSubtitle: 'Tính tiền bảo hiểm theo tháng và tự động trừ vào chi tiêu.',
     insAdd: 'Kiểm tra bảo hiểm tháng này',
     insType2: '2 loại',
-    insType4: 'Tất cả 4 loại',
+    insTypePartial: 'Nghỉ giữa tháng',
+    insType4: 'Làm đủ tháng',
     insWorkplace: 'Nơi làm (không bắt buộc)',
     insStartDate: 'Ngày bắt đầu làm',
     insPayDate: 'Ngày nhận lương',
@@ -444,7 +533,7 @@ export function IncomeScreen({
     insEdit: 'Sửa',
     insEmpty: 'Chưa có khai bảo hiểm tháng này',
     insEmptyHint: 'Thêm khai bảo hiểm để tự động trừ vào thu nhập ròng.',
-    insExpenseNote: (type: string) => `Bảo hiểm 4대보험 (${type === '4' ? '4 loại' : '2 loại'})`,
+    insExpenseNote: (type: string) => `Bảo hiểm 4대보험 (${type === '4' ? 'đủ 4 loại' : type === 'partial' ? 'chỉ 고용 · nghỉ giữa tháng' : '건강+장기요양'})`,
     juhyuTitle: 'Quản lý 주휴수당',
     juhyuSubtitle: 'Làm ≥ 15h/tuần? Bạn được hưởng phụ cấp ngày nghỉ. Tính toán và kiểm tra ở đây.',
     juhyuAdd: 'Tính 주휴수당 tháng này',
@@ -464,23 +553,13 @@ export function IncomeScreen({
     juhyuQualifies: 'Đủ điều kiện nhận',
   };
   const categoryLabels: Record<Expense['category'], string> = isKo ? {
-    rent: '월세',
-    phone: '통신비',
-    food: '식비',
-    transport: '교통비',
-    shopping: '쇼핑',
-    health: '건강',
-    entertainment: '여가',
-    other: '기타',
+    rent: '월세', phone: '통신비', food: '식비', transport: '교통비',
+    shopping: '쇼핑', health: '건강', entertainment: '여가', other: '기타',
+    juhyu_income: '주휴수당', other_income: '기타 수입',
   } : {
-    rent: 'Tiền nhà',
-    phone: 'Điện thoại',
-    food: 'Ăn uống',
-    transport: 'Di chuyển',
-    shopping: 'Mua sắm',
-    health: 'Sức khỏe',
-    entertainment: 'Giải trí',
-    other: 'Khác',
+    rent: 'Tiền nhà', phone: 'Điện thoại', food: 'Ăn uống', transport: 'Di chuyển',
+    shopping: 'Mua sắm', health: 'Sức khỏe', entertainment: 'Giải trí', other: 'Khác',
+    juhyu_income: '주휴수당', other_income: 'Thu nhập khác',
   };
   const [activeTab, setActiveTab] = useState<IncomeTab>('overview');
   const [isEditingTarget, setIsEditingTarget] = useState(false);
@@ -502,8 +581,9 @@ export function IncomeScreen({
   const [expenseForm, setExpenseForm] = useState<Omit<Expense, 'id'>>({
     category: 'food',
     amount: 0,
-    date: new Date().toISOString().slice(0, 10),
+    date: localDateStr(),
     note: '',
+    type: 'chi',
   });
   const prevTotalRef = useRef<number | null>(null);
 
@@ -513,7 +593,7 @@ export function IncomeScreen({
   const [editingInsId, setEditingInsId] = useState<string | null>(null);
   const [expandedInsId, setExpandedInsId] = useState<string | null>(null);
   const [insDatePickerField, setInsDatePickerField] = useState<InsFormField | null>(null);
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = localDateStr();
   // insForm initialised with safe zero-defaults; populated in the "Add" click handler
   const [insForm, setInsForm] = useState<Omit<InsuranceRecord, 'id'>>({
     month: '',
@@ -521,7 +601,7 @@ export function IncomeScreen({
     workStartDate: todayStr,
     payDate: todayStr,
     baseSalary: 0,
-    insuranceType: '2',
+    insuranceType: '4',
     healthRate: INS_RATES.health,
     longCareRate: INS_RATES.longCare,
     pensionRate: INS_RATES.pension,
@@ -539,18 +619,18 @@ export function IncomeScreen({
   const [isAddingJuhyu, setIsAddingJuhyu] = useState(false);
   const [editingJuhyuId, setEditingJuhyuId] = useState<string | null>(null);
   const [expandedJuhyuId, setExpandedJuhyuId] = useState<string | null>(null);
-  const [juhyuDatePickerOpen, setJuhyuDatePickerOpen] = useState(false);
+  const [juhyuDatePickerField, setJuhyuDatePickerField] = useState<'startDate' | 'endDate' | null>(null);
   const [juhyuForm, setJuhyuForm] = useState<Omit<JuhyuRecord, 'id'>>({
     month: '',
     workplaceLabel: '',
-    weeklyHours: 25,
-    workDays: 5,
+    startDate: todayStr,
+    endDate: todayStr,
     hourlyRate: 10320,
-    juhyuHoursPerWeek: 5,
-    juhyuPerWeek: 51600,
-    juhyuPerMonth: 224322,
-    qualifies: true,
-    payDate: todayStr,
+    juhyuHoursPerWeek: 0,
+    juhyuPerWeek: 0,
+    juhyuPerMonth: 0,
+    weeks: [],
+    qualifies: false,
     confirmed: false,
     note: '',
   });
@@ -558,8 +638,10 @@ export function IncomeScreen({
   function applyJuhyuCalc(patch: Partial<Omit<JuhyuRecord, 'id'>>) {
     setJuhyuForm(f => {
       const merged = { ...f, ...patch };
-      const calc = calcJuhyu(merged.weeklyHours, merged.workDays, merged.hourlyRate);
-      return { ...merged, ...calc };
+      const weeks = calcJuhyuWeeksFromShifts(
+        merged.startDate, merged.endDate, merged.workplaceLabel, shifts, merged.hourlyRate,
+      );
+      return { ...merged, ...buildJuhyuCalc(weeks, merged.hourlyRate) };
     });
   }
 
@@ -800,10 +882,11 @@ export function IncomeScreen({
     if (expenseForm.amount <= 0) return;
     onAddExpense(expenseForm);
     setExpenseForm({
-      category: 'food',
+      category: expenseForm.type === 'thu' ? 'other_income' : 'food',
       amount: 0,
-      date: new Date().toISOString().slice(0, 10),
+      date: localDateStr(),
       note: '',
+      type: expenseForm.type ?? 'chi',
     });
     setIsAddingExpense(false);
   }
@@ -1009,19 +1092,23 @@ export function IncomeScreen({
       </section>
 
       <div className="income-subtabs" role="tablist" aria-label={ui.incomeTabs}>
-        {incomeTabs.map(({ id, icon: Icon }) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === id}
-            className={activeTab === id ? 'active' : ''}
-            onClick={() => setActiveTab(id)}
-          >
-            <Icon size={16} />
-            {ui.tabs[id]}
-          </button>
-        ))}
+        {incomeTabs.map(({ id, icon: Icon }) => {
+          const isActive = activeTab === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              className={isActive ? 'active' : ''}
+              onClick={() => setActiveTab(id)}
+              title={ui.tabs[id]}
+            >
+              <Icon size={16} />
+              <span className="income-subtab-label">{ui.tabs[id]}</span>
+            </button>
+          );
+        })}
       </div>
 
       <div className="income-tab-body">
@@ -1186,6 +1273,23 @@ export function IncomeScreen({
 
             {isAddingExpense ? (
               <div className="income-expense-form">
+                {/* Thu / Chi toggle */}
+                <div className="income-thuchi-toggle">
+                  <button
+                    type="button"
+                    className={`income-thuchi-btn thu${expenseForm.type === 'thu' ? ' active' : ''}`}
+                    onClick={() => setExpenseForm({ ...expenseForm, type: 'thu', category: 'other_income' })}
+                  >
+                    + {isKo ? '수입' : 'Thu nhập'}
+                  </button>
+                  <button
+                    type="button"
+                    className={`income-thuchi-btn chi${expenseForm.type !== 'thu' ? ' active' : ''}`}
+                    onClick={() => setExpenseForm({ ...expenseForm, type: 'chi', category: 'food' })}
+                  >
+                    − {isKo ? '지출' : 'Chi tiêu'}
+                  </button>
+                </div>
                 <label>
                   <span>{ui.category}</span>
                   <div className="income-select-wrap" style={{ position: 'relative' }}>
@@ -1199,7 +1303,9 @@ export function IncomeScreen({
                     </button>
                     {activeSelect === 'category' && (
                       <div className="settings-dropdown" style={{ top: '100%', left: 0, right: 0, marginTop: '4px', zIndex: 10 }}>
-                        {Object.entries(categoryMeta).map(([value]) => (
+                        {Object.entries(categoryMeta)
+                          .filter(([, m]) => m.entryType === (expenseForm.type ?? 'chi'))
+                          .map(([value]) => (
                           <button
                             key={value}
                             type="button"
@@ -1252,13 +1358,31 @@ export function IncomeScreen({
               </div>
             ) : null}
 
+            {monthExpenses.length > 0 && (() => {
+              const thuTotal = monthExpenses.filter(e => e.type === 'thu').reduce((s, e) => s + e.amount, 0);
+              const chiTotal = monthExpenses.filter(e => e.type !== 'thu').reduce((s, e) => s + e.amount, 0);
+              return (
+                <div className="income-thuchi-summary">
+                  <div className="income-thuchi-sum thu">
+                    <span>{isKo ? '수입' : 'Thu'}</span>
+                    <strong>+{formatMoney(thuTotal)}</strong>
+                  </div>
+                  <div className="income-thuchi-divider" />
+                  <div className="income-thuchi-sum chi">
+                    <span>{isKo ? '지출' : 'Chi'}</span>
+                    <strong>−{formatMoney(chiTotal)}</strong>
+                  </div>
+                </div>
+              );
+            })()}
             <div className="income-expense-list">
               {monthExpenses.length ? (
                 monthExpenses.map((expense) => {
-                  const meta = categoryMeta[expense.category];
+                  const meta = categoryMeta[expense.category] ?? categoryMeta['other'];
                   const Icon = meta.icon;
+                  const isThu = expense.type === 'thu';
                   return (
-                    <article key={expense.id} className="income-expense-row">
+                    <article key={expense.id} className={`income-expense-row${isThu ? ' thu' : ''}`}>
                       <div className={`income-expense-icon ${meta.tone}`}>
                         <Icon size={18} />
                       </div>
@@ -1267,7 +1391,7 @@ export function IncomeScreen({
                         <span>{categoryLabels[expense.category]} · {new Date(expense.date).getDate()}/{new Date(expense.date).getMonth() + 1}</span>
                       </div>
                       <div className="income-expense-amount">
-                        <b>{formatMoney(expense.amount)}</b>
+                        <b className={isThu ? 'thu-amt' : ''}>{isThu ? '+' : '−'}{formatMoney(expense.amount)}</b>
                         <button type="button" onClick={() => onDeleteExpense(expense.id)} aria-label={ui.deleteExpense}>
                           <Trash2 size={15} />
                         </button>
@@ -1286,43 +1410,6 @@ export function IncomeScreen({
           </section>
         ) : null}
 
-        {activeTab === 'workplaces' ? (
-          <section className="income-workplace-panel">
-            <div className="income-section-head">
-              <div>
-                <p>{ui.workplace}</p>
-                <h2>{ui.byIncome}</h2>
-              </div>
-              <Building2 size={22} />
-            </div>
-            <div className="income-workplace-list">
-              {workplaceInsights.length ? (
-                workplaceInsights.map((workplace) => (
-                  <article key={workplace.label} className="income-workplace-row">
-                    <span className="income-venue-dot" style={{ background: getVenueColor(workplace.label, venueColors) }} />
-                    <div>
-                      <strong>{workplace.label}</strong>
-                      <small>{workplace.count} {ui.shifts} · {formatHoursCompact(workplace.hours)} · {workplace.share.toFixed(0)}%</small>
-                      <div className="income-workplace-track">
-                        <span style={{ width: `${Math.min(workplace.share, 100)}%`, background: getVenueColor(workplace.label, venueColors) }} />
-                      </div>
-                    </div>
-                    <p>
-                      <b>{formatMoney(workplace.total)}</b>
-                      <span>{formatMoney(workplace.hourly)}/h</span>
-                    </p>
-                  </article>
-                ))
-              ) : (
-                <div className="income-empty">
-                  <Building2 size={34} />
-                  <strong>{ui.noWorkplace}</strong>
-                  <p>{ui.noWorkplaceHint}</p>
-                </div>
-              )}
-            </div>
-          </section>
-        ) : null}
 
         {/* ── Insurance Tab ── */}
         {activeTab === 'insurance' ? (
@@ -1350,7 +1437,18 @@ export function IncomeScreen({
                     }}
                   >
                     {ui.insType2}
-                    <span className="income-ins-type-sub">(건강보험+장기요양)</span>
+                    <span className="income-ins-type-sub">(건강+장기요양)</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`income-ins-type-btn${insForm.insuranceType === 'partial' ? ' active' : ''}`}
+                    onClick={() => {
+                      const calc = calcIns(insForm.baseSalary, 'partial', { health: insForm.healthRate, longCare: insForm.longCareRate, pension: insForm.pensionRate, employment: insForm.employmentRate });
+                      setInsForm(f => ({ ...f, insuranceType: 'partial', ...calc }));
+                    }}
+                  >
+                    {ui.insTypePartial}
+                    <span className="income-ins-type-sub">(고용보험 0.9%만)</span>
                   </button>
                   <button
                     type="button"
@@ -1361,7 +1459,7 @@ export function IncomeScreen({
                     }}
                   >
                     {ui.insType4}
-                    <span className="income-ins-type-sub">(건강+장기+국민+고용)</span>
+                    <span className="income-ins-type-sub">(4가지 전부)</span>
                   </button>
                 </div>
 
@@ -1453,87 +1551,91 @@ export function IncomeScreen({
                 <div className="income-ins-breakdown">
                   <div className="income-ins-breakdown-title">{isKo ? '보험료 내역 (% · 금액 모두 수정 가능)' : 'Chi tiết bảo hiểm (% và ₩ đều có thể sửa)'}</div>
 
-                  {/* 건강보험 */}
-                  <div className="income-ins-row">
-                    <span className="income-ins-name">{ui.insHealth}</span>
-                    <input className="income-ins-rate-input" type="number" inputMode="decimal" step="0.001"
-                      value={insForm.healthRate}
-                      onChange={e => {
-                        const rate = Number(e.target.value) || 0;
-                        const healthAmt = Math.round(insForm.baseSalary * rate / 100);
-                        const longCareAmt = Math.round(healthAmt * insForm.longCareRate / 100);
-                        setInsForm(f => ({ ...f, healthRate: rate, healthAmt, longCareAmt }));
-                      }}
-                    />
-                    <span className="income-ins-unit">%&nbsp;=</span>
-                    <input className="income-ins-amt" type="number" inputMode="numeric"
-                      value={insForm.healthAmt || ''}
-                      onChange={e => {
-                        const healthAmt = Number(e.target.value) || 0;
-                        const longCareAmt = Math.round(healthAmt * insForm.longCareRate / 100);
-                        setInsForm(f => ({ ...f, healthAmt, longCareAmt }));
-                      }}
-                    />
-                    <span className="income-ins-unit">₩</span>
-                  </div>
-
-                  {/* 장기요양 */}
-                  <div className="income-ins-row">
-                    <span className="income-ins-name">{ui.insLongCare}</span>
-                    <input className="income-ins-rate-input" type="number" inputMode="decimal" step="0.01"
-                      value={insForm.longCareRate}
-                      onChange={e => {
-                        const rate = Number(e.target.value) || 0;
-                        const longCareAmt = Math.round(insForm.healthAmt * rate / 100);
-                        setInsForm(f => ({ ...f, longCareRate: rate, longCareAmt }));
-                      }}
-                    />
-                    <span className="income-ins-unit">%&nbsp;=</span>
-                    <input className="income-ins-amt" type="number" inputMode="numeric"
-                      value={insForm.longCareAmt || ''}
-                      onChange={e => setInsForm(f => ({ ...f, longCareAmt: Number(e.target.value) || 0 }))}
-                    />
-                    <span className="income-ins-unit">₩</span>
-                  </div>
-
-                  {/* 국민연금 + 고용보험 — only for 4-type */}
-                  {insForm.insuranceType === '4' && (
+                  {/* 건강보험 + 장기요양 — cho type '2' và '4' */}
+                  {(insForm.insuranceType === '2' || insForm.insuranceType === '4') && (
                     <>
                       <div className="income-ins-row">
-                        <span className="income-ins-name">{ui.insPension}</span>
-                        <input className="income-ins-rate-input" type="number" inputMode="decimal" step="0.01"
-                          value={insForm.pensionRate}
+                        <span className="income-ins-name">{ui.insHealth}</span>
+                        <input className="income-ins-rate-input" type="number" inputMode="decimal" step="0.001"
+                          value={insForm.healthRate}
                           onChange={e => {
                             const rate = Number(e.target.value) || 0;
-                            const pensionAmt = Math.round(insForm.baseSalary * rate / 100);
-                            setInsForm(f => ({ ...f, pensionRate: rate, pensionAmt }));
+                            const healthAmt = Math.round(insForm.baseSalary * rate / 100);
+                            const longCareAmt = Math.round(healthAmt * insForm.longCareRate / 100);
+                            setInsForm(f => ({ ...f, healthRate: rate, healthAmt, longCareAmt }));
                           }}
                         />
                         <span className="income-ins-unit">%&nbsp;=</span>
                         <input className="income-ins-amt" type="number" inputMode="numeric"
-                          value={insForm.pensionAmt || ''}
-                          onChange={e => setInsForm(f => ({ ...f, pensionAmt: Number(e.target.value) || 0 }))}
+                          value={insForm.healthAmt || ''}
+                          onChange={e => {
+                            const healthAmt = Number(e.target.value) || 0;
+                            const longCareAmt = Math.round(healthAmt * insForm.longCareRate / 100);
+                            setInsForm(f => ({ ...f, healthAmt, longCareAmt }));
+                          }}
                         />
                         <span className="income-ins-unit">₩</span>
                       </div>
                       <div className="income-ins-row">
-                        <span className="income-ins-name">{ui.insEmployment}</span>
+                        <span className="income-ins-name">{ui.insLongCare}</span>
                         <input className="income-ins-rate-input" type="number" inputMode="decimal" step="0.01"
-                          value={insForm.employmentRate}
+                          value={insForm.longCareRate}
                           onChange={e => {
                             const rate = Number(e.target.value) || 0;
-                            const employmentAmt = Math.round(insForm.baseSalary * rate / 100);
-                            setInsForm(f => ({ ...f, employmentRate: rate, employmentAmt }));
+                            const longCareAmt = Math.round(insForm.healthAmt * rate / 100);
+                            setInsForm(f => ({ ...f, longCareRate: rate, longCareAmt }));
                           }}
                         />
                         <span className="income-ins-unit">%&nbsp;=</span>
                         <input className="income-ins-amt" type="number" inputMode="numeric"
-                          value={insForm.employmentAmt || ''}
-                          onChange={e => setInsForm(f => ({ ...f, employmentAmt: Number(e.target.value) || 0 }))}
+                          value={insForm.longCareAmt || ''}
+                          onChange={e => setInsForm(f => ({ ...f, longCareAmt: Number(e.target.value) || 0 }))}
                         />
                         <span className="income-ins-unit">₩</span>
                       </div>
                     </>
+                  )}
+
+                  {/* 국민연금 — chỉ cho type '4' */}
+                  {insForm.insuranceType === '4' && (
+                    <div className="income-ins-row">
+                      <span className="income-ins-name">{ui.insPension}</span>
+                      <input className="income-ins-rate-input" type="number" inputMode="decimal" step="0.01"
+                        value={insForm.pensionRate}
+                        onChange={e => {
+                          const rate = Number(e.target.value) || 0;
+                          const pensionAmt = Math.round(insForm.baseSalary * rate / 100);
+                          setInsForm(f => ({ ...f, pensionRate: rate, pensionAmt }));
+                        }}
+                      />
+                      <span className="income-ins-unit">%&nbsp;=</span>
+                      <input className="income-ins-amt" type="number" inputMode="numeric"
+                        value={insForm.pensionAmt || ''}
+                        onChange={e => setInsForm(f => ({ ...f, pensionAmt: Number(e.target.value) || 0 }))}
+                      />
+                      <span className="income-ins-unit">₩</span>
+                    </div>
+                  )}
+
+                  {/* 고용보험 — cho type 'partial' và '4' */}
+                  {(insForm.insuranceType === 'partial' || insForm.insuranceType === '4') && (
+                    <div className="income-ins-row">
+                      <span className="income-ins-name">{ui.insEmployment}</span>
+                      <input className="income-ins-rate-input" type="number" inputMode="decimal" step="0.01"
+                        value={insForm.employmentRate}
+                        onChange={e => {
+                          const rate = Number(e.target.value) || 0;
+                          const employmentAmt = Math.round(insForm.baseSalary * rate / 100);
+                          setInsForm(f => ({ ...f, employmentRate: rate, employmentAmt }));
+                        }}
+                      />
+                      <span className="income-ins-unit">%&nbsp;=</span>
+                      <input className="income-ins-amt" type="number" inputMode="numeric"
+                        value={insForm.employmentAmt || ''}
+                        onChange={e => setInsForm(f => ({ ...f, employmentAmt: Number(e.target.value) || 0 }))}
+                      />
+                      <span className="income-ins-unit">₩</span>
+                    </div>
                   )}
 
                   <div className="income-ins-row income-ins-total-row">
@@ -1596,12 +1698,12 @@ export function IncomeScreen({
                     workStartDate: `${selectedMonthKey}-01`,
                     payDate: todayStr,
                     baseSalary: base,
-                    insuranceType: '2',
+                    insuranceType: '4',
                     healthRate: INS_RATES.health,
                     longCareRate: INS_RATES.longCare,
                     pensionRate: INS_RATES.pension,
                     employmentRate: INS_RATES.employment,
-                    ...calcIns(base, '2'),
+                    ...calcIns(base, '4'),
                     confirmed: false,
                     note: '',
                   });
@@ -1633,7 +1735,11 @@ export function IncomeScreen({
                             : <strong>{isKo ? '전체 근무지' : 'Tất cả nơi làm'}</strong>
                           }
                           <span className="income-ins-card-badge">
-                            {rec.insuranceType === '4' ? (isKo ? '4가지' : '4 loại') : (isKo ? '2가지' : '2 loại')}
+                            {rec.insuranceType === '4'
+                              ? (isKo ? '풀 1달' : 'Đủ tháng')
+                              : rec.insuranceType === 'partial'
+                                ? (isKo ? '중도퇴사' : 'Nghỉ giữa tháng')
+                                : (isKo ? '2가지' : '2 loại')}
                           </span>
                           {rec.confirmed && (
                             <span className="income-ins-confirmed-badge">
@@ -1656,29 +1762,40 @@ export function IncomeScreen({
                           </div>
 
                           <div className="income-ins-card-breakdown">
-                            <div className="income-ins-card-brow">
-                              <span className="ins-brow-name">{ui.insHealth}</span>
-                              <span className="ins-brow-rate">{rec.healthRate}%</span>
-                              <span className="ins-brow-amt">{rec.healthAmt.toLocaleString()} ₩</span>
-                            </div>
-                            <div className="income-ins-card-brow">
-                              <span className="ins-brow-name">{ui.insLongCare}</span>
-                              <span className="ins-brow-rate">{rec.longCareRate}%</span>
-                              <span className="ins-brow-amt">{rec.longCareAmt.toLocaleString()} ₩</span>
-                            </div>
-                            {rec.insuranceType === '4' && (
+                            {(rec.insuranceType === '2' || rec.insuranceType === '4') && (
                               <>
                                 <div className="income-ins-card-brow">
-                                  <span className="ins-brow-name">{ui.insPension}</span>
-                                  <span className="ins-brow-rate">{rec.pensionRate}%</span>
-                                  <span className="ins-brow-amt">{rec.pensionAmt.toLocaleString()} ₩</span>
+                                  <span className="ins-brow-name">{ui.insHealth}</span>
+                                  <span className="ins-brow-rate">{rec.healthRate}%</span>
+                                  <span className="ins-brow-amt">{rec.healthAmt.toLocaleString()} ₩</span>
                                 </div>
                                 <div className="income-ins-card-brow">
-                                  <span className="ins-brow-name">{ui.insEmployment}</span>
-                                  <span className="ins-brow-rate">{rec.employmentRate}%</span>
-                                  <span className="ins-brow-amt">{rec.employmentAmt.toLocaleString()} ₩</span>
+                                  <span className="ins-brow-name">{ui.insLongCare}</span>
+                                  <span className="ins-brow-rate">{rec.longCareRate}%</span>
+                                  <span className="ins-brow-amt">{rec.longCareAmt.toLocaleString()} ₩</span>
                                 </div>
                               </>
+                            )}
+                            {rec.insuranceType === '4' && (
+                              <div className="income-ins-card-brow">
+                                <span className="ins-brow-name">{ui.insPension}</span>
+                                <span className="ins-brow-rate">{rec.pensionRate}%</span>
+                                <span className="ins-brow-amt">{rec.pensionAmt.toLocaleString()} ₩</span>
+                              </div>
+                            )}
+                            {rec.insuranceType === 'partial' && (
+                              <div className="income-ins-card-brow" style={{ color: '#64748b', fontSize: '12px' }}>
+                                <span className="ins-brow-name">
+                                  {isKo ? '국민연금·건강·장기요양 미적용 (중도퇴사)' : '국민연금·건강보험 không tính (nghỉ giữa tháng)'}
+                                </span>
+                              </div>
+                            )}
+                            {(rec.insuranceType === 'partial' || rec.insuranceType === '4') && (
+                              <div className="income-ins-card-brow">
+                                <span className="ins-brow-name">{ui.insEmployment}</span>
+                                <span className="ins-brow-rate">{rec.employmentRate}%</span>
+                                <span className="ins-brow-amt">{rec.employmentAmt.toLocaleString()} ₩</span>
+                              </div>
                             )}
                           </div>
 
@@ -1705,7 +1822,7 @@ export function IncomeScreen({
                               <button type="button" className="income-ins-confirm-btn"
                                 onClick={() => {
                                   updateInsRecord(rec.id, { confirmed: true });
-                                  onAddExpense({ category: 'health', amount: insTotal(rec), date: rec.payDate, note: ui.insExpenseNote(rec.insuranceType) });
+                                  onAddExpense({ category: 'health', amount: insTotal(rec), date: rec.payDate, note: ui.insExpenseNote(rec.insuranceType), type: 'chi' });
                                 }}
                               >
                                 <Check size={14} />
@@ -1775,35 +1892,6 @@ export function IncomeScreen({
                   />
                 </label>
 
-                {/* Inputs row */}
-                <div className="income-juhyu-inputs">
-                  <label className="income-ins-label">
-                    <span>{ui.juhyuWeeklyHours}</span>
-                    <div className="income-ins-input-wrap">
-                      <input
-                        className="income-ins-input"
-                        type="number"
-                        inputMode="decimal"
-                        step="0.5"
-                        min="0"
-                        max="84"
-                        value={juhyuForm.weeklyHours || ''}
-                        onChange={e => applyJuhyuCalc({ weeklyHours: Number(e.target.value) || 0 })}
-                      />
-                      <span className="income-ins-unit">h</span>
-                    </div>
-                  </label>
-
-                  <label className="income-ins-label">
-                    <span>{ui.juhyuWorkDays}</span>
-                    <div className="income-juhyu-stepper">
-                      <button type="button" onClick={() => applyJuhyuCalc({ workDays: Math.max(1, juhyuForm.workDays - 1) })}>−</button>
-                      <span>{juhyuForm.workDays}{isKo ? '일' : ' ngày'}</span>
-                      <button type="button" onClick={() => applyJuhyuCalc({ workDays: Math.min(7, juhyuForm.workDays + 1) })}>+</button>
-                    </div>
-                  </label>
-                </div>
-
                 <label className="income-ins-label">
                   <span>{ui.juhyuHourlyRate}</span>
                   <div className="income-ins-input-wrap">
@@ -1818,42 +1906,53 @@ export function IncomeScreen({
                   </div>
                 </label>
 
-                {/* Pay date */}
-                <label className="income-ins-label">
-                  <span>{ui.juhyuPayDate}</span>
-                  <button type="button" className="income-ins-date-btn" onClick={() => setJuhyuDatePickerOpen(true)}>
-                    {juhyuForm.payDate}
-                  </button>
-                </label>
-
-                {/* ── Qualification + calculation preview ── */}
-                <div className={`income-juhyu-preview${juhyuForm.qualifies ? ' qualifies' : ' warn'}`}>
-                  {juhyuForm.qualifies ? (
-                    <>
-                      <div className="income-juhyu-preview-badge good">
-                        <Check size={11} /> {ui.juhyuQualifies}
-                      </div>
-                      <div className="income-juhyu-calc">
-                        <div className="income-juhyu-calc-row">
-                          <span>{isKo ? '주휴시간' : 'Giờ phụ cấp'}</span>
-                          <strong>{juhyuForm.weeklyHours}h ÷ {juhyuForm.workDays} = {juhyuForm.juhyuHoursPerWeek.toFixed(2)}h</strong>
-                        </div>
-                        <div className="income-juhyu-calc-row">
-                          <span>{isKo ? '주당 주휴수당' : 'Mỗi tuần'}</span>
-                          <strong>{juhyuForm.juhyuHoursPerWeek.toFixed(2)}h × {juhyuForm.hourlyRate.toLocaleString()} = {juhyuForm.juhyuPerWeek.toLocaleString()} ₩</strong>
-                        </div>
-                        <div className="income-juhyu-calc-row total">
-                          <span>{isKo ? '월 주휴수당 (×4.345)' : 'Mỗi tháng (×4.345)'}</span>
-                          <strong>{juhyuForm.juhyuPerMonth.toLocaleString()} ₩</strong>
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="income-juhyu-preview-badge warn">
-                      <AlertTriangle size={11} /> {ui.juhyuWarn15h}
-                    </div>
-                  )}
+                {/* Start date & End date */}
+                <div className="income-juhyu-dates">
+                  <label className="income-ins-label">
+                    <span>{isKo ? '근무 시작일' : 'Ngày bắt đầu làm'}</span>
+                    <button type="button" className="income-ins-date-btn" onClick={() => setJuhyuDatePickerField('startDate')}>
+                      {juhyuForm.startDate}
+                    </button>
+                  </label>
+                  <label className="income-ins-label">
+                    <span>{isKo ? '근무 종료일' : 'Ngày kết thúc'}</span>
+                    <button type="button" className="income-ins-date-btn" onClick={() => setJuhyuDatePickerField('endDate')}>
+                      {juhyuForm.endDate}
+                    </button>
+                  </label>
                 </div>
+
+                {/* ── Week-by-week preview ── */}
+                {juhyuForm.weeks.length > 0 && (
+                  <div className={`income-juhyu-preview${juhyuForm.qualifies ? ' qualifies' : ' warn'}`}>
+                    <div className="income-juhyu-weeks">
+                      {juhyuForm.weeks.map((w, i) => (
+                        <div key={i} className={`income-juhyu-week-row${w.qualifies ? '' : ' partial'}`}>
+                          <span className="income-juhyu-week-label">
+                            {isKo ? `${i + 1}주차` : `Tuần ${i + 1}`}
+                            {' '}({w.weekStart.slice(5).replace('-', '/')} – {w.weekEnd.slice(5).replace('-', '/')})
+                            {' '}
+                            <em>{w.weeklyHours > 0 ? `${w.weeklyHours.toFixed(1)}h${w.workDays > 0 ? ` · ${w.workDays}${isKo ? '일' : ' ngày'}` : ''}` : (isKo ? '근무 없음' : 'Không có ca')}</em>
+                          </span>
+                          <strong>
+                            {w.qualifies
+                              ? `+${w.amount.toLocaleString()} ₩`
+                              : w.weeklyHours < 15 && w.weeklyHours > 0
+                                ? (isKo ? `<15h` : `<15h`)
+                                : w.weeklyHours === 0
+                                  ? '–'
+                                  : (isKo ? '불완전한 주' : 'Tuần lẻ')
+                            }
+                          </strong>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="income-juhyu-calc-row total" style={{ marginTop: '6px' }}>
+                      <span>{isKo ? '합계' : 'Tổng cộng'}</span>
+                      <strong>{juhyuForm.juhyuPerMonth.toLocaleString()} ₩</strong>
+                    </div>
+                  </div>
+                )}
 
                 {/* Note */}
                 <label className="income-ins-label">
@@ -1891,15 +1990,17 @@ export function IncomeScreen({
                 onClick={() => {
                   const wp = workplaces[0];
                   const hr = wp && wp.hours > 0 ? Math.round(wp.total / wp.hours) : 10320;
-                  const calc = calcJuhyu(25, 5, hr);
+                  const monthStart = `${selectedMonthKey}-01`;
+                  const monthEnd = `${selectedMonthKey}-${String(chartDaysInMonth).padStart(2, '0')}`;
+                  const label = wp?.label ?? '';
+                  const weeks = calcJuhyuWeeksFromShifts(monthStart, monthEnd, label, shifts, hr);
                   setJuhyuForm({
                     month: selectedMonthKey,
-                    workplaceLabel: wp?.label ?? '',
-                    weeklyHours: 25,
-                    workDays: 5,
+                    workplaceLabel: label,
+                    startDate: monthStart,
+                    endDate: monthEnd,
                     hourlyRate: hr,
-                    ...calc,
-                    payDate: todayStr,
+                    ...buildJuhyuCalc(weeks, hr),
                     confirmed: false,
                     note: '',
                   });
@@ -1931,7 +2032,7 @@ export function IncomeScreen({
                           </strong>
                           {rec.qualifies ? (
                             <span className="income-ins-card-badge income-juhyu-badge-ok">
-                              {rec.weeklyHours}h/{isKo ? '주' : 'tuần'}
+                              {rec.weeks.filter(w => w.qualifies).length}{isKo ? '주' : ' tuần đủ đk'}
                             </span>
                           ) : (
                             <span className="income-ins-card-badge income-juhyu-badge-warn">
@@ -1956,27 +2057,32 @@ export function IncomeScreen({
                       {isOpen && (
                         <div className="income-ins-card-detail">
                           <div className="income-ins-card-dates">
-                            <span>{isKo ? '급여일' : 'Ngày lương'}: {rec.payDate}</span>
+                            <span>{rec.startDate ?? ''} → {rec.endDate ?? ''}</span>
                             <span>{rec.hourlyRate.toLocaleString()} ₩/h</span>
                           </div>
 
-                          <div className="income-ins-card-breakdown">
-                            <div className="income-ins-card-brow">
-                              <span className="ins-brow-name">{isKo ? '근무 시간/일수' : 'Giờ / Ngày'}</span>
-                              <span className="ins-brow-rate">{rec.weeklyHours}h</span>
-                              <span className="ins-brow-amt">{rec.workDays}{isKo ? '일' : ' ngày'}</span>
+                          {rec.weeks && rec.weeks.length > 0 && (
+                            <div className="income-juhyu-weeks income-juhyu-weeks-record">
+                              {rec.weeks.map((w, i) => (
+                                <div key={i} className={`income-juhyu-week-row${w.qualifies ? '' : ' partial'}`}>
+                                  <span className="income-juhyu-week-label">
+                                    {isKo ? `${i + 1}주차` : `Tuần ${i + 1}`}
+                                    {' '}({w.weekStart.slice(5).replace('-', '/')} – {w.weekEnd.slice(5).replace('-', '/')})
+                                    {' '}
+                                    <em>{w.weeklyHours > 0 ? `${w.weeklyHours.toFixed(1)}h · ${w.workDays}${isKo ? '일' : ' ngày'}` : (isKo ? '근무 없음' : 'Không có ca')}</em>
+                                  </span>
+                                  <strong>
+                                    {w.qualifies
+                                      ? `+${w.amount.toLocaleString()} ₩`
+                                      : w.weeklyHours > 0 && w.weeklyHours < 15
+                                        ? (isKo ? '<15h' : '<15h')
+                                        : w.weeklyHours === 0 ? '–' : (isKo ? '불완전한 주' : 'Tuần lẻ')
+                                    }
+                                  </strong>
+                                </div>
+                              ))}
                             </div>
-                            <div className="income-ins-card-brow">
-                              <span className="ins-brow-name">{isKo ? '주휴시간 (일평균)' : 'Giờ phụ cấp/tuần'}</span>
-                              <span className="ins-brow-rate">{rec.juhyuHoursPerWeek.toFixed(2)}h</span>
-                              <span className="ins-brow-amt">{rec.juhyuPerWeek.toLocaleString()} ₩/{isKo ? '주' : 'tuần'}</span>
-                            </div>
-                            <div className="income-ins-card-brow">
-                              <span className="ins-brow-name">{isKo ? '월 환산 (×4.345)' : 'Tháng (×4.345)'}</span>
-                              <span className="ins-brow-rate">×4.345</span>
-                              <span className="ins-brow-amt">{rec.juhyuPerMonth.toLocaleString()} ₩</span>
-                            </div>
-                          </div>
+                          )}
 
                           {rec.note ? <p className="income-ins-card-note">{rec.note}</p> : null}
 
@@ -2006,7 +2112,16 @@ export function IncomeScreen({
                             </div>
                             {!rec.confirmed && rec.qualifies && (
                               <button type="button" className="income-ins-confirm-btn income-juhyu-confirm-btn"
-                                onClick={() => updateJuhyuRecord(rec.id, { confirmed: true })}
+                                onClick={() => {
+                                  updateJuhyuRecord(rec.id, { confirmed: true });
+                                  onAddExpense({
+                                    category: 'juhyu_income',
+                                    amount: rec.juhyuPerMonth,
+                                    date: rec.endDate ?? todayStr,
+                                    note: rec.workplaceLabel ? `주휴수당 — ${rec.workplaceLabel}` : '주휴수당',
+                                    type: 'thu',
+                                  });
+                                }}
                               >
                                 <Check size={14} />
                                 {ui.juhyuConfirm}
@@ -2054,15 +2169,17 @@ export function IncomeScreen({
           }}
         />
       )}
-      {/* 주휴수당 date picker */}
-      {juhyuDatePickerOpen && (
+      {/* 주휴수당 date pickers */}
+      {juhyuDatePickerField && (
         <DateWheelModal
-          title={ui.juhyuPayDate}
-          initialDate={juhyuForm.payDate}
-          onClose={() => setJuhyuDatePickerOpen(false)}
+          title={juhyuDatePickerField === 'startDate'
+            ? (isKo ? '근무 시작일' : 'Ngày bắt đầu làm')
+            : (isKo ? '근무 종료일' : 'Ngày kết thúc')}
+          initialDate={juhyuDatePickerField === 'startDate' ? juhyuForm.startDate : juhyuForm.endDate}
+          onClose={() => setJuhyuDatePickerField(null)}
           onConfirm={(date) => {
-            applyJuhyuCalc({ payDate: date });
-            setJuhyuDatePickerOpen(false);
+            applyJuhyuCalc({ [juhyuDatePickerField]: date });
+            setJuhyuDatePickerField(null);
           }}
         />
       )}

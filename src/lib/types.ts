@@ -53,10 +53,11 @@ export interface ProfileDraft {
 
 export interface Expense {
   id: string;
-  category: 'rent' | 'phone' | 'food' | 'transport' | 'shopping' | 'health' | 'entertainment' | 'other';
+  category: 'rent' | 'phone' | 'food' | 'transport' | 'shopping' | 'health' | 'entertainment' | 'other' | 'juhyu_income' | 'other_income';
   amount: number;
   date: string;
   note: string;
+  type?: 'thu' | 'chi';  // defaults to 'chi' for backward compat
 }
 
 export type StoredState = {

@@ -1,12 +1,14 @@
-{
-  "version": "0.0.1",
-  "configurations": [
-    {
-      "name": "tien-luong-dev",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
-      "port": 5175,
-      "cwd": "C:\\Users\\Hhung\\Desktop\\tien-luong"
-    }
-  ]
+﻿{
+    "version":  "0.0.1",
+    "configurations":  [
+                           {
+                               "port":  5175,
+                               "runtimeExecutable":  "npm",
+                               "name":  "tien-luong-dev",
+                               "runtimeArgs":  [
+                                                   "run",
+                                                   "dev"
+                                               ]
+                           }
+                       ]
 }

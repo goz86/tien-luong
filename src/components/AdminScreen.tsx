@@ -25,6 +25,7 @@ import {
 import { supabase } from '../lib/supabase';
 import type { AppLang } from './ProfileScreen';
 import { timeAgo } from '../data/communityData';
+import { localDateStr, localMonthStr } from '../lib/localDate';
 
 type AdminTab = 'overview' | 'users' | 'content' | 'reports' | 'announcements' | 'logs' | 'events';
 type AdminContentView = 'posts' | 'reviews' | 'comments';
@@ -618,7 +619,7 @@ export function AdminScreen({
       const padded: DailyVisit[] = Array.from({ length: 14 }, (_, i) => {
         const d = new Date(today);
         d.setDate(d.getDate() - (13 - i));
-        const dayStr = d.toISOString().slice(0, 10);
+        const dayStr = localDateStr(d);
         return rawVisits.find(v => v.day === dayStr)
           ?? { day: dayStr, total_sessions: 0, guest_sessions: 0, user_sessions: 0 };
       });
@@ -1311,7 +1312,7 @@ export function AdminScreen({
               {/* Bar chart — 14 ngày gần nhất (luôn đủ 14 cột) */}
               <div className="admin-visit-chart" aria-label={isKo ? '14일 방문 추이' : 'Biểu đồ 14 ngày'}>
                 {(() => {
-                  const todayStr = new Date().toISOString().slice(0, 10);
+                  const todayStr = localDateStr();
                   const maxVal = Math.max(...dailyVisits.map(d => d.total_sessions), 1);
                   return dailyVisits.map((d) => {
                     const heightPct = Math.max(Math.round((d.total_sessions / maxVal) * 100), d.total_sessions > 0 ? 6 : 0);
@@ -1351,7 +1352,7 @@ export function AdminScreen({
                     <span>{isKo ? '월별 통계' : 'Thống kê theo tháng'}</span>
                   </div>
                   {(() => {
-                    const todayMonth = new Date().toISOString().slice(0, 7);
+                    const todayMonth = localMonthStr();
                     const maxMonthTotal = Math.max(...monthlyVisits.map(m => m.total_sessions), 1);
                     return monthlyVisits.slice(0, 6).map(m => {
                       const [year, month] = m.month.split('-');

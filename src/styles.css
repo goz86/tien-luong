@@ -3718,7 +3718,7 @@ button.ticker-inner {
   top: 0;
   z-index: 20;
   display: flex;
-  gap: 8px;
+  gap: 6px;
   overflow-x: auto;
   padding: 8px 0 14px;
   margin: 0 -2px 2px;
@@ -3733,19 +3733,21 @@ button.ticker-inner {
 
 .community-subtabs button,
 .income-subtabs button {
-  flex: 0 0 auto;
-  min-height: 42px;
+  flex: 1 1 0;
+  min-height: 40px;
   border: 0;
   border-radius: 999px;
-  padding: 0 14px;
+  padding: 0 10px;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  justify-content: center;
+  gap: 5px;
   background: #edf2f8;
   color: #66758a;
-  font-size: 13px;
-  font-weight: 900;
+  font-size: 12px;
+  font-weight: 700;
   white-space: nowrap;
+  transition: background 0.18s ease, color 0.18s ease;
 }
 
 .community-subtabs button.active,
@@ -3753,6 +3755,10 @@ button.ticker-inner {
   background: var(--text-main);
   color: white;
   box-shadow: 0 12px 22px rgba(8, 22, 43, 0.18);
+}
+
+.income-subtab-label {
+  white-space: nowrap;
 }
 
 .community-tab-body,
@@ -3947,7 +3953,7 @@ button.ticker-inner {
   top: 0;
   z-index: 20;
   display: flex;
-  gap: 8px;
+  gap: 6px;
   overflow-x: auto;
   padding: 8px 0 14px;
   margin: 0 -2px 2px;
@@ -3962,19 +3968,21 @@ button.ticker-inner {
 
 .community-subtabs button,
 .income-subtabs button {
-  flex: 0 0 auto;
-  min-height: 42px;
+  flex: 1 1 0;
+  min-height: 40px;
   border: 0;
   border-radius: 999px;
-  padding: 0 14px;
+  padding: 0 10px;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  justify-content: center;
+  gap: 5px;
   background: #edf2f8;
   color: #66758a;
-  font-size: 13px;
-  font-weight: 900;
+  font-size: 12px;
+  font-weight: 700;
   white-space: nowrap;
+  transition: background 0.18s ease, color 0.18s ease;
 }
 
 .community-subtabs button.active,
@@ -3982,6 +3990,10 @@ button.ticker-inner {
   background: var(--text-main);
   color: white;
   box-shadow: 0 12px 22px rgba(8, 22, 43, 0.18);
+}
+
+.income-subtab-label {
+  white-space: nowrap;
 }
 
 .community-tab-body,
@@ -5409,6 +5421,91 @@ button.ticker-inner {
   padding: 4px;
   color: #b6c0cf;
   background: transparent;
+}
+
+/* Thu (income) row */
+.income-expense-row.thu {
+  background: rgba(13,155,114,.04);
+  border-radius: 10px;
+  padding: 10px 10px;
+  margin: 2px -10px;
+}
+.income-expense-amount b.thu-amt {
+  color: #0d9b72;
+}
+
+/* Thu/Chi icon tone */
+.income-expense-icon.emerald {
+  color: #0d9b72;
+  background: rgba(13,155,114,.12);
+}
+
+/* Thu/Chi type toggle */
+.income-thuchi-toggle {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.income-thuchi-btn {
+  flex: 1;
+  padding: 8px 0;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  background: transparent;
+  color: var(--text-soft);
+  transition: all 0.15s;
+}
+.income-thuchi-btn.thu.active {
+  background: rgba(13,155,114,.1);
+  border-color: #0d9b72;
+  color: #0d9b72;
+}
+.income-thuchi-btn.chi.active {
+  background: rgba(232,75,95,.08);
+  border-color: #e84b5f;
+  color: #e84b5f;
+}
+
+/* Thu/Chi summary bar */
+.income-thuchi-summary {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: #f7f9fd;
+  border-radius: 12px;
+  padding: 10px 16px;
+  margin-bottom: 10px;
+}
+.income-thuchi-sum {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.income-thuchi-sum span {
+  font-size: 11px;
+  color: var(--text-faint);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+.income-thuchi-sum.thu strong {
+  font-size: 15px;
+  font-weight: 800;
+  color: #0d9b72;
+}
+.income-thuchi-sum.chi strong {
+  font-size: 15px;
+  font-weight: 800;
+  color: #e84b5f;
+}
+.income-thuchi-divider {
+  width: 1px;
+  height: 32px;
+  background: #e2e8f0;
+  margin: 0 16px;
 }
 
 .income-empty {
@@ -18369,9 +18466,11 @@ button.admin-stat-card {
 
 /* Card summary total — green (income) vs insurance red (deduction) */
 .income-juhyu-summary-total {
-  font-size: 15px;
+  font-size: 22px;
   font-weight: 800;
   color: #0d9b72;
+  white-space: nowrap;
+  letter-spacing: -0.5px;
 }
 
 /* Badge variants on card */
@@ -18389,3 +18488,48 @@ button.admin-stat-card {
   background: #0d9b72 !important;
 }
 .income-juhyu-confirm-btn:active { opacity: .75; }
+
+/* Side-by-side date fields */
+.income-juhyu-dates {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+/* Week breakdown list */
+.income-juhyu-weeks {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 2px 0;
+}
+.income-juhyu-week-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  background: rgba(13,155,114,.06);
+}
+.income-juhyu-week-row.partial {
+  background: rgba(100,116,139,.06);
+}
+.income-juhyu-week-label {
+  font-size: 12px;
+  color: var(--text-soft);
+  font-weight: 600;
+}
+.income-juhyu-week-row > strong {
+  font-size: 12px;
+  font-weight: 700;
+  color: #0d9b72;
+  white-space: nowrap;
+}
+.income-juhyu-week-row.partial > strong {
+  color: var(--text-faint);
+  font-weight: 600;
+}
+.income-juhyu-weeks-record {
+  margin: 8px 0 4px;
+}

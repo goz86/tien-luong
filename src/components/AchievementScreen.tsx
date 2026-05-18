@@ -27,6 +27,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { calculateShiftPay, formatKrw } from '../lib/salary';
 import { supabase } from '../lib/supabase';
 import type { Expense, Shift, PersonalGoal } from '../lib/types';
+import { localDateStr } from '../lib/localDate';
 import {
   ACHIEVEMENT_CLAIMED_CHANGE_EVENT,
   loadAchievementClaimed,
@@ -802,7 +803,7 @@ export function AchievementScreen({ onClose, isKo = false, inline = false }: Ach
   // ── Load admin events ──
   useEffect(() => {
     if (!supabase) { setEventsLoading(false); return; }
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDateStr();
     void supabase
       .from('admin_events')
       .select('id,title,description,reward_emoji,start_date,end_date')

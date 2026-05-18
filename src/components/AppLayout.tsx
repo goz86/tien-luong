@@ -9,6 +9,7 @@ import { WALLPAPERS, type WallpaperKey } from '../lib/wallpapers';
 import { AppLockOverlay } from './AppLockOverlay';
 import { timeAgo } from '../data/communityData';
 import { shiftMonth } from '../utils/helpers';
+import { localDateStr } from '../lib/localDate';
 import type { Tab } from '../lib/types';
 import { recordAppVisit } from '../lib/appVisits';
 import { getGuestSessionId } from '../lib/guestSession';
@@ -272,7 +273,7 @@ export default function AppLayout() {
   }, []);
 
   const openAddToday = useCallback((venue?: string) => {
-    navigateToDate(new Date().toISOString().slice(0, 10), venue);
+    navigateToDate(localDateStr(), venue);
   }, [navigateToDate]);
 
   const openCommunityPost = useCallback((postId: string) => {
