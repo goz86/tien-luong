@@ -17,6 +17,7 @@ import {
   PiggyBank,
   Plus,
   ReceiptText,
+  ShieldCheck,
   Sparkles,
   Trophy,
   Trash2,
@@ -89,7 +90,7 @@ function useShareMascotImgKey(shifts: Shift[], expenses: Expense[], rateValue: n
 }
 
 type AppLang = 'vi' | 'ko';
-type IncomeTab = 'overview' | 'expenses' | 'workplaces';
+type IncomeTab = 'overview' | 'expenses' | 'workplaces' | 'insurance';
 type ChartViewMode = 'day' | 'week' | 'month';
 type IconComponent = LucideIcon;
 
@@ -97,7 +98,71 @@ const incomeTabs: Array<{ id: IncomeTab; icon: IconComponent }> = [
   { id: 'overview', icon: BarChart3 },
   { id: 'expenses', icon: ReceiptText },
   { id: 'workplaces', icon: Building2 },
+  { id: 'insurance', icon: ShieldCheck },
 ];
+
+// ─── Insurance 4대보험 ────────────────────────────────────────
+interface InsuranceRecord {
+  id: string;
+  month: string;           // 'YYYY-MM'
+  workplaceLabel: string;
+  workStartDate: string;   // 'YYYY-MM-DD'
+  payDate: string;         // 'YYYY-MM-DD'
+  baseSalary: number;      // KRW
+  insuranceType: '2' | '4';
+  healthAmt: number;       // 건강보험 employee share (editable)
+  longCareAmt: number;     // 장기요양 (editable)
+  pensionAmt: number;      // 국민연금 employee share (editable, 0 if '2')
+  employmentAmt: number;   // 고용보험 employee share (editable, 0 if '2')
+  confirmed: boolean;
+  note: string;
+}
+type InsFormField = 'workStartDate' | 'payDate';
+
+const INS_STORAGE_KEY = 'duhoc-mate-insurance';
+// 2025-2026 rates — employee share
+const INS_RATES = {
+  health: 0.03545,     // 건강보험 3.545%
+  longCare: 0.1295,    // 장기요양 = healthAmt × 12.95%
+  pension: 0.045,      // 국민연금 4.5%
+  employment: 0.009,   // 고용보험 0.9%
+};
+
+function calcIns(base: number, type: '2' | '4') {
+  const healthAmt = Math.round(base * INS_RATES.health);
+  const longCareAmt = Math.round(healthAmt * INS_RATES.longCare);
+  const pensionAmt = type === '4' ? Math.round(base * INS_RATES.pension) : 0;
+  const employmentAmt = type === '4' ? Math.round(base * INS_RATES.employment) : 0;
+  return { healthAmt, longCareAmt, pensionAmt, employmentAmt };
+}
+
+function insTotal(rec: Pick<InsuranceRecord, 'healthAmt' | 'longCareAmt' | 'pensionAmt' | 'employmentAmt'>) {
+  return rec.healthAmt + rec.longCareAmt + rec.pensionAmt + rec.employmentAmt;
+}
+
+function loadInsRecords(): InsuranceRecord[] {
+  try {
+    const raw = window.localStorage.getItem(INS_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as InsuranceRecord[]) : [];
+  } catch { return []; }
+}
+function saveInsRecords(records: InsuranceRecord[]) {
+  window.localStorage.setItem(INS_STORAGE_KEY, JSON.stringify(records));
+}
+function useInsuranceRecords() {
+  const [records, setRaw] = useState<InsuranceRecord[]>(loadInsRecords);
+  const set = (next: InsuranceRecord[]) => { saveInsRecords(next); setRaw(next); };
+  const add = (rec: Omit<InsuranceRecord, 'id'>) => {
+    const r = { ...rec, id: `ins-${Date.now()}-${Math.random().toString(16).slice(2)}` };
+    set([...loadInsRecords(), r]);
+    return r;
+  };
+  const update = (id: string, patch: Partial<InsuranceRecord>) => {
+    set(loadInsRecords().map(r => r.id === id ? { ...r, ...patch } : r));
+  };
+  const remove = (id: string) => set(loadInsRecords().filter(r => r.id !== id));
+  return { records, add, update, remove };
+}
 
 const categoryMeta: Record<Expense['category'], { label: string; icon: any; tone: string }> = {
   rent: { label: 'Tiền nhà', icon: Home, tone: 'blue' },
@@ -175,7 +240,7 @@ export function IncomeScreen({
   const isKo = lang === 'ko';
   const locale = isKo ? 'ko-KR' : 'vi-VN';
   const ui = isKo ? {
-    tabs: { overview: '요약', expenses: '지출', workplaces: '근무지' },
+    tabs: { overview: '요약', expenses: '지출', workplaces: '근무지', insurance: '보험' },
     netIncome: '월 순수입',
     grossIncome: '총 급여',
     expenses: '지출',
@@ -213,8 +278,32 @@ export function IncomeScreen({
     noWorkplaceHint: '캘린더에 근무를 추가하면 근무지별로 자동 집계됩니다.',
     deleteExpense: '지출 삭제',
     shifts: '회',
+    insTitle: '4대보험 관리',
+    insSubtitle: '월별 보험료를 계산하고 지출에 반영하세요.',
+    insAdd: '보험료 추가',
+    insType2: '2가지 (건강+장기)',
+    insType4: '전부 4가지',
+    insWorkplace: '근무지 (선택)',
+    insStartDate: '근무 시작일',
+    insPayDate: '급여일',
+    insSalaryBase: '기준 급여 (₩)',
+    insHealth: '건강보험 (3.545%)',
+    insLongCare: '장기요양 (12.95%)',
+    insPension: '국민연금 (4.5%)',
+    insEmployment: '고용보험 (0.9%)',
+    insTotal: '납부 예상액',
+    insConfirm: '확인 — 지출에 반영',
+    insConfirmed: '지출에 반영됨',
+    insNote: '메모',
+    insSave: '저장',
+    insCancel: '취소',
+    insDelete: '삭제',
+    insEdit: '수정',
+    insEmpty: '이달 보험료 기록 없음',
+    insEmptyHint: '보험료를 추가하면 월별 순수입에 자동 반영됩니다.',
+    insExpenseNote: (type: string) => `4대보험 (${type === '4' ? '4가지' : '2가지'})`,
   } : {
-    tabs: { overview: 'Tổng quan', expenses: 'Chi tiêu', workplaces: 'Nơi làm' },
+    tabs: { overview: 'Tổng quan', expenses: 'Chi tiêu', workplaces: 'Nơi làm', insurance: 'Bảo hiểm' },
     netIncome: 'Thu nhập ròng / tháng',
     grossIncome: 'Tổng lương',
     expenses: 'Chi tiêu',
@@ -252,6 +341,30 @@ export function IncomeScreen({
     noWorkplaceHint: 'Thêm ca làm trong lịch để app tự tổng hợp theo từng nơi.',
     deleteExpense: 'Xóa chi tiêu',
     shifts: 'ca',
+    insTitle: 'Quản lý bảo hiểm 4대보험',
+    insSubtitle: 'Tính tiền bảo hiểm theo tháng và tự động trừ vào chi tiêu.',
+    insAdd: 'Thêm khai bảo hiểm',
+    insType2: '2 loại (y tế + dưỡng lão)',
+    insType4: 'Đủ 4 loại',
+    insWorkplace: 'Nơi làm (không bắt buộc)',
+    insStartDate: 'Ngày bắt đầu làm',
+    insPayDate: 'Ngày nhận lương',
+    insSalaryBase: 'Lương cơ sở (₩)',
+    insHealth: '건강보험 (3.545%)',
+    insLongCare: '장기요양 (12.95%)',
+    insPension: '국민연금 (4.5%)',
+    insEmployment: '고용보험 (0.9%)',
+    insTotal: 'Tổng phải đóng',
+    insConfirm: 'Xác nhận — trừ vào Chi tiêu',
+    insConfirmed: 'Đã trừ vào Chi tiêu',
+    insNote: 'Ghi chú',
+    insSave: 'Lưu',
+    insCancel: 'Hủy',
+    insDelete: 'Xóa',
+    insEdit: 'Sửa',
+    insEmpty: 'Chưa có khai bảo hiểm tháng này',
+    insEmptyHint: 'Thêm khai bảo hiểm để tự động trừ vào thu nhập ròng.',
+    insExpenseNote: (type: string) => `Bảo hiểm 4대보험 (${type === '4' ? '4 loại' : '2 loại'})`,
   };
   const categoryLabels: Record<Expense['category'], string> = isKo ? {
     rent: '월세',
@@ -296,6 +409,25 @@ export function IncomeScreen({
     note: '',
   });
   const prevTotalRef = useRef<number | null>(null);
+
+  // ── Insurance tab state ──
+  const { records: allInsRecords, add: addInsRecord, update: updateInsRecord, remove: removeInsRecord } = useInsuranceRecords();
+  const [isAddingIns, setIsAddingIns] = useState(false);
+  const [editingInsId, setEditingInsId] = useState<string | null>(null);
+  const [insDatePickerField, setInsDatePickerField] = useState<InsFormField | null>(null);
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const defaultInsForm = (): Omit<InsuranceRecord, 'id'> => ({
+    month: selectedMonthKey,
+    workplaceLabel: workplaces[0]?.label ?? '',
+    workStartDate: `${selectedMonthKey}-01`,
+    payDate: todayStr,
+    baseSalary: monthlyTotal,
+    insuranceType: '2',
+    ...calcIns(monthlyTotal, '2'),
+    confirmed: false,
+    note: '',
+  });
+  const [insForm, setInsForm] = useState<Omit<InsuranceRecord, 'id'>>(defaultInsForm);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent | TouchEvent) => {
@@ -401,6 +533,11 @@ export function IncomeScreen({
         share: monthlyTotal ? (workplace.total / monthlyTotal) * 100 : 0,
       })),
     [monthlyTotal, workplaces]
+  );
+
+  const monthInsRecords = useMemo(
+    () => allInsRecords.filter(r => r.month === selectedMonthKey),
+    [allInsRecords, selectedMonthKey]
   );
 
   const dailyAggregated = useMemo(() => {
@@ -1047,7 +1184,309 @@ export function IncomeScreen({
             </div>
           </section>
         ) : null}
+
+        {/* ── Insurance Tab ── */}
+        {activeTab === 'insurance' ? (
+          <section className="income-insurance-panel">
+            <div className="income-section-head">
+              <div>
+                <p>{isKo ? '보험료 관리' : 'Bảo hiểm'}</p>
+                <h2>{ui.insTitle}</h2>
+              </div>
+              <ShieldCheck size={22} />
+            </div>
+            <p className="income-ins-subtitle">{ui.insSubtitle}</p>
+
+            {/* ── Add form ── */}
+            {isAddingIns || editingInsId ? (
+              <div className="income-ins-form">
+                {/* Insurance type toggle */}
+                <div className="income-ins-type-row">
+                  <button
+                    type="button"
+                    className={`income-ins-type-btn${insForm.insuranceType === '2' ? ' active' : ''}`}
+                    onClick={() => {
+                      const calc = calcIns(insForm.baseSalary, '2');
+                      setInsForm(f => ({ ...f, insuranceType: '2', ...calc }));
+                    }}
+                  >
+                    {ui.insType2}
+                  </button>
+                  <button
+                    type="button"
+                    className={`income-ins-type-btn${insForm.insuranceType === '4' ? ' active' : ''}`}
+                    onClick={() => {
+                      const calc = calcIns(insForm.baseSalary, '4');
+                      setInsForm(f => ({ ...f, insuranceType: '4', ...calc }));
+                    }}
+                  >
+                    {ui.insType4}
+                  </button>
+                </div>
+
+                {/* Workplace */}
+                <label className="income-ins-label">
+                  <span>{ui.insWorkplace}</span>
+                  <input
+                    className="income-ins-input"
+                    value={insForm.workplaceLabel}
+                    onChange={e => setInsForm(f => ({ ...f, workplaceLabel: e.target.value }))}
+                    placeholder={workplaces[0]?.label ?? (isKo ? '근무지명' : 'Tên nơi làm')}
+                  />
+                </label>
+
+                {/* Date row */}
+                <div className="income-ins-date-row">
+                  <label className="income-ins-label" style={{ flex: 1 }}>
+                    <span>{ui.insStartDate}</span>
+                    <button
+                      type="button"
+                      className="income-ins-date-btn"
+                      onClick={() => setInsDatePickerField('workStartDate')}
+                    >
+                      {insForm.workStartDate}
+                    </button>
+                  </label>
+                  <label className="income-ins-label" style={{ flex: 1 }}>
+                    <span>{ui.insPayDate}</span>
+                    <button
+                      type="button"
+                      className="income-ins-date-btn"
+                      onClick={() => setInsDatePickerField('payDate')}
+                    >
+                      {insForm.payDate}
+                    </button>
+                  </label>
+                </div>
+
+                {/* Base salary */}
+                <label className="income-ins-label">
+                  <span>{ui.insSalaryBase}</span>
+                  <input
+                    className="income-ins-input"
+                    type="number"
+                    inputMode="numeric"
+                    value={insForm.baseSalary || ''}
+                    onChange={e => {
+                      const base = Number(e.target.value) || 0;
+                      const calc = calcIns(base, insForm.insuranceType);
+                      setInsForm(f => ({ ...f, baseSalary: base, ...calc }));
+                    }}
+                  />
+                </label>
+
+                {/* Breakdown — all editable */}
+                <div className="income-ins-breakdown">
+                  <div className="income-ins-breakdown-title">{isKo ? '보험료 내역 (수정 가능)' : 'Chi tiết bảo hiểm (có thể sửa)'}</div>
+                  <div className="income-ins-row">
+                    <span>{ui.insHealth}</span>
+                    <input
+                      className="income-ins-amt"
+                      type="number"
+                      inputMode="numeric"
+                      value={insForm.healthAmt || ''}
+                      onChange={e => setInsForm(f => ({ ...f, healthAmt: Number(e.target.value) || 0 }))}
+                    />
+                    <span className="income-ins-unit">₩</span>
+                  </div>
+                  <div className="income-ins-row">
+                    <span>{ui.insLongCare}</span>
+                    <input
+                      className="income-ins-amt"
+                      type="number"
+                      inputMode="numeric"
+                      value={insForm.longCareAmt || ''}
+                      onChange={e => setInsForm(f => ({ ...f, longCareAmt: Number(e.target.value) || 0 }))}
+                    />
+                    <span className="income-ins-unit">₩</span>
+                  </div>
+                  {insForm.insuranceType === '4' && (
+                    <>
+                      <div className="income-ins-row">
+                        <span>{ui.insPension}</span>
+                        <input
+                          className="income-ins-amt"
+                          type="number"
+                          inputMode="numeric"
+                          value={insForm.pensionAmt || ''}
+                          onChange={e => setInsForm(f => ({ ...f, pensionAmt: Number(e.target.value) || 0 }))}
+                        />
+                        <span className="income-ins-unit">₩</span>
+                      </div>
+                      <div className="income-ins-row">
+                        <span>{ui.insEmployment}</span>
+                        <input
+                          className="income-ins-amt"
+                          type="number"
+                          inputMode="numeric"
+                          value={insForm.employmentAmt || ''}
+                          onChange={e => setInsForm(f => ({ ...f, employmentAmt: Number(e.target.value) || 0 }))}
+                        />
+                        <span className="income-ins-unit">₩</span>
+                      </div>
+                    </>
+                  )}
+                  <div className="income-ins-row income-ins-total-row">
+                    <span>{ui.insTotal}</span>
+                    <strong>{insTotal(insForm).toLocaleString()} ₩</strong>
+                  </div>
+                  <p className="income-ins-employer-note">
+                    {isKo
+                      ? '산재보험은 사업주가 100% 부담하므로 포함되지 않습니다.'
+                      : '산재보험 (tai nạn lao động) do chủ đóng 100%, không tính vào đây.'}
+                  </p>
+                </div>
+
+                {/* Note */}
+                <label className="income-ins-label">
+                  <span>{ui.insNote}</span>
+                  <input
+                    className="income-ins-input"
+                    value={insForm.note}
+                    onChange={e => setInsForm(f => ({ ...f, note: e.target.value }))}
+                    placeholder={isKo ? '예: GS25 5월 급여일 공제' : 'VD: trừ lương tháng 5 tại GS25'}
+                  />
+                </label>
+
+                {/* Actions */}
+                <div className="income-ins-form-actions">
+                  <button
+                    type="button"
+                    className="income-ins-cancel-btn"
+                    onClick={() => { setIsAddingIns(false); setEditingInsId(null); }}
+                  >
+                    {ui.insCancel}
+                  </button>
+                  <button
+                    type="button"
+                    className="income-ins-save-btn"
+                    onClick={() => {
+                      if (editingInsId) {
+                        updateInsRecord(editingInsId, insForm);
+                        setEditingInsId(null);
+                      } else {
+                        addInsRecord({ ...insForm, month: selectedMonthKey, confirmed: false });
+                        setIsAddingIns(false);
+                      }
+                    }}
+                  >
+                    {ui.insSave}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="income-ins-add-btn"
+                onClick={() => {
+                  setInsForm(defaultInsForm());
+                  setIsAddingIns(true);
+                }}
+              >
+                <Plus size={16} />
+                {ui.insAdd}
+              </button>
+            )}
+
+            {/* ── Record list ── */}
+            {monthInsRecords.length > 0 ? (
+              <div className="income-ins-list">
+                {monthInsRecords.map(rec => (
+                  <article key={rec.id} className={`income-ins-card${rec.confirmed ? ' confirmed' : ''}`}>
+                    <div className="income-ins-card-head">
+                      <div>
+                        {rec.workplaceLabel && <strong className="income-ins-card-venue">{rec.workplaceLabel}</strong>}
+                        <span className="income-ins-card-badge">
+                          {rec.insuranceType === '4'
+                            ? (isKo ? '4가지' : '4 loại')
+                            : (isKo ? '2가지' : '2 loại')}
+                        </span>
+                        {rec.confirmed && (
+                          <span className="income-ins-confirmed-badge">
+                            <Check size={11} /> {ui.insConfirmed}
+                          </span>
+                        )}
+                      </div>
+                      {!rec.confirmed && (
+                        <button
+                          type="button"
+                          className="income-ins-edit-btn"
+                          onClick={() => {
+                            setInsForm({ ...rec });
+                            setEditingInsId(rec.id);
+                            setIsAddingIns(false);
+                          }}
+                        >
+                          {ui.insEdit}
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="income-ins-card-dates">
+                      <span>{rec.workStartDate} → {rec.payDate}</span>
+                      <span>{rec.baseSalary.toLocaleString()} ₩</span>
+                    </div>
+
+                    <div className="income-ins-card-breakdown">
+                      <span>{ui.insHealth}: {rec.healthAmt.toLocaleString()} ₩</span>
+                      <span>{ui.insLongCare}: {rec.longCareAmt.toLocaleString()} ₩</span>
+                      {rec.insuranceType === '4' && (
+                        <>
+                          <span>{ui.insPension}: {rec.pensionAmt.toLocaleString()} ₩</span>
+                          <span>{ui.insEmployment}: {rec.employmentAmt.toLocaleString()} ₩</span>
+                        </>
+                      )}
+                    </div>
+
+                    <div className="income-ins-card-footer">
+                      <div className="income-ins-card-total">
+                        <span>{ui.insTotal}</span>
+                        <strong>−{insTotal(rec).toLocaleString()} ₩</strong>
+                      </div>
+                      <div className="income-ins-card-actions">
+                        <button
+                          type="button"
+                          className="income-ins-del-btn"
+                          onClick={() => removeInsRecord(rec.id)}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                        {!rec.confirmed && (
+                          <button
+                            type="button"
+                            className="income-ins-confirm-btn"
+                            onClick={() => {
+                              updateInsRecord(rec.id, { confirmed: true });
+                              onAddExpense({
+                                category: 'health',
+                                amount: insTotal(rec),
+                                date: rec.payDate,
+                                note: ui.insExpenseNote(rec.insuranceType),
+                              });
+                            }}
+                          >
+                            <Check size={14} />
+                            {ui.insConfirm}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    {rec.note ? <p className="income-ins-card-note">{rec.note}</p> : null}
+                  </article>
+                ))}
+              </div>
+            ) : !isAddingIns && !editingInsId ? (
+              <div className="income-empty">
+                <ShieldCheck size={34} />
+                <strong>{ui.insEmpty}</strong>
+                <p>{ui.insEmptyHint}</p>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
       </div>
+
+      {/* Expense date picker */}
       {isDatePickerOpen && (
         <DateWheelModal
           title={ui.expenseDate}
@@ -1056,6 +1495,18 @@ export function IncomeScreen({
           onConfirm={(date) => {
             setExpenseForm({ ...expenseForm, date });
             setIsDatePickerOpen(false);
+          }}
+        />
+      )}
+      {/* Insurance date pickers */}
+      {insDatePickerField && (
+        <DateWheelModal
+          title={insDatePickerField === 'workStartDate' ? ui.insStartDate : ui.insPayDate}
+          initialDate={insDatePickerField === 'workStartDate' ? insForm.workStartDate : insForm.payDate}
+          onClose={() => setInsDatePickerField(null)}
+          onConfirm={(date) => {
+            setInsForm(f => ({ ...f, [insDatePickerField]: date }));
+            setInsDatePickerField(null);
           }}
         />
       )}
