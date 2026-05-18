@@ -13,6 +13,7 @@ import { localDateStr } from '../lib/localDate';
 import type { Tab } from '../lib/types';
 import { recordAppVisit } from '../lib/appVisits';
 import { getGuestSessionId } from '../lib/guestSession';
+import { enqueueSyncItem } from '../lib/offlineSyncQueue';
 
 const CalendarScreen = lazy(() => import('./CalendarScreen').then((m) => ({ default: m.CalendarScreen })));
 const IncomeScreen = lazy(() => import('./IncomeScreen').then((m) => ({ default: m.IncomeScreen })));
@@ -533,6 +534,10 @@ export default function AppLayout() {
     };
     s.addShift(shift, nextTab);
     if (supabaseClient && s.session) {
+      if (!s.online) {
+        enqueueSyncItem(s.session.user.id, { type: 'upsert_shift', payload: shift });
+        return;
+      }
       try {
         await supabaseClient.from('shift_entries').upsert({
           id: shift.id,
@@ -549,6 +554,7 @@ export default function AppLayout() {
           holiday_allowance: shift.holidayAllowance,
         });
       } catch (error) {
+        enqueueSyncItem(s.session.user.id, { type: 'upsert_shift', payload: shift });
         console.warn('Saved shift locally; Supabase sync will retry later.', error);
       }
     }
@@ -559,6 +565,10 @@ export default function AppLayout() {
     s.updateShift(shift);
     s.setSelectedDate(shift.date);
     if (supabaseClient && s.session) {
+      if (!s.online) {
+        enqueueSyncItem(s.session.user.id, { type: 'upsert_shift', payload: shift });
+        return;
+      }
       try {
         await supabaseClient.from('shift_entries').upsert({
           id: shift.id,
@@ -575,6 +585,7 @@ export default function AppLayout() {
           holiday_allowance: shift.holidayAllowance,
         });
       } catch (error) {
+        enqueueSyncItem(s.session.user.id, { type: 'upsert_shift', payload: shift });
         console.warn('Updated shift locally; Supabase sync will retry later.', error);
       }
     }
@@ -584,9 +595,14 @@ export default function AppLayout() {
     const s = useAppStore.getState();
     s.deleteShift(id);
     if (supabaseClient && s.session) {
+      if (!s.online) {
+        enqueueSyncItem(s.session.user.id, { type: 'delete_shift', payload: { id } });
+        return;
+      }
       try {
         await supabaseClient.from('shift_entries').delete().eq('id', id);
       } catch (error) {
+        enqueueSyncItem(s.session.user.id, { type: 'delete_shift', payload: { id } });
         console.warn('Deleted shift locally; Supabase delete could not sync yet.', error);
       }
     }
@@ -598,8 +614,12 @@ export default function AppLayout() {
     const next = { ...expense, id: crypto.randomUUID() };
     s.addExpenseLocally(next);
     if (supabaseClient && s.session) {
+      if (!s.online) {
+        enqueueSyncItem(s.session.user.id, { type: 'upsert_expense', payload: next });
+        return;
+      }
       try {
-        await supabaseClient.from('expenses').insert({
+        await supabaseClient.from('expenses').upsert({
           id: next.id,
           user_id: s.session.user.id,
           category: next.category,
@@ -608,6 +628,7 @@ export default function AppLayout() {
           note: next.note,
         });
       } catch (error) {
+        enqueueSyncItem(s.session.user.id, { type: 'upsert_expense', payload: next });
         console.warn('Saved expense locally; Supabase sync will retry later.', error);
       }
     }
@@ -617,9 +638,14 @@ export default function AppLayout() {
     const s = useAppStore.getState();
     s.removeExpenseLocally(id);
     if (supabaseClient && s.session) {
+      if (!s.online) {
+        enqueueSyncItem(s.session.user.id, { type: 'delete_expense', payload: { id } });
+        return;
+      }
       try {
         await supabaseClient.from('expenses').delete().eq('id', id);
       } catch (error) {
+        enqueueSyncItem(s.session.user.id, { type: 'delete_expense', payload: { id } });
         console.warn('Deleted expense locally; Supabase delete could not sync yet.', error);
       }
     }

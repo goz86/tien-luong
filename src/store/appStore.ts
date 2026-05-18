@@ -15,7 +15,9 @@ import {
 } from '../lib/guestSession';
 import { togglePostReaction, toggleCommunityBookmark } from '../lib/communityStore';
 
-const STORAGE_KEY = 'duhoc-mate-redesign-state';
+const LEGACY_STORAGE_KEY = 'duhoc-mate-redesign-state';
+const GUEST_STORAGE_KEY = 'duhoc-mate-guest-state';
+const USER_STORAGE_PREFIX = 'duhoc-mate-user-state';
 const NOTIFICATION_SEEN_KEY = 'duhoc-mate-notifications-seen-at';
 const getLocalDateString = () => {
   const d = new Date();
@@ -88,34 +90,67 @@ function clearUserScopedState() {
   };
 }
 
-function loadState(): StoredState {
+function storageKeyForUser(userId?: string | null) {
+  return userId ? `${USER_STORAGE_PREFIX}:${userId}` : GUEST_STORAGE_KEY;
+}
+
+function normalizeStoredState(parsed: Partial<StoredState>): StoredState {
+  return {
+    shifts: Array.isArray(parsed.shifts) ? parsed.shifts : [],
+    profile: parsed.profile ? { ...fallbackState().profile, ...parsed.profile } : fallbackState().profile,
+    companions: Array.isArray(parsed.companions) ? parsed.companions : [],
+    requested: Array.isArray(parsed.requested) ? parsed.requested : [],
+    rate: parsed.rate
+      ? { ...parsed.rate, source: parsed.rate.source === 'live' ? 'live' : 'cached' }
+      : fallbackState().rate,
+    venueColors:
+      typeof parsed.venueColors === 'object' && parsed.venueColors !== null
+        ? (parsed.venueColors as VenueColors)
+        : {},
+    incomeTarget: typeof parsed.incomeTarget === 'number' ? parsed.incomeTarget : 2000000,
+    expenses: Array.isArray(parsed.expenses) ? parsed.expenses : [],
+    personalGoals: Array.isArray(parsed.personalGoals) ? parsed.personalGoals : [],
+    currencyMode: ['krw-vnd', 'vnd-vnd', 'vnd-krw'].includes(parsed.currencyMode as string)
+      ? (parsed.currencyMode as CurrencyMode)
+      : 'krw-vnd',
+  };
+}
+
+function loadStoredState(key: string): StoredState {
   if (typeof window === 'undefined') return fallbackState();
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = window.localStorage.getItem(key);
     if (!raw) return fallbackState();
-    const parsed = JSON.parse(raw) as Partial<StoredState>;
-    return {
-      shifts: Array.isArray(parsed.shifts) ? parsed.shifts : [],
-      profile: parsed.profile ? { ...fallbackState().profile, ...parsed.profile } : fallbackState().profile,
-      companions: Array.isArray(parsed.companions) ? parsed.companions : [],
-      requested: Array.isArray(parsed.requested) ? parsed.requested : [],
-      rate: parsed.rate
-        ? { ...parsed.rate, source: parsed.rate.source === 'live' ? 'live' : 'cached' }
-        : fallbackState().rate,
-      venueColors:
-        typeof parsed.venueColors === 'object' && parsed.venueColors !== null
-          ? (parsed.venueColors as VenueColors)
-          : {},
-      incomeTarget: typeof parsed.incomeTarget === 'number' ? parsed.incomeTarget : 2000000,
-      expenses: Array.isArray(parsed.expenses) ? parsed.expenses : [],
-      personalGoals: Array.isArray(parsed.personalGoals) ? parsed.personalGoals : [],
-      currencyMode: ['krw-vnd', 'vnd-vnd', 'vnd-krw'].includes(parsed.currencyMode as string)
-        ? (parsed.currencyMode as CurrencyMode)
-        : 'krw-vnd',
-    };
+    return normalizeStoredState(JSON.parse(raw) as Partial<StoredState>);
   } catch {
     return fallbackState();
   }
+}
+
+function loadState(userId?: string | null): StoredState {
+  if (typeof window === 'undefined') return fallbackState();
+  const key = storageKeyForUser(userId);
+  const scoped = loadStoredState(key);
+  if (key === GUEST_STORAGE_KEY && !window.localStorage.getItem(GUEST_STORAGE_KEY)) {
+    const legacy = loadStoredState(LEGACY_STORAGE_KEY);
+    if (legacy.shifts.length || legacy.expenses.length || legacy.personalGoals?.length) return legacy;
+  }
+  return scoped;
+}
+
+function storedStatePatch(stored: StoredState) {
+  return {
+    shifts: stored.shifts,
+    profile: stored.profile,
+    companions: stored.companions,
+    requested: stored.requested,
+    rate: stored.rate,
+    venueColors: stored.venueColors,
+    incomeTarget: stored.incomeTarget ?? 2000000,
+    expenses: stored.expenses,
+    personalGoals: stored.personalGoals ?? [],
+    currencyMode: stored.currencyMode ?? 'krw-vnd',
+  };
 }
 
 const defaultDraft: ShiftDraft = {
@@ -372,7 +407,7 @@ export const useAppStore = create<AppState>((set, get) => {
     persist: () => {
       const s = get();
       window.localStorage.setItem(
-        STORAGE_KEY,
+        storageKeyForUser(s.session?.user.id),
         JSON.stringify({
           shifts: s.shifts,
           profile: s.profile,
@@ -426,10 +461,11 @@ export const useAppStore = create<AppState>((set, get) => {
         const nextUserId = nextSession?.user.id ?? null;
         const userChanged = previousUserId !== nextUserId;
         const wasGuest = !previousUserId && Boolean(nextUserId);
-        const shouldClearLocalData = userChanged && !wasGuest;
-        const cleared = shouldClearLocalData ? clearUserScopedState() : {};
-        const nextNotifications = shouldClearLocalData ? [] : state.notifications;
-        const nextAdminRole = shouldClearLocalData ? null : state.adminRole;
+        const nextStored = userChanged ? loadState(nextUserId) : null;
+        const scopedPatch = nextStored ? storedStatePatch(nextStored) : {};
+        const cleared = userChanged ? clearUserScopedState() : {};
+        const nextNotifications = userChanged ? [] : state.notifications;
+        const nextAdminRole = userChanged ? null : state.adminRole;
 
         // Sync pending guest likes/bookmarks khi đăng nhập lần đầu
         if (wasGuest && nextUserId) {
@@ -450,12 +486,13 @@ export const useAppStore = create<AppState>((set, get) => {
 
         return {
           ...cleared,
+          ...scopedPatch,
           session: nextSession,
           ...derive({
             session: nextSession,
             adminRole: nextAdminRole,
             notifications: nextNotifications,
-            shifts: shouldClearLocalData ? [] : state.shifts,
+            shifts: nextStored ? nextStored.shifts : state.shifts,
           }),
         };
       });

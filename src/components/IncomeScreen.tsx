@@ -954,8 +954,8 @@ export function IncomeScreen({
       <section className={`income-share-report ${showShareCard ? 'open' : ''}`}>
         <div className="income-share-head">
           <div>
-            <span>{isKo ? '공유 카드' : 'Báo cáo chia sẻ'}</span>
-            <strong>{isKo ? '이번 달 기록을 예쁘게 저장' : 'Lưu lại tháng làm việc của mình'}</strong>
+            <span>{isKo ? '공유 카드' : 'Báo cáo tháng này'}</span>
+            <strong>{isKo ? '이번 달 기록을 예쁘게 저장' : 'Hãy lưu lại những khoảnh khắc đáng nhớ của tháng này!'}</strong>
           </div>
           <button type="button" onClick={() => {
             if (!showShareCard) {

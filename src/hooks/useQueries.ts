@@ -1,11 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { useAppStore } from '../store/appStore';
-import type { Shift, Expense, ProfileDraft, CompanionProfile } from '../lib/types';
-import { useEffect, useRef } from 'react';
+import type { Shift, Expense, CompanionProfile } from '../lib/types';
+import { useEffect, useRef, useState } from 'react';
 import type { CommunityNotification } from '../data/communityData';
 import { BADGES } from '../data/badgeData';
 import { calculateShiftPay } from '../lib/salary';
+import { getSyncQueue, removeSyncQueueItem } from '../lib/offlineSyncQueue';
 
 /* ── query key factories ── */
 export const queryKeys = {
@@ -76,24 +77,6 @@ function expenseToRow(expense: Expense, userId: string) {
     date: expense.date,
     note: expense.note,
   };
-}
-
-function mergeById<T extends { id: string }>(cloudItems: T[], localItems: T[]) {
-  const merged = new Map<string, T>();
-  cloudItems.forEach((item) => merged.set(item.id, item));
-  localItems.forEach((item) => merged.set(item.id, item));
-  return Array.from(merged.values());
-}
-
-function hasProfileContent(profile: ProfileDraft) {
-  return Boolean(
-    profile.displayName?.trim() ||
-    profile.school?.trim() ||
-    profile.region?.trim() ||
-    profile.note?.trim() ||
-    profile.avatarUrl?.trim() ||
-    profile.tags?.length
-  );
 }
 
 /* ── Shifts ── */
@@ -467,6 +450,7 @@ export function useBadgesQuery(userId: string | undefined) {
 
 /* ── Hub: syncs RQ data → Zustand store ── */
 export function useSyncQueriesToStore() {
+  const qc = useQueryClient();
   const userId = useAppStore((s) => s.session?.user.id);
   const online = useAppStore((s) => s.online);
   const setShifts = useAppStore((s) => s.setShifts);
@@ -480,7 +464,8 @@ export function useSyncQueriesToStore() {
   const setRate = useAppStore((s) => s.setRate);
   const setRequested = useAppStore((s) => s.setRequested);
   const setIsAnonymousRank = useAppStore((s) => s.setIsAnonymousRank);
-  const lastLocalSyncRef = useRef<string>('');
+  const processingQueueRef = useRef(false);
+  const [queueTick, setQueueTick] = useState(0);
 
   const { data: shifts } = useShiftsQuery(userId);
   const { data: expenses } = useExpensesQuery(userId);
@@ -495,64 +480,54 @@ export function useSyncQueriesToStore() {
   useEffect(() => {
     if (!supabase || !userId || !online) return;
     const client = supabase;
-    const state = useAppStore.getState();
-    const syncKey = JSON.stringify({
-      userId,
-      shifts: state.shifts,
-      expenses: state.expenses,
-      profile: state.profile,
-    });
-    if (lastLocalSyncRef.current === syncKey) return;
-    lastLocalSyncRef.current = syncKey;
+    if (processingQueueRef.current) return;
+    processingQueueRef.current = true;
 
-    const syncLocalToCloud = async () => {
+    const flushQueue = async () => {
       try {
-        const latest = useAppStore.getState();
-        if (latest.shifts.length) {
-          await client
-            .from('shift_entries')
-            .upsert(latest.shifts.map((shift) => shiftToRow(shift, userId)), { onConflict: 'id' });
+        const queue = getSyncQueue(userId);
+        for (const item of queue) {
+          if (item.type === 'upsert_shift') {
+            await client.from('shift_entries').upsert(shiftToRow(item.payload, userId), { onConflict: 'id' });
+          } else if (item.type === 'delete_shift') {
+            await client.from('shift_entries').delete().eq('id', item.payload.id).eq('user_id', userId);
+          } else if (item.type === 'upsert_expense') {
+            await client.from('expenses').upsert(expenseToRow(item.payload, userId), { onConflict: 'id' });
+          } else if (item.type === 'delete_expense') {
+            await client.from('expenses').delete().eq('id', item.payload.id).eq('user_id', userId);
+          }
+          removeSyncQueueItem(userId, item.id);
         }
 
-        if (latest.expenses.length) {
-          await client
-            .from('expenses')
-            .upsert(latest.expenses.map((expense) => expenseToRow(expense, userId)), { onConflict: 'id' });
-        }
-
-        if (hasProfileContent(latest.profile)) {
-          await client.from('profiles').upsert({
-            id: userId,
-            display_name: latest.profile.displayName,
-            school: latest.profile.school,
-            region: latest.profile.region,
-            note: latest.profile.note,
-            avatar_url: latest.profile.avatarUrl || null,
-            tags: latest.profile.tags ?? [],
-          });
+        if (queue.length > 0) {
+          void qc.invalidateQueries({ queryKey: queryKeys.shifts(userId) });
+          void qc.invalidateQueries({ queryKey: queryKeys.expenses(userId) });
         }
       } catch (error) {
-        lastLocalSyncRef.current = '';
-        console.warn('Unable to sync local data to Supabase:', error);
+        console.warn('Unable to flush offline sync queue:', error);
+      } finally {
+        processingQueueRef.current = false;
       }
     };
 
-    void syncLocalToCloud();
-  }, [userId, online]);
+    void flushQueue();
+  }, [userId, online, queueTick, qc]);
+
+  useEffect(() => {
+    if (!userId) return;
+    const flushOnQueueChange = () => setQueueTick((tick) => tick + 1);
+
+    window.addEventListener('duhoc-mate-sync-queue-change', flushOnQueueChange);
+    return () => window.removeEventListener('duhoc-mate-sync-queue-change', flushOnQueueChange);
+  }, [userId]);
 
   // Sync all query data to Zustand via useEffect (NOT during render)
   useEffect(() => {
-    if (shifts) {
-      const localShifts = useAppStore.getState().shifts;
-      setShifts(mergeById(shifts, localShifts));
-    }
+    if (shifts) setShifts(shifts);
   }, [shifts, setShifts]);
 
   useEffect(() => {
-    if (expenses) {
-      const localExpenses = useAppStore.getState().expenses;
-      setExpenses(mergeById(expenses, localExpenses));
-    }
+    if (expenses) setExpenses(expenses);
   }, [expenses, setExpenses]);
 
   useEffect(() => {
@@ -591,12 +566,12 @@ export function useSyncQueriesToStore() {
     if (profileData) {
       useAppStore.getState().setProfile((prev) => ({
         ...prev,
-        displayName: prev.displayName || profileData.displayName,
-        school: prev.school || profileData.school,
-        region: prev.region || profileData.region,
-        note: prev.note || profileData.note,
-        avatarUrl: prev.avatarUrl || profileData.avatarUrl,
-        tags: prev.tags?.length ? prev.tags : profileData.tags,
+        displayName: profileData.displayName,
+        school: profileData.school,
+        region: profileData.region,
+        note: profileData.note,
+        avatarUrl: profileData.avatarUrl,
+        tags: profileData.tags,
       }));
     }
   }, [profileData]);
