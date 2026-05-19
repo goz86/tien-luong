@@ -501,6 +501,18 @@ function formatPercent(value: number) {
   return `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
 }
 
+function makeSmoothPath(points: Array<{ x: number; y: number }>) {
+  if (points.length === 0) return '';
+  if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
+
+  return points.reduce((path, point, index) => {
+    if (index === 0) return `M ${point.x} ${point.y}`;
+    const prev = points[index - 1];
+    const controlX = prev.x + (point.x - prev.x) / 2;
+    return `${path} C ${controlX} ${prev.y}, ${controlX} ${point.y}, ${point.x} ${point.y}`;
+  }, '');
+}
+
 function profileLine(isKo: boolean, saveRatio: number) {
   if (saveRatio >= 70) return isKo ? '저축력이 아주 좋아요.' : 'Giữ tiền quá ổn, rất đáng tự hào.';
   if (saveRatio >= 40) return isKo ? '좋은 리듬으로 가고 있어요.' : 'Nhịp làm và giữ tiền đang rất đẹp.';
@@ -884,6 +896,18 @@ export function IncomeScreen({
       ),
     [currentWeekShifts]
   );
+  const weekdayHours = useMemo(
+    () =>
+      weekdayLabels.map((_, index) =>
+        currentWeekShifts
+          .filter((shift) => {
+            const day = new Date(`${shift.date}T00:00:00`).getDay();
+            return (day + 6) % 7 === index;
+          })
+          .reduce((sum, shift) => sum + calculateShiftPay(shift).hours, 0)
+      ),
+    [currentWeekShifts]
+  );
 
   const totalIncomeEntries = useMemo(
     () => monthExpenses.filter(isIncomeEntry).reduce((sum, expense) => sum + expense.amount, 0),
@@ -944,19 +968,68 @@ export function IncomeScreen({
     return dailyAggregated.reduce((prev, curr) => (curr[1].total > prev[1].total ? curr : prev));
   }, [dailyAggregated]);
 
-  // Monthly stats for the new chart (summarize by day of month)
-  const monthlyChartData = useMemo(() => {
-    const results = Array(chartDaysInMonth).fill(0);
-    monthShifts.forEach(s => {
-      const d = new Date(`${s.date}T00:00:00`).getDate();
-      if (d >= 1 && d <= chartDaysInMonth) {
-        results[d - 1] += calculateShiftPay(s).total;
+  const monthlyFlowChartData = useMemo(() => {
+    const results = Array.from({ length: chartDaysInMonth }, (_, index) => ({
+      day: index + 1,
+      income: 0,
+      expense: 0,
+      incomeDelta: 0,
+      expenseDelta: 0,
+    }));
+
+    monthShifts.forEach((shift) => {
+      const day = new Date(`${shift.date}T00:00:00`).getDate();
+      if (day >= 1 && day <= chartDaysInMonth) {
+        results[day - 1].incomeDelta += calculateShiftPay(shift).total;
       }
     });
-    return results;
-  }, [chartDaysInMonth, monthShifts]);
 
-  const maxMonthlyDay = Math.max(...monthlyChartData, 1);
+    monthExpenses.forEach((expense) => {
+      const day = new Date(`${expense.date}T00:00:00`).getDate();
+      if (day < 1 || day > chartDaysInMonth) return;
+      if (isIncomeEntry(expense)) {
+        results[day - 1].incomeDelta += expense.amount;
+      } else {
+        results[day - 1].expenseDelta += expense.amount;
+      }
+    });
+
+    let incomeRunning = 0;
+    let expenseRunning = 0;
+    return results.map((item) => {
+      incomeRunning += item.incomeDelta;
+      expenseRunning += item.expenseDelta;
+      return { ...item, income: incomeRunning, expense: expenseRunning };
+    });
+  }, [chartDaysInMonth, monthExpenses, monthShifts]);
+
+  const maxMonthlyFlow = useMemo(
+    () => Math.max(...monthlyFlowChartData.flatMap((item) => [item.income, item.expense]), 1),
+    [monthlyFlowChartData]
+  );
+
+  const monthlyFlowGeometry = useMemo(() => {
+    const toPoint = (value: number, index: number) => ({
+      x: 20 + (index / Math.max(1, chartDaysInMonth - 1)) * 282,
+      y: 108 - (value / maxMonthlyFlow) * 82,
+    });
+    const incomePoints = monthlyFlowChartData.map((item, index) => toPoint(item.income, index));
+    const expensePoints = monthlyFlowChartData.map((item, index) => toPoint(item.expense, index));
+    const incomeLine = makeSmoothPath(incomePoints);
+    const expenseLine = makeSmoothPath(expensePoints);
+    const areaBottom = 112;
+
+    return {
+      incomePoints,
+      expensePoints,
+      incomeLine,
+      expenseLine,
+      incomeArea: incomeLine ? `${incomeLine} L ${incomePoints[incomePoints.length - 1].x} ${areaBottom} L ${incomePoints[0].x} ${areaBottom} Z` : '',
+      expenseArea: expenseLine ? `${expenseLine} L ${expensePoints[expensePoints.length - 1].x} ${areaBottom} L ${expensePoints[0].x} ${areaBottom} Z` : '',
+    };
+  }, [chartDaysInMonth, maxMonthlyFlow, monthlyFlowChartData]);
+
+  const flowLabelDay = isCurrentViewMonth ? todayDayNumber : chartDaysInMonth;
 
   // ── 6-month grouped chart ──────────────────────────────────────────────
   const sixMonthsData = useMemo(() => {
@@ -1286,6 +1359,7 @@ export function IncomeScreen({
               <div className="income-week-bars">
                 {weekdayTotals.map((value, index) => (
                   <div key={weekdayLabels[index]} className={index === strongestDay && value > 0 ? 'hot' : ''}>
+                    <em>{weekdayHours[index] > 0 ? formatHoursCompact(weekdayHours[index]) : ''}</em>
                     <span style={{ height: `${Math.max(4, (value / maxWeekdayTotal) * 80)}px` }} />
                     <small>{weekdayLabels[index]}</small>
                   </div>
@@ -1322,7 +1396,7 @@ export function IncomeScreen({
                   <p>{ui.monthOverview}</p>
                   <h2>
                     {chartView === 'day'
-                      ? ui.monthIncome(chartDaysInMonth)
+                      ? (isKo ? `${chartDaysInMonth}일 수입 · 지출` : `Thu và chi ${chartDaysInMonth} ngày`)
                       : chartView === 'week'
                         ? (isKo ? '주간 수입 흐름' : 'Thu nhập theo tuần')
                         : (isKo ? '월별 수입 흐름' : 'Thu nhập theo tháng')}
@@ -1351,34 +1425,64 @@ export function IncomeScreen({
               {/* ── Bar chart area — fixed height wrapper prevents layout jump ── */}
               <div className="income-chart-area">
                 {chartView === 'day' ? (
-                  <div className="income-day-view">
-                    <div className="income-month-bars">
-                      {monthlyChartData.map((value, idx) => {
-                        const day = idx + 1;
-                        const isToday = isCurrentViewMonth && day === todayDayNumber;
-                        const isTop = value === maxMonthlyDay && value > 0;
-                        const weekBand = Math.floor(idx / 7) % 2 === 1 ? 'week-odd' : '';
-                        const cls = [isTop && !isToday ? 'top-day' : '', isToday ? 'today-day' : '', weekBand].filter(Boolean).join(' ');
-                        return (
-                          <div key={idx} className={cls || undefined}>
-                            <span style={{ height: `${Math.max(2, (value / maxMonthlyDay) * 72)}px` }} />
-                          </div>
-                        );
-                      })}
+                  <div className="income-flow-line-chart">
+                    <div className="income-flow-legend">
+                      <span className="income-flow-legend-income">{isKo ? '수입' : 'Thu'}</span>
+                      <span className="income-flow-legend-expense">{isKo ? '지출' : 'Chi'}</span>
                     </div>
-                    {/* Day milestone markers */}
-                    <div className="income-day-ticks">
-                      {monthlyChartData.map((_, idx) => {
-                        const day = idx + 1;
-                        const isMilestone = [5, 10, 15, 20, 25, 30].includes(day);
-                        const isToday = isCurrentViewMonth && day === todayDayNumber;
-                        const cls = [isMilestone ? 'tick-show' : '', isToday ? 'tick-today' : ''].filter(Boolean).join(' ');
+                    <svg className="income-flow-svg" viewBox="0 0 320 132" role="img" aria-label={isKo ? '월별 수입과 지출 라인 차트' : 'Biểu đồ đường thu và chi trong tháng'}>
+                      {[0.25, 0.5, 0.75, 1].map((tick) => (
+                        <g key={tick}>
+                          <line x1="20" x2="302" y1={108 - tick * 82} y2={108 - tick * 82} className="income-flow-grid" />
+                          <text x="4" y={112 - tick * 82} className="income-flow-y-label">{fmtBar(maxMonthlyFlow * tick)}</text>
+                        </g>
+                      ))}
+                      {isCurrentViewMonth ? (
+                        <line
+                          x1={20 + ((todayDayNumber - 1) / Math.max(1, chartDaysInMonth - 1)) * 282}
+                          x2={20 + ((todayDayNumber - 1) / Math.max(1, chartDaysInMonth - 1)) * 282}
+                          y1="16"
+                          y2="112"
+                          className="income-flow-today-line"
+                        />
+                      ) : null}
+                      <path className="income-flow-area income-flow-area-income" d={monthlyFlowGeometry.incomeArea} />
+                      <path className="income-flow-area income-flow-area-expense" d={monthlyFlowGeometry.expenseArea} />
+                      <path className="income-flow-line income-flow-line-income" d={monthlyFlowGeometry.incomeLine} />
+                      <path className="income-flow-line income-flow-line-expense" d={monthlyFlowGeometry.expenseLine} />
+                      {monthlyFlowChartData.map((item, index) => {
+                        const incomePoint = monthlyFlowGeometry.incomePoints[index];
+                        const expensePoint = monthlyFlowGeometry.expensePoints[index];
+                        const showIncomeDot = item.incomeDelta > 0 || item.day === flowLabelDay;
+                        const showExpenseDot = item.expenseDelta > 0 || item.day === flowLabelDay;
+                        const showIncomeLabel = item.income > 0 && item.day === flowLabelDay;
+                        const showExpenseLabel = item.expense > 0 && item.day === flowLabelDay;
                         return (
-                          <span key={idx} className={cls || undefined}>
-                            {isMilestone ? day : ''}
-                          </span>
+                          <g key={item.day}>
+                            {showIncomeDot && item.income > 0 ? (
+                              <>
+                                <circle className="income-flow-dot income-flow-dot-income" cx={incomePoint.x} cy={incomePoint.y} r={showIncomeLabel ? 4.6 : 3} />
+                                {showIncomeLabel ? (
+                                  <text x={Math.min(292, Math.max(28, incomePoint.x))} y={Math.max(14, incomePoint.y - 10)} className="income-flow-value income-flow-value-income">{fmtBar(item.income)}</text>
+                                ) : null}
+                              </>
+                            ) : null}
+                            {showExpenseDot && item.expense > 0 ? (
+                              <>
+                                <circle className="income-flow-dot income-flow-dot-expense" cx={expensePoint.x} cy={expensePoint.y} r={showExpenseLabel ? 4.6 : 3} />
+                                {showExpenseLabel ? (
+                                  <text x={Math.min(292, Math.max(28, expensePoint.x))} y={Math.max(14, expensePoint.y - 10)} className="income-flow-value income-flow-value-expense">{fmtBar(item.expense)}</text>
+                                ) : null}
+                              </>
+                            ) : null}
+                          </g>
                         );
                       })}
+                    </svg>
+                    <div className="income-flow-x-axis">
+                      {[1, 5, 10, 15, 20, 25, 30].filter((day) => day <= chartDaysInMonth).map((day) => (
+                        <span key={day}>{day}</span>
+                      ))}
                     </div>
                   </div>
                 ) : (
