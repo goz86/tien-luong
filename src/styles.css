@@ -5547,6 +5547,31 @@ button.ticker-inner {
   padding: 13px 0;
 }
 
+.income-expense-row > div:nth-child(2) {
+  overflow: hidden;
+}
+
+.income-expense-row > div:nth-child(2) strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+
+.income-expense-row > div:nth-child(2) span {
+  display: block;
+  font-size: 12px;
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 0;
+}
+
 .income-expense-icon {
   width: 48px;
   height: 48px;
