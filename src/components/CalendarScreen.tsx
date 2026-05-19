@@ -367,6 +367,11 @@ export function CalendarScreen({
 
   function startEditShift(shift: Shift) {
     setEditingShiftId(shift.id);
+    // Reconstruct wageInput from stored data so the correct value shows in the input field
+    const wageInput =
+      shift.wageType === 'monthly' ? (shift.monthlyWage ?? shift.hourlyWage)
+      : shift.wageType === 'daily'  ? Math.round(shift.hourlyWage * shiftHours(shift))
+      : shift.hourlyWage;
     setDraft({
       venue: shift.label,
       date: shift.date,
@@ -378,7 +383,9 @@ export function CalendarScreen({
       note: shift.notes,
       nightShift: shift.nightShift,
       taxDeduction: shift.taxDeduction,
-      holidayAllowance: shift.holidayAllowance
+      holidayAllowance: shift.holidayAllowance,
+      wageType: shift.wageType ?? 'hourly',
+      wageInput,
     });
     setIsHistoryOpen(false);
     setSheetMode('form');
