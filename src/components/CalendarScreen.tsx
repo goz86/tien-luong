@@ -104,8 +104,8 @@ export function CalendarScreen({
     paySettings: '급여 계산 설정 (한국 기준)',
     tax: '3.3% 세금',
     taxHint: '프리랜서/알바용',
-    night: '야간수당 (x1.5)',
-    nightHint: '보통 22:00 이후 적용',
+    night: '',
+    nightHint: '',
     holiday: '휴일/주휴수당',
     holidayPlaceholder: '수당 금액 입력 (있는 경우)',
     juhyuSuggestLabel: (amt: string) => `최저 기준: ${amt}원 ↓`,
@@ -156,8 +156,8 @@ export function CalendarScreen({
     paySettings: 'Cài đặt tính lương (Luật HQ)',
     tax: 'Thuế 3.3%',
     taxHint: 'Dành cho freelancer/Alba',
-    night: 'Phụ cấp ca đêm (x1.5)',
-    nightHint: 'Thường áp dụng sau 22:00',
+    night: '',
+    nightHint: '',
     holiday: 'Phụ cấp nghỉ / Cuối tuần (주휴수당)',
     holidayPlaceholder: 'Nhập số tiền phụ cấp (nếu có)',
     juhyuSuggestLabel: (amt: string) => `Mức tối thiểu: ${amt}원 ↓`,
@@ -946,19 +946,6 @@ export function CalendarScreen({
                       type="checkbox"
                       checked={draft.taxDeduction || false}
                       onChange={(event) => setDraft({ ...draft, taxDeduction: event.target.checked })}
-                      style={{ width: '20px', height: '20px', accentColor: '#2752ff' }}
-                    />
-                  </label>
-
-                  <label className="korean-law-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <strong style={{ fontSize: '14px', color: '#08162b' }}>{ui.night}</strong>
-                      <span style={{ fontSize: '12px', color: '#657080' }}>{ui.nightHint}</span>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={draft.nightShift || false}
-                      onChange={(event) => setDraft({ ...draft, nightShift: event.target.checked })}
                       style={{ width: '20px', height: '20px', accentColor: '#2752ff' }}
                     />
                   </label>
