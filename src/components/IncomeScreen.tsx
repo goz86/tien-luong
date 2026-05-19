@@ -28,6 +28,7 @@ import {
   Bus,
   ShoppingBag,
   HeartPulse,
+  HelpCircle,
   Music,
   ChevronDown,
   CalendarCheck,
@@ -156,7 +157,7 @@ function calcIns(
     const employmentAmt = Math.round(base * e / 100);
     return { healthAmt, longCareAmt, pensionAmt, employmentAmt };
   } else if (type === 'partial') {
-    // Nghỉ giữa tháng (상실): 국민연금 + 건강보험 + 장기요양 KHÔNG tính.
+    // Vào/nghỉ giữa tháng: 국민연금 + 건강보험 + 장기요양 không tính cho tháng đầu.
     // Chỉ đóng 고용보험 (0.9%) dựa trên thu nhập thực tế tháng đó.
     const employmentAmt = Math.round(base * e / 100);
     return { healthAmt: 0, longCareAmt: 0, pensionAmt: 0, employmentAmt };
@@ -166,6 +167,16 @@ function calcIns(
     const longCareAmt = Math.round(healthAmt * lc / 100);
     return { healthAmt, longCareAmt, pensionAmt: 0, employmentAmt: 0 };
   }
+}
+
+function inferInsuranceTypeFromStartDate(
+  workStartDate: string,
+  currentType: InsuranceRecord['insuranceType'],
+): InsuranceRecord['insuranceType'] {
+  if (currentType === '2') return '2';
+  const startDay = Number(workStartDate.slice(8, 10));
+  if (!Number.isFinite(startDay) || startDay < 1) return currentType;
+  return startDay === 1 ? '4' : 'partial';
 }
 
 function insTotal(rec: Pick<InsuranceRecord, 'healthAmt' | 'longCareAmt' | 'pensionAmt' | 'employmentAmt'>) {
@@ -279,8 +290,8 @@ interface JuhyuWeek {
   weekEnd: string;      // YYYY-MM-DD (Sunday CN)
   weeklyHours: number;  // actual hours worked at this workplace this week
   workDays: number;     // actual days worked this week
-  juhyuHours: number;   // weeklyHours / workDays
-  qualifies: boolean;   // full Mon-Sun AND weeklyHours >= 15
+  juhyuHours: number;   // min((weeklyHours / 40) * 8, 8)
+  qualifies: boolean;   // weeklyHours >= 15 based on recorded shifts
   amount: number;
 }
 
@@ -342,8 +353,8 @@ function calcJuhyuWeeksFromShifts(
 
     const weeklyHours = weekShifts.reduce((sum, s) => sum + calculateShiftPay(s).hours, 0);
     const workDays = new Set(weekShifts.map(s => s.date)).size;
-    const juhyuHours = workDays > 0 ? weeklyHours / workDays : 0;
     const qualifies = weeklyHours >= 15;  // only hours matter, not full-week
+    const juhyuHours = qualifies ? Math.min((weeklyHours / 40) * 8, 8) : 0;
     const amount = qualifies ? Math.round(juhyuHours * hourlyRate) : 0;
 
     weeks.push({ weekStart: weekStartStr, weekEnd: weekEndStr, weeklyHours, workDays, juhyuHours, qualifies, amount });
@@ -363,6 +374,17 @@ function buildJuhyuCalc(weeks: JuhyuWeek[], hourlyRate: number) {
   const juhyuPerWeek = qualifying.length > 0
     ? Math.round(juhyuHoursPerWeek * hourlyRate) : 0;
   return { qualifies, juhyuHoursPerWeek, juhyuPerWeek, juhyuPerMonth, weeks };
+}
+
+function recalcJuhyuRecord(rec: JuhyuRecord, shifts: Shift[]): JuhyuRecord {
+  const weeks = calcJuhyuWeeksFromShifts(
+    rec.startDate,
+    rec.endDate,
+    rec.workplaceLabel,
+    shifts,
+    rec.hourlyRate,
+  );
+  return { ...rec, ...buildJuhyuCalc(weeks, rec.hourlyRate) };
 }
 
 function loadJuhyuRecords(): JuhyuRecord[] {
@@ -594,11 +616,13 @@ export function IncomeScreen({
     insSubtitle: '월별 보험료를 계산하고 지출에 반영하세요.',
     insAdd: '이번 달 보험료 확인',
     insType2: '2가지',
-    insTypePartial: '중도 퇴사',
+    insTypePartial: '중간 입사/퇴사',
     insType4: '풀 1달',
     insWorkplace: '근무지 (선택)',
-    insStartDate: '근무 시작일',
-    insPayDate: '급여일',
+    insStartDate: '산정 시작일',
+    insStartHelp: '해당 월 보험료를 어떤 달의 급여 기준으로 계산할지 정합니다. 1일 입사면 4대보험 전체, 2일 이후 입사면 첫 달은 고용보험만 계산합니다.',
+    insPayDate: '공제 기록일',
+    insPayHelp: '계산된 보험료를 수입/지출에 공제 항목으로 기록할 날짜입니다.',
     insSalaryBase: '해당 급여 (₩)',
     insHealth: '건강보험',
     insLongCare: '장기요양',
@@ -614,7 +638,7 @@ export function IncomeScreen({
     insEdit: '수정',
     insEmpty: '이달 보험료 기록 없음',
     insEmptyHint: '보험료를 추가하면 월별 순수입에 자동 반영됩니다.',
-    insExpenseNote: (type: string) => `4대보험 (${type === '4' ? '전체 4가지' : type === 'partial' ? '고용보험만 · 중도퇴사' : '건강+장기요양'})`,
+    insExpenseNote: (type: string) => `4대보험 (${type === '4' ? '전체 4가지' : type === 'partial' ? '고용보험만 · 중간 입사/퇴사' : '건강+장기요양'})`,
     juhyuTitle: '주휴수당 관리',
     juhyuSubtitle: '주 15시간 이상 근무 시 받을 수 있는 유급 주휴수당을 확인하세요.',
     juhyuAdd: '이번 달 주휴수당 계산',
@@ -679,11 +703,13 @@ export function IncomeScreen({
     insSubtitle: 'Tính tiền bảo hiểm theo tháng và tự động trừ vào chi tiêu.',
     insAdd: 'Kiểm tra bảo hiểm tháng này',
     insType2: '2 loại',
-    insTypePartial: 'Nghỉ giữa tháng',
+    insTypePartial: 'Vào/nghỉ giữa tháng',
     insType4: 'Làm đủ tháng',
     insWorkplace: 'Nơi làm (không bắt buộc)',
-    insStartDate: 'Ngày bắt đầu làm',
-    insPayDate: 'Ngày nhận lương',
+    insStartDate: 'Bắt đầu tính từ',
+    insStartHelp: 'Dùng để chọn tháng lương làm căn cứ tính bảo hiểm. Nếu bắt đầu ngày 1 thì tính đủ 4 loại; từ ngày 2 trở đi thì tháng đầu chỉ tính 고용보험.',
+    insPayDate: 'Ngày ghi khoản trừ',
+    insPayHelp: 'Ngày khoản bảo hiểm được ghi vào Thu chi như một khoản trừ.',
     insSalaryBase: 'Lương tương ứng (₩)',
     insHealth: '건강보험',
     insLongCare: '장기요양',
@@ -699,7 +725,7 @@ export function IncomeScreen({
     insEdit: 'Sửa',
     insEmpty: 'Chưa có khai bảo hiểm tháng này',
     insEmptyHint: 'Thêm khai bảo hiểm để tự động trừ vào thu nhập ròng.',
-    insExpenseNote: (type: string) => `Bảo hiểm 4대보험 (${type === '4' ? 'đủ 4 loại' : type === 'partial' ? 'chỉ 고용 · nghỉ giữa tháng' : '건강+장기요양'})`,
+    insExpenseNote: (type: string) => `Bảo hiểm 4대보험 (${type === '4' ? 'đủ 4 loại' : type === 'partial' ? 'chỉ 고용 · vào/nghỉ giữa tháng' : '건강+장기요양'})`,
     juhyuTitle: 'Quản lý 주휴수당',
     juhyuSubtitle: 'Làm ≥ 15h/tuần? Bạn được hưởng phụ cấp ngày nghỉ. Tính toán và kiểm tra ở đây.',
     juhyuAdd: 'Tính 주휴수당 tháng này',
@@ -809,6 +835,38 @@ export function IncomeScreen({
       );
       return { ...merged, ...buildJuhyuCalc(weeks, merged.hourlyRate) };
     });
+  }
+
+  function buildInsPatch(
+    form: Omit<InsuranceRecord, 'id'>,
+    patch: Partial<Omit<InsuranceRecord, 'id'>>,
+    shouldInferType = false,
+    shouldSyncBaseToStartMonth = shouldInferType,
+  ) {
+    const merged = { ...form, ...patch };
+    const startMonthKey = merged.workStartDate.slice(0, 7);
+    const shouldUseStartMonthBase = shouldSyncBaseToStartMonth && /^\d{4}-\d{2}$/.test(startMonthKey);
+    const baseSalary = shouldUseStartMonthBase
+      ? shifts
+          .filter((shift) => {
+            if (!shift.date.startsWith(startMonthKey)) return false;
+            return merged.workplaceLabel && merged.workplaceLabel !== '__all__'
+              ? shift.label === merged.workplaceLabel
+              : true;
+          })
+          .reduce((sum, shift) => sum + calculateShiftPay(shift).total, 0)
+      : merged.baseSalary;
+    const insuranceType = shouldInferType
+      ? inferInsuranceTypeFromStartDate(merged.workStartDate, merged.insuranceType)
+      : merged.insuranceType;
+    const calc = calcIns(baseSalary, insuranceType, {
+      health: merged.healthRate,
+      longCare: merged.longCareRate,
+      pension: merged.pensionRate,
+      employment: merged.employmentRate,
+    });
+
+    return { ...merged, baseSalary, insuranceType, ...calc };
   }
 
   useEffect(() => {
@@ -942,8 +1000,10 @@ export function IncomeScreen({
   );
 
   const monthJuhyuRecords = useMemo(
-    () => allJuhyuRecords.filter(r => r.month === selectedMonthKey),
-    [allJuhyuRecords, selectedMonthKey]
+    () => allJuhyuRecords
+      .filter(r => r.month === selectedMonthKey)
+      .map(rec => recalcJuhyuRecord(rec, shifts)),
+    [allJuhyuRecords, selectedMonthKey, shifts]
   );
 
   const dailyAggregated = useMemo(() => {
@@ -1739,8 +1799,7 @@ export function IncomeScreen({
                         className={`income-ins-wp-chip${insForm.workplaceLabel === '__all__' ? ' active' : ''}`}
                         onClick={() => {
                           const base = monthlyTotal;
-                          const calc = calcIns(base, insForm.insuranceType, { health: insForm.healthRate, longCare: insForm.longCareRate, pension: insForm.pensionRate, employment: insForm.employmentRate });
-                          setInsForm(f => ({ ...f, workplaceLabel: '__all__', baseSalary: base, ...calc }));
+                          setInsForm(f => buildInsPatch(f, { workplaceLabel: '__all__', baseSalary: base }, true, true));
                         }}
                       >
                         <span>{isKo ? '전체' : 'Tất cả'}</span>
@@ -1753,8 +1812,7 @@ export function IncomeScreen({
                           className={`income-ins-wp-chip${insForm.workplaceLabel === wp.label ? ' active' : ''}`}
                           onClick={() => {
                             const base = wp.total;
-                            const calc = calcIns(base, insForm.insuranceType, { health: insForm.healthRate, longCare: insForm.longCareRate, pension: insForm.pensionRate, employment: insForm.employmentRate });
-                            setInsForm(f => ({ ...f, workplaceLabel: wp.label, baseSalary: base, ...calc }));
+                            setInsForm(f => buildInsPatch(f, { workplaceLabel: wp.label, baseSalary: base }, true, true));
                           }}
                         >
                           <span>{wp.label}</span>
@@ -1775,7 +1833,18 @@ export function IncomeScreen({
                 {/* Date row */}
                 <div className="income-ins-date-row">
                   <label className="income-ins-label" style={{ flex: 1 }}>
-                    <span>{ui.insStartDate}</span>
+                    <span className="income-ins-label-head">
+                      <span>{ui.insStartDate}</span>
+                      <span
+                        className="income-ins-help"
+                        title={ui.insStartHelp}
+                        aria-label={ui.insStartHelp}
+                        data-tooltip={ui.insStartHelp}
+                        tabIndex={0}
+                      >
+                        <HelpCircle size={13} />
+                      </span>
+                    </span>
                     <button
                       type="button"
                       className="income-ins-date-btn"
@@ -1785,7 +1854,18 @@ export function IncomeScreen({
                     </button>
                   </label>
                   <label className="income-ins-label" style={{ flex: 1 }}>
-                    <span>{ui.insPayDate}</span>
+                    <span className="income-ins-label-head">
+                      <span>{ui.insPayDate}</span>
+                      <span
+                        className="income-ins-help"
+                        title={ui.insPayHelp}
+                        aria-label={ui.insPayHelp}
+                        data-tooltip={ui.insPayHelp}
+                        tabIndex={0}
+                      >
+                        <HelpCircle size={13} />
+                      </span>
+                    </span>
                     <button
                       type="button"
                       className="income-ins-date-btn"
@@ -1806,8 +1886,7 @@ export function IncomeScreen({
                     value={insForm.baseSalary || ''}
                     onChange={e => {
                       const base = Number(e.target.value) || 0;
-                      const calc = calcIns(base, insForm.insuranceType, { health: insForm.healthRate, longCare: insForm.longCareRate, pension: insForm.pensionRate, employment: insForm.employmentRate });
-                      setInsForm(f => ({ ...f, baseSalary: base, ...calc }));
+                      setInsForm(f => buildInsPatch(f, { baseSalary: base }, true, false));
                     }}
                   />
                 </label>
@@ -2003,7 +2082,7 @@ export function IncomeScreen({
                             {rec.insuranceType === '4'
                               ? (isKo ? '풀 1달' : 'Đủ tháng')
                               : rec.insuranceType === 'partial'
-                                ? (isKo ? '중도퇴사' : 'Nghỉ giữa tháng')
+                                ? (isKo ? '중간 입사/퇴사' : 'Vào/nghỉ giữa tháng')
                                 : (isKo ? '2가지' : '2 loại')}
                           </span>
                           {rec.confirmed && (
@@ -2051,7 +2130,7 @@ export function IncomeScreen({
                             {rec.insuranceType === 'partial' && (
                               <div className="income-ins-card-brow" style={{ color: '#64748b', fontSize: '12px' }}>
                                 <span className="ins-brow-name">
-                                  {isKo ? '국민연금·건강·장기요양 미적용 (중도퇴사)' : '국민연금·건강보험 không tính (nghỉ giữa tháng)'}
+                                  {isKo ? '국민연금·건강·장기요양 미적용 (중간 입사/퇴사)' : '국민연금·건강보험 không tính (vào/nghỉ giữa tháng)'}
                                 </span>
                               </div>
                             )}
@@ -2376,9 +2455,9 @@ export function IncomeScreen({
                               </div>
                             </div>
                             {!rec.confirmed && rec.qualifies && (
-                              <button type="button" className="income-ins-confirm-btn income-juhyu-confirm-btn"
-                                onClick={() => {
-                                  updateJuhyuRecord(rec.id, { confirmed: true });
+                                <button type="button" className="income-ins-confirm-btn income-juhyu-confirm-btn"
+                                  onClick={() => {
+                                  updateJuhyuRecord(rec.id, { ...rec, confirmed: true });
                                   onAddExpense({
                                     category: 'juhyu_income',
                                     amount: rec.juhyuPerMonth,
@@ -2429,7 +2508,8 @@ export function IncomeScreen({
           initialDate={insDatePickerField === 'workStartDate' ? insForm.workStartDate : insForm.payDate}
           onClose={() => setInsDatePickerField(null)}
           onConfirm={(date) => {
-            setInsForm(f => ({ ...f, [insDatePickerField]: date }));
+            const field = insDatePickerField;
+            setInsForm(f => buildInsPatch(f, { [field]: date }, field === 'workStartDate', field === 'workStartDate'));
             setInsDatePickerField(null);
           }}
         />
