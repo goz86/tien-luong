@@ -1014,10 +1014,24 @@ export function CalendarScreen({
                       </p>
                     )}
                     {draft.wageType === 'monthly' && (
-                      <p style={{ fontSize: '11px', color: '#22963f', marginTop: '5px', fontWeight: 600, lineHeight: 1.4 }}>
+                      <p style={{ fontSize: '11px', color: '#657080', marginTop: '5px', lineHeight: 1.7 }}>
+                        <span style={{ color: '#22963f', fontWeight: 700 }}>
+                          {lang === 'ko' ? '✓ 209h 기준 (주휴수당 포함)' : '✓ Đã gồm 주휴수당 (209h/tháng)'}
+                        </span>
+                        <br />
                         {lang === 'ko'
-                          ? `✓ 209h 기준 (주휴수당 포함) ≈ ${(draft.hourlyWage).toLocaleString()}₩/h`
-                          : `✓ Đã gồm 주휴수당 (209h/tháng) ≈ ${(draft.hourlyWage).toLocaleString()}₩/h`}
+                          ? <>{(draft.wageInput ?? draft.hourlyWage * 209).toLocaleString()}₩ ÷ 209h = <strong style={{ color: '#08162b' }}>{(draft.hourlyWage).toLocaleString()}₩/h</strong></>
+                          : <>{(draft.wageInput ?? draft.hourlyWage * 209).toLocaleString()}₩ ÷ 209h = <strong style={{ color: '#08162b' }}>{(draft.hourlyWage).toLocaleString()}₩/h</strong></>}
+                        {draftHrs > 0 && (
+                          <>
+                            <br />
+                            <span style={{ color: '#08162b', fontWeight: 700 }}>
+                              {lang === 'ko'
+                                ? `→ 이 ca (${draftHrs.toFixed(1)}h): ${(Math.round(draft.hourlyWage * draftHrs)).toLocaleString()}₩`
+                                : `→ Ca này (${draftHrs.toFixed(1)}h): ${(Math.round(draft.hourlyWage * draftHrs)).toLocaleString()}₩`}
+                            </span>
+                          </>
+                        )}
                       </p>
                     )}
                   </label>
