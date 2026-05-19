@@ -1117,12 +1117,22 @@ export function IncomeScreen({
     [monthShifts, selectedMonthKey]
   );
 
+  // Monthly-wage shifts don't contribute to hourly stats (their income is a fixed total, not per-hour)
   const monthlyHours = useMemo(
-    () => monthShifts.reduce((sum, shift) => sum + calculateShiftPay(shift).hours, 0),
+    () => monthShifts
+      .filter(s => s.wageType !== 'monthly')
+      .reduce((sum, shift) => sum + calculateShiftPay(shift).hours, 0),
     [monthShifts]
   );
 
-  const averageHourly = monthlyHours ? monthlyTotal / monthlyHours : 0;
+  const hourlyShiftsTotal = useMemo(
+    () => monthShifts
+      .filter(s => s.wageType !== 'monthly')
+      .reduce((sum, shift) => sum + calculateShiftPay(shift).total, 0),
+    [monthShifts]
+  );
+
+  const averageHourly = monthlyHours ? hourlyShiftsTotal / monthlyHours : 0;
 
   const workplaces = useMemo(() => {
     const map = new Map<string, { label: string; total: number; count: number; hours: number; isMonthly?: boolean }>();
@@ -1230,7 +1240,8 @@ export function IncomeScreen({
 
   const dailyAggregated = useMemo(() => {
     const map = new Map<string, { total: number; hours: number }>();
-    monthShifts.forEach((s) => {
+    // Exclude monthly-wage shifts — their income isn't per-day (no hours/bestDay stats)
+    monthShifts.filter(s => s.wageType !== 'monthly').forEach((s) => {
       const current = map.get(s.date) || { total: 0, hours: 0 };
       const pay = calculateShiftPay(s);
       map.set(s.date, { total: current.total + pay.total, hours: current.hours + pay.hours });
@@ -1659,7 +1670,7 @@ export function IncomeScreen({
               <article>
                 <CalendarDays size={20} />
                 <span>{ui.shiftCount}</span>
-                <strong>{monthShifts.length} {ui.shifts}</strong>
+                <strong>{monthShifts.filter(s => s.wageType !== 'monthly').length} {ui.shifts}</strong>
               </article>
               <article>
                 <Clock size={20} />

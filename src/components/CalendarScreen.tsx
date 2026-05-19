@@ -349,6 +349,7 @@ export function CalendarScreen({
   }, [isSettingsOpen, isHistoryOpen, isMonthPickerOpen]);
 
   function getCalendarShiftLine(shift: Shift) {
+    if (shift.wageType === 'monthly') return lang === 'ko' ? '월급' : 'Tháng';
     const trim = (value: string) => value.replace(':00', '');
     return calendarDisplay === 'range' ? `${trim(shift.startTime)}~${trim(shift.endTime)}` : formatHoursCompact(shiftHours(shift));
   }
@@ -747,10 +748,16 @@ export function CalendarScreen({
                   <button type="button" className="history-main" onClick={() => startEditShift(shift)}>
                     <strong>{formatDateChip(shift.date)}</strong>
                     <span>
-                      {shift.startTime}-{shift.endTime} · {formatHoursCompact(shiftHours(shift))}
+                      {shift.wageType === 'monthly'
+                        ? (lang === 'ko' ? '월급 고정 수입' : 'Lương tháng cố định')
+                        : `${shift.startTime}-${shift.endTime} · ${formatHoursCompact(shiftHours(shift))}`}
                     </span>
                   </button>
-                  <strong className="history-pay">{formatCalendarKrw(calculateShiftPay(shift).total)}</strong>
+                  <strong className="history-pay">
+                    {shift.wageType === 'monthly'
+                      ? formatCalendarKrw(shift.monthlyWage ?? 0)
+                      : formatCalendarKrw(calculateShiftPay(shift).total)}
+                  </strong>
                   <div className="history-actions">
                     <button type="button" onClick={() => startEditShift(shift)}>{ui.edit}</button>
                     <button type="button" className="danger" onClick={() => setDeleteConfirmId(shift.id)}>{ui.delete}</button>
