@@ -6,7 +6,7 @@ import type {
 } from '../lib/types';
 import type { CommunityNotification } from '../data/communityData';
 import type { AppLang, WallpaperKey } from '../components/ProfileScreen';
-import { DEFAULT_KRW_TO_VND, calculateShiftPay, shiftHours } from '../lib/salary';
+import { DEFAULT_KRW_TO_VND, calculateShiftPay, shiftHours, getMonthlyWageTotal } from '../lib/salary';
 import { startOfMonth } from '../utils/helpers';
 import {
   getGuestPendingLikes,
@@ -219,7 +219,7 @@ export interface AppState {
   monthlyTotal: number;
   monthlyHours: number;
   averageHourly: number;
-  workplaceSummary: Array<{ label: string; total: number; count: number; hours: number }>;
+  workplaceSummary: Array<{ label: string; total: number; count: number; hours: number; isMonthly?: boolean }>;
   recentShifts: Shift[];
   monthShifts: Shift[];
   unreadCount: number;
@@ -317,18 +317,30 @@ export const useAppStore = create<AppState>((set, get) => {
     const shifts = state.shifts ?? current?.shifts ?? initial.shifts ?? [];
     const monthKey = (state.calendarMonth ?? current?.calendarMonth ?? startOfMonth(todayIso)).slice(0, 7);
     const monthShifts = shifts.filter((s) => s.date.startsWith(monthKey));
-    const monthlyTotal = monthShifts.reduce((sum, s) => sum + calculateShiftPay(s).total, 0);
-    const monthlyHours = monthShifts.reduce((sum, s) => sum + shiftHours(s), 0);
-    const averageHourly = monthlyHours ? monthlyTotal / monthlyHours : 0;
+    const shiftPayTotal = monthShifts.reduce((sum, s) => sum + calculateShiftPay(s).total, 0);
+    const monthlyTotal = shiftPayTotal + getMonthlyWageTotal(monthShifts, monthKey);
+    // Hours and avg-hourly only from hourly/daily shifts (monthly wage is not per-hour)
+    const monthlyHours = monthShifts
+      .filter(s => s.wageType !== 'monthly')
+      .reduce((sum, s) => sum + shiftHours(s), 0);
+    const hourlyOnlyTotal = monthShifts
+      .filter(s => s.wageType !== 'monthly')
+      .reduce((sum, s) => sum + calculateShiftPay(s).total, 0);
+    const averageHourly = monthlyHours ? hourlyOnlyTotal / monthlyHours : 0;
 
-    const map = new Map<string, { label: string; total: number; count: number; hours: number }>();
+    const map = new Map<string, { label: string; total: number; count: number; hours: number; isMonthly?: boolean }>();
     monthShifts.forEach((s) => {
       const cur = map.get(s.label) ?? { label: s.label, total: 0, count: 0, hours: 0 };
       const pay = calculateShiftPay(s);
-      cur.total += pay.total;
-      cur.count += 1;
-      cur.hours += pay.hours;
-      map.set(s.label, cur);
+      if (s.wageType === 'monthly') {
+        // Monthly venue: total = fixed monthly wage (overwrite, same across shifts in month)
+        map.set(s.label, { label: s.label, total: s.monthlyWage ?? 0, count: cur.count + 1, hours: cur.hours + pay.hours, isMonthly: true });
+      } else {
+        cur.total += pay.total;
+        cur.count += 1;
+        cur.hours += pay.hours;
+        map.set(s.label, cur);
+      }
     });
     const workplaceSummary = [...map.values()].sort((a, b) => b.total - a.total);
 

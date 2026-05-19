@@ -42,7 +42,7 @@ export function HomeScreen({
   monthlyHours: number;
   averageHourly: number;
   rate: RateState;
-  workplaces: Array<{ label: string; total: number; count: number; hours: number }>;
+  workplaces: Array<{ label: string; total: number; count: number; hours: number; isMonthly?: boolean }>;
   recentShifts: Shift[];
   allShifts: Shift[];
   expenses: Expense[];
@@ -482,7 +482,9 @@ export function HomeScreen({
               <div className="workplace-copy">
                 <strong>{workplace.label}</strong>
                 <span>
-                  {workplace.count} ca · {formatHoursCompact(workplace.hours)}
+                  {workplace.isMonthly
+                    ? (lang === 'ko' ? '월급 고정 수입' : 'Lương tháng cố định')
+                    : `${workplace.count} ${lang === 'ko' ? '카' : 'ca'} · ${formatHoursCompact(workplace.hours)}`}
                 </span>
               </div>
               <strong className="workplace-amount">{formatKrw(workplace.total)}</strong>
