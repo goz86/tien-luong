@@ -480,6 +480,105 @@ function useJuhyuRecords() {
   return { records, add, update, remove };
 }
 
+// ─── 연장근로수당 ─────────────────────────────────────────────────
+interface OvertimeWeek {
+  weekStart: string;
+  weekEnd: string;
+  weeklyHours: number;    // total hours worked this week
+  overtimeHours: number;  // max(weeklyHours - 40, 0)
+  amount: number;         // overtimeHours × hourlyRate × multiplier
+}
+
+interface OvertimeRecord {
+  id: string;
+  month: string;
+  workplaceLabel: string;
+  startDate: string;
+  endDate: string;
+  hourlyRate: number;
+  companySize: '5plus' | 'under5'; // 5인 이상 (1.5×) / 5인 미만 (법적 의무 없음)
+  weeks: OvertimeWeek[];
+  totalOvertimeHours: number;
+  overtimeAmount: number;   // premium amount (0.5× extra only — base pay already in shifts)
+  confirmed: boolean;
+  note: string;
+}
+
+const OVERTIME_STORAGE_KEY = 'duhoc-mate-overtime';
+
+function calcOvertimeWeeksFromShifts(
+  startDate: string,
+  endDate: string,
+  workplaceLabel: string,
+  shifts: Shift[],
+  hourlyRate: number,
+  companySize: '5plus' | 'under5',
+): OvertimeWeek[] {
+  const premiumRate = companySize === '5plus' ? 0.5 : 0; // extra 0.5× premium on top of base
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const sd = new Date(startDate + 'T00:00:00');
+  const ed = new Date(endDate + 'T00:00:00');
+
+  let mon = new Date(sd);
+  const dow = mon.getDay();
+  if (dow !== 1) mon.setDate(mon.getDate() - (dow === 0 ? 6 : dow - 1));
+
+  const weeks: OvertimeWeek[] = [];
+  while (mon <= ed) {
+    const sun = new Date(mon);
+    sun.setDate(sun.getDate() + 6);
+    const weekStartStr = fmt(mon);
+    const weekEndStr   = fmt(sun);
+    const effectiveFrom = weekStartStr < startDate ? startDate : weekStartStr;
+    const effectiveTo   = weekEndStr   > endDate   ? endDate   : weekEndStr;
+
+    const weekShifts = shifts.filter(s => {
+      const matchLabel = workplaceLabel ? s.label === workplaceLabel : true;
+      return matchLabel && s.date >= effectiveFrom && s.date <= effectiveTo;
+    });
+    const weeklyHours  = weekShifts.reduce((sum, s) => sum + calculateShiftPay(s).hours, 0);
+    const overtimeHours = Math.max(weeklyHours - 40, 0);
+    // amount = only the EXTRA premium (0.5×), base pay already in shift records
+    const amount = Math.round(overtimeHours * hourlyRate * premiumRate);
+
+    weeks.push({ weekStart: weekStartStr, weekEnd: weekEndStr, weeklyHours, overtimeHours, amount });
+    mon = new Date(mon);
+    mon.setDate(mon.getDate() + 7);
+  }
+  return weeks;
+}
+
+function buildOvertimeCalc(weeks: OvertimeWeek[]) {
+  const totalOvertimeHours = weeks.reduce((s, w) => s + w.overtimeHours, 0);
+  const overtimeAmount = weeks.reduce((s, w) => s + w.amount, 0);
+  return { totalOvertimeHours, overtimeAmount };
+}
+
+function loadOvertimeRecords(): OvertimeRecord[] {
+  try {
+    const raw = window.localStorage.getItem(OVERTIME_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as OvertimeRecord[]) : [];
+  } catch { return []; }
+}
+function saveOvertimeRecords(records: OvertimeRecord[]) {
+  window.localStorage.setItem(OVERTIME_STORAGE_KEY, JSON.stringify(records));
+}
+function useOvertimeRecords() {
+  const [records, setRaw] = useState<OvertimeRecord[]>(loadOvertimeRecords);
+  const set = (next: OvertimeRecord[]) => { saveOvertimeRecords(next); setRaw(next); };
+  const add = (rec: Omit<OvertimeRecord, 'id'>) => {
+    const r = { ...rec, id: `ot-${Date.now()}-${Math.random().toString(16).slice(2)}` };
+    set([...loadOvertimeRecords(), r]);
+    return r;
+  };
+  const update = (id: string, patch: Partial<OvertimeRecord>) => {
+    set(loadOvertimeRecords().map(r => r.id === id ? { ...r, ...patch } : r));
+  };
+  const remove = (id: string) => set(loadOvertimeRecords().filter(r => r.id !== id));
+  return { records, add, update, remove };
+}
+
 const categoryMeta: Record<Expense['category'], { label: string; icon: any; tone: string; entryType: 'thu' | 'chi' }> = {
   rent:           { label: 'Tiền nhà',      icon: Home,         tone: 'blue',    entryType: 'chi' },
   phone:          { label: 'Điện thoại',    icon: Smartphone,   tone: 'green',   entryType: 'chi' },
@@ -489,8 +588,9 @@ const categoryMeta: Record<Expense['category'], { label: string; icon: any; tone
   health:         { label: 'Sức khỏe',      icon: HeartPulse,   tone: 'red',     entryType: 'chi' },
   entertainment:  { label: 'Giải trí',      icon: Music,        tone: 'cyan',    entryType: 'chi' },
   other:          { label: 'Khác',          icon: ReceiptText,  tone: 'gray',    entryType: 'chi' },
-  juhyu_income:   { label: '주휴수당',       icon: CalendarCheck, tone: 'emerald', entryType: 'thu' },
-  other_income:   { label: 'Thu nhập khác', icon: TrendingUp,   tone: 'emerald', entryType: 'thu' },
+  juhyu_income:    { label: '주휴수당',        icon: CalendarCheck, tone: 'emerald', entryType: 'thu' },
+  overtime_income: { label: '연장근로수당',   icon: Clock,        tone: 'amber',   entryType: 'thu' },
+  other_income:    { label: 'Thu nhập khác', icon: TrendingUp,   tone: 'emerald', entryType: 'thu' },
 };
 
 const weekdayLabels = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
@@ -656,6 +756,22 @@ export function IncomeScreen({
     juhyuEmptyHint: '주 근무 정보를 추가하면 주휴수당을 자동 계산해드려요.',
     juhyuWarn15h: '주 15시간 미만 — 주휴수당 미해당',
     juhyuQualifies: '주휴수당 해당',
+    // ── 연장근로수당 ──
+    otTitle: '연장근로수당 관리',
+    otSubtitle: '주 40시간 초과 근무 시 발생하는 연장근로수당을 확인하세요.',
+    otAdd: '이번 달 연장근로수당 계산',
+    otWorkplace: '근무지 (선택)',
+    otHourlyRate: '시급 (₩)',
+    ot5plus: '5인 이상 (연장 1.5배 의무)',
+    otUnder5: '5인 미만 (의무 없음)',
+    otSizeLabel: '사업장 규모',
+    otTotal: '연장근로 가산수당 합계',
+    otTotalHours: '연장 시간',
+    otConfirm: '수령 확인',
+    otConfirmed: '수령 확인됨',
+    otEmpty: '이달 연장근로수당 기록 없음',
+    otEmptyHint: '초과 근무가 있었다면 기록하고 수당이 맞게 지급됐는지 확인하세요.',
+    otNote: '메모',
   } : {
     tabs: { overview: 'Tổng quan', expenses: 'Thu chi', insurance: 'Bảo hiểm', juhyu: '주휴' },
     netIncome: 'Thu nhập ròng / tháng',
@@ -743,15 +859,31 @@ export function IncomeScreen({
     juhyuEmptyHint: 'Thêm để biết bạn có đang nhận đủ lương hay không.',
     juhyuWarn15h: 'Dưới 15h/tuần — không đủ điều kiện',
     juhyuQualifies: 'Đủ điều kiện nhận',
+    // ── 연장근로수당 ──
+    otTitle: 'Quản lý 연장근로수당',
+    otSubtitle: 'Làm quá 40h/tuần? Tính khoản phụ cấp tăng ca (x1.5) và kiểm tra có được trả đủ không.',
+    otAdd: 'Tính tăng ca tháng này',
+    otWorkplace: 'Nơi làm (không bắt buộc)',
+    otHourlyRate: 'Lương giờ (₩)',
+    ot5plus: '≥ 5 nhân viên (bắt buộc ×1.5)',
+    otUnder5: '< 5 nhân viên (không bắt buộc)',
+    otSizeLabel: 'Quy mô công ty',
+    otTotal: 'Tổng phụ cấp tăng ca',
+    otTotalHours: 'Giờ tăng ca',
+    otConfirm: 'Xác nhận đã nhận',
+    otConfirmed: 'Đã nhận',
+    otEmpty: 'Chưa có tính toán tăng ca',
+    otEmptyHint: 'Nếu làm quá 40h/tuần, thêm vào để kiểm tra xem công ty trả đúng không.',
+    otNote: 'Ghi chú',
   };
   const categoryLabels: Record<Expense['category'], string> = isKo ? {
     rent: '월세', phone: '통신비', food: '식비', transport: '교통비',
     shopping: '쇼핑', health: '건강', entertainment: '여가', other: '기타',
-    juhyu_income: '주휴수당', other_income: '기타 수입',
+    juhyu_income: '주휴수당', overtime_income: '연장근로수당', other_income: '기타 수입',
   } : {
     rent: 'Tiền nhà', phone: 'Điện thoại', food: 'Ăn uống', transport: 'Di chuyển',
     shopping: 'Mua sắm', health: 'Sức khỏe', entertainment: 'Giải trí', other: 'Khác',
-    juhyu_income: '주휴수당', other_income: 'Thu nhập khác',
+    juhyu_income: '주휴수당', overtime_income: 'Tăng ca', other_income: 'Thu nhập khác',
   };
   const [activeTab, setActiveTab] = useState<IncomeTab>('overview');
   const [isEditingTarget, setIsEditingTarget] = useState(false);
@@ -834,6 +966,36 @@ export function IncomeScreen({
         merged.startDate, merged.endDate, merged.workplaceLabel, shifts, merged.hourlyRate,
       );
       return { ...merged, ...buildJuhyuCalc(weeks, merged.hourlyRate) };
+    });
+  }
+
+  // ── 연장근로수당 state ──
+  const { records: allOtRecords, add: addOtRecord, update: updateOtRecord, remove: removeOtRecord } = useOvertimeRecords();
+  const [isAddingOt, setIsAddingOt] = useState(false);
+  const [editingOtId, setEditingOtId] = useState<string | null>(null);
+  const [expandedOtId, setExpandedOtId] = useState<string | null>(null);
+  const [otDatePickerField, setOtDatePickerField] = useState<'startDate' | 'endDate' | null>(null);
+  const [otForm, setOtForm] = useState<Omit<OvertimeRecord, 'id'>>({
+    month: '',
+    workplaceLabel: '',
+    startDate: todayStr,
+    endDate: todayStr,
+    hourlyRate: 10320,
+    companySize: '5plus',
+    weeks: [],
+    totalOvertimeHours: 0,
+    overtimeAmount: 0,
+    confirmed: false,
+    note: '',
+  });
+
+  function applyOtCalc(patch: Partial<Omit<OvertimeRecord, 'id'>>) {
+    setOtForm(f => {
+      const merged = { ...f, ...patch };
+      const weeks = calcOvertimeWeeksFromShifts(
+        merged.startDate, merged.endDate, merged.workplaceLabel, shifts, merged.hourlyRate, merged.companySize,
+      );
+      return { ...merged, weeks, ...buildOvertimeCalc(weeks) };
     });
   }
 
@@ -1004,6 +1166,14 @@ export function IncomeScreen({
       .filter(r => r.month === selectedMonthKey)
       .map(rec => recalcJuhyuRecord(rec, shifts)),
     [allJuhyuRecords, selectedMonthKey, shifts]
+  );
+
+  const monthOtRecords = useMemo(
+    () => allOtRecords.filter(r => r.month === selectedMonthKey).map(rec => {
+      const weeks = calcOvertimeWeeksFromShifts(rec.startDate, rec.endDate, rec.workplaceLabel, shifts, rec.hourlyRate, rec.companySize);
+      return { ...rec, weeks, ...buildOvertimeCalc(weeks) };
+    }),
+    [allOtRecords, selectedMonthKey, shifts]
   );
 
   const dailyAggregated = useMemo(() => {
@@ -2485,6 +2655,301 @@ export function IncomeScreen({
                 <p>{ui.juhyuEmptyHint}</p>
               </div>
             ) : null}
+
+            {/* ═══════════════════════════════════════
+                연장근로수당 sub-section
+                ═══════════════════════════════════════ */}
+            <div className="income-juhyu-divider">
+              <Clock size={14} />
+              <span>연장근로수당</span>
+            </div>
+            <p className="income-ins-subtitle">{ui.otSubtitle}</p>
+
+            {/* Add / Edit overtime form */}
+            {isAddingOt || editingOtId ? (
+              <div className="income-ins-form">
+                {/* Workplace chips */}
+                <label className="income-ins-label">
+                  <span>{ui.otWorkplace}</span>
+                  {workplaces.length > 0 && (
+                    <div className="income-ins-wp-chips">
+                      {workplaces.map(wp => (
+                        <button key={wp.label} type="button"
+                          className={`income-ins-wp-chip${otForm.workplaceLabel === wp.label ? ' active' : ''}`}
+                          onClick={() => {
+                            const hr = wp.hours > 0 ? Math.round(wp.total / wp.hours) : otForm.hourlyRate;
+                            applyOtCalc({ workplaceLabel: wp.label, hourlyRate: hr });
+                          }}
+                        >
+                          <span>{wp.label}</span>
+                          <small>{wp.hours > 0 ? `${Math.round(wp.total / wp.hours).toLocaleString()} ₩/h` : ''}</small>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <input className="income-ins-input" style={{ marginTop: workplaces.length > 0 ? '6px' : 0 }}
+                    value={otForm.workplaceLabel}
+                    onChange={e => applyOtCalc({ workplaceLabel: e.target.value })}
+                    placeholder={workplaces[0]?.label ?? (isKo ? '근무지명 직접 입력' : 'Nhập tên nơi làm')}
+                  />
+                </label>
+
+                {/* Hourly rate */}
+                <label className="income-ins-label">
+                  <span>{ui.otHourlyRate}</span>
+                  <div className="income-ins-input-wrap">
+                    <input className="income-ins-input" type="number" inputMode="numeric"
+                      value={otForm.hourlyRate || ''}
+                      onChange={e => applyOtCalc({ hourlyRate: Number(e.target.value) || 0 })}
+                    />
+                    <span className="income-ins-unit">₩/h</span>
+                  </div>
+                </label>
+
+                {/* Company size toggle */}
+                <label className="income-ins-label"><span>{ui.otSizeLabel}</span></label>
+                <div className="income-ins-type-row">
+                  <button type="button"
+                    className={`income-ins-type-btn${otForm.companySize === '5plus' ? ' active' : ''}`}
+                    onClick={() => applyOtCalc({ companySize: '5plus' })}
+                  >
+                    {ui.ot5plus}
+                    <span className="income-ins-type-sub">×1.5 가산 의무</span>
+                  </button>
+                  <button type="button"
+                    className={`income-ins-type-btn${otForm.companySize === 'under5' ? ' active' : ''}`}
+                    onClick={() => applyOtCalc({ companySize: 'under5' })}
+                  >
+                    {ui.otUnder5}
+                    <span className="income-ins-type-sub">법적 가산 없음</span>
+                  </button>
+                </div>
+
+                {/* Date range */}
+                <div className="income-juhyu-dates">
+                  <label className="income-ins-label">
+                    <span>{isKo ? '근무 시작일' : 'Ngày bắt đầu làm'}</span>
+                    <button type="button" className="income-ins-date-btn" onClick={() => setOtDatePickerField('startDate')}>
+                      {otForm.startDate}
+                    </button>
+                  </label>
+                  <label className="income-ins-label">
+                    <span>{isKo ? '근무 종료일' : 'Ngày kết thúc'}</span>
+                    <button type="button" className="income-ins-date-btn" onClick={() => setOtDatePickerField('endDate')}>
+                      {otForm.endDate}
+                    </button>
+                  </label>
+                </div>
+
+                {/* Week-by-week overtime preview */}
+                {otForm.weeks.length > 0 && (
+                  <div className={`income-juhyu-preview${otForm.totalOvertimeHours > 0 ? ' qualifies income-ot-preview' : ' warn'}`}>
+                    <div className="income-juhyu-weeks">
+                      {otForm.weeks.map((w, i) => (
+                        <div key={i} className={`income-juhyu-week-row${w.overtimeHours > 0 ? ' income-ot-row-active' : ' partial'}`}>
+                          <span className="income-juhyu-week-label">
+                            {isKo ? `${i + 1}주차` : `Tuần ${i + 1}`}
+                            {' '}({w.weekStart.slice(5).replace('-', '/')} – {w.weekEnd.slice(5).replace('-', '/')})
+                            {' '}
+                            <em>
+                              {w.weeklyHours > 0
+                                ? `${w.weeklyHours.toFixed(1)}h ${isKo ? '(연장' : '(tăng ca'} +${w.overtimeHours.toFixed(1)}h)`
+                                : (isKo ? '근무 없음' : 'Không có ca')}
+                            </em>
+                          </span>
+                          <strong className={w.overtimeHours > 0 ? 'income-ot-amount' : ''}>
+                            {w.overtimeHours > 0
+                              ? (otForm.companySize === '5plus'
+                                  ? `+${w.amount.toLocaleString()} ₩`
+                                  : (isKo ? '법적의무없음' : 'Không bắt buộc'))
+                              : '–'}
+                          </strong>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="income-juhyu-calc-row total income-ot-total-row" style={{ marginTop: '6px' }}>
+                      <span>
+                        {ui.otTotalHours}: {otForm.totalOvertimeHours.toFixed(1)}h
+                        {otForm.companySize === '5plus' && ` · ${isKo ? '가산수당' : 'Phụ cấp'}`}
+                      </span>
+                      <strong className="income-ot-amount">
+                        {otForm.companySize === '5plus'
+                          ? `+${otForm.overtimeAmount.toLocaleString()} ₩`
+                          : (isKo ? '—' : '—')}
+                      </strong>
+                    </div>
+                    {otForm.companySize === 'under5' && (
+                      <p className="income-ot-under5-note">
+                        {isKo
+                          ? '⚠️ 5인 미만 사업장은 연장근로 가산(×1.5)이 법적으로 적용되지 않습니다. 계약서를 확인하세요.'
+                          : '⚠️ Công ty dưới 5 người không bắt buộc trả ×1.5. Kiểm tra hợp đồng.'}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Note */}
+                <label className="income-ins-label">
+                  <span>{ui.otNote}</span>
+                  <input className="income-ins-input" value={otForm.note}
+                    onChange={e => applyOtCalc({ note: e.target.value })}
+                    placeholder={isKo ? '예: GS25 5월 연장근무' : 'VD: GS25 tăng ca tháng 5'}
+                  />
+                </label>
+
+                <div className="income-ins-form-actions">
+                  <button type="button" className="income-ins-cancel-btn"
+                    onClick={() => { setIsAddingOt(false); setEditingOtId(null); }}
+                  >{ui.insCancel}</button>
+                  <button type="button" className="income-ins-save-btn"
+                    onClick={() => {
+                      if (editingOtId) {
+                        updateOtRecord(editingOtId, otForm);
+                        setEditingOtId(null);
+                      } else {
+                        addOtRecord({ ...otForm, month: selectedMonthKey, confirmed: false });
+                        setIsAddingOt(false);
+                      }
+                    }}
+                  >{ui.insSave}</button>
+                </div>
+              </div>
+            ) : (
+              <button type="button" className="income-ins-add-btn income-ot-add-btn"
+                onClick={() => {
+                  const wp = workplaces[0];
+                  const hr = wp && wp.hours > 0 ? Math.round(wp.total / wp.hours) : 10320;
+                  const monthStart = `${selectedMonthKey}-01`;
+                  const monthEnd = `${selectedMonthKey}-${String(chartDaysInMonth).padStart(2, '0')}`;
+                  const label = wp?.label ?? '';
+                  const weeks = calcOvertimeWeeksFromShifts(monthStart, monthEnd, label, shifts, hr, '5plus');
+                  setOtForm({
+                    month: selectedMonthKey, workplaceLabel: label,
+                    startDate: monthStart, endDate: monthEnd,
+                    hourlyRate: hr, companySize: '5plus',
+                    weeks, ...buildOvertimeCalc(weeks),
+                    confirmed: false, note: '',
+                  });
+                  setIsAddingOt(true);
+                }}
+              >
+                <Plus size={16} />
+                {ui.otAdd}
+              </button>
+            )}
+
+            {/* Overtime record list (collapsible) */}
+            {monthOtRecords.length > 0 ? (
+              <div className="income-ins-list">
+                {monthOtRecords.map(rec => {
+                  const isOpen = expandedOtId === rec.id;
+                  return (
+                    <article key={rec.id} className={`income-ins-card${rec.confirmed ? ' confirmed' : ''}${isOpen ? ' open' : ''}`}>
+                      <button type="button" className="income-ins-card-summary"
+                        onClick={() => setExpandedOtId(isOpen ? null : rec.id)}
+                      >
+                        <div className="income-ins-card-summary-left">
+                          <strong>{rec.workplaceLabel || (isKo ? '전체 근무지' : 'Tất cả nơi làm')}</strong>
+                          <span className={`income-ins-card-badge${rec.totalOvertimeHours > 0 ? ' income-ot-badge' : ' income-juhyu-badge-warn'}`}>
+                            {rec.totalOvertimeHours > 0
+                              ? `+${rec.totalOvertimeHours.toFixed(1)}h`
+                              : (isKo ? '초과없음' : 'Không tăng ca')}
+                          </span>
+                          {rec.confirmed && (
+                            <span className="income-ins-confirmed-badge">
+                              <Check size={10} /> {isKo ? '완료' : 'Đã nhận'}
+                            </span>
+                          )}
+                        </div>
+                        <div className="income-ins-card-summary-right">
+                          <strong className="income-ot-summary-total">
+                            {rec.companySize === '5plus' && rec.overtimeAmount > 0
+                              ? `+${rec.overtimeAmount.toLocaleString()} ₩`
+                              : '—'}
+                          </strong>
+                          <ChevronDown size={15} className={`income-ins-chevron${isOpen ? ' rotated' : ''}`} />
+                        </div>
+                      </button>
+
+                      {isOpen && (
+                        <div className="income-ins-card-detail">
+                          <div className="income-ins-card-dates">
+                            <span>{rec.startDate} → {rec.endDate}</span>
+                            <span>{rec.hourlyRate.toLocaleString()} ₩/h · {rec.companySize === '5plus' ? '5인↑' : '5인↓'}</span>
+                          </div>
+
+                          {rec.weeks && rec.weeks.length > 0 && (
+                            <div className="income-juhyu-weeks income-juhyu-weeks-record">
+                              {rec.weeks.map((w, i) => (
+                                <div key={i} className={`income-juhyu-week-row${w.overtimeHours > 0 ? ' income-ot-row-active' : ' partial'}`}>
+                                  <span className="income-juhyu-week-label">
+                                    {isKo ? `${i + 1}주차` : `Tuần ${i + 1}`}
+                                    {' '}({w.weekStart.slice(5).replace('-', '/')} – {w.weekEnd.slice(5).replace('-', '/')})
+                                    {' '}
+                                    <em>{w.weeklyHours > 0 ? `${w.weeklyHours.toFixed(1)}h (+${w.overtimeHours.toFixed(1)}h)` : '–'}</em>
+                                  </span>
+                                  <strong className={w.overtimeHours > 0 ? 'income-ot-amount' : ''}>
+                                    {w.overtimeHours > 0 && rec.companySize === '5plus'
+                                      ? `+${w.amount.toLocaleString()} ₩` : '–'}
+                                  </strong>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {rec.note ? <p className="income-ins-card-note">{rec.note}</p> : null}
+
+                          <div className="income-ins-card-footer">
+                            <div className="income-ins-card-footer-top">
+                              <div className="income-ins-card-total">
+                                <span>{ui.otTotal}</span>
+                                <strong className="income-ot-summary-total">
+                                  {rec.companySize === '5plus' && rec.overtimeAmount > 0
+                                    ? `+${rec.overtimeAmount.toLocaleString()} ₩` : '—'}
+                                </strong>
+                              </div>
+                              <div style={{ display: 'flex', gap: '6px' }}>
+                                {!rec.confirmed && (
+                                  <button type="button" className="income-ins-edit-btn"
+                                    onClick={() => { setOtForm({ ...rec }); setEditingOtId(rec.id); setIsAddingOt(false); setExpandedOtId(null); }}
+                                  >{ui.insEdit}</button>
+                                )}
+                                <button type="button" className="income-ins-del-btn" onClick={() => removeOtRecord(rec.id)}>
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            </div>
+                            {!rec.confirmed && rec.companySize === '5plus' && rec.overtimeAmount > 0 && (
+                              <button type="button" className="income-ins-confirm-btn income-ot-confirm-btn"
+                                onClick={() => {
+                                  updateOtRecord(rec.id, { confirmed: true });
+                                  onAddExpense({
+                                    category: 'overtime_income',
+                                    amount: rec.overtimeAmount,
+                                    date: rec.endDate ?? todayStr,
+                                    note: rec.workplaceLabel ? `연장근로수당 — ${rec.workplaceLabel}` : '연장근로수당',
+                                    type: 'thu',
+                                  });
+                                }}
+                              >
+                                <Check size={14} />
+                                {ui.otConfirm}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </article>
+                  );
+                })}
+              </div>
+            ) : !isAddingOt && !editingOtId ? (
+              <div className="income-empty">
+                <Clock size={34} />
+                <strong>{ui.otEmpty}</strong>
+                <p>{ui.otEmptyHint}</p>
+              </div>
+            ) : null}
           </section>
         ) : null}
       </div>
@@ -2525,6 +2990,20 @@ export function IncomeScreen({
           onConfirm={(date) => {
             applyJuhyuCalc({ [juhyuDatePickerField]: date });
             setJuhyuDatePickerField(null);
+          }}
+        />
+      )}
+      {/* 연장근로수당 date pickers */}
+      {otDatePickerField && (
+        <DateWheelModal
+          title={otDatePickerField === 'startDate'
+            ? (isKo ? '근무 시작일' : 'Ngày bắt đầu làm')
+            : (isKo ? '근무 종료일' : 'Ngày kết thúc')}
+          initialDate={otDatePickerField === 'startDate' ? otForm.startDate : otForm.endDate}
+          onClose={() => setOtDatePickerField(null)}
+          onConfirm={(date) => {
+            applyOtCalc({ [otDatePickerField]: date });
+            setOtDatePickerField(null);
           }}
         />
       )}

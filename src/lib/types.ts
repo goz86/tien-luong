@@ -53,7 +53,7 @@ export interface ProfileDraft {
 
 export interface Expense {
   id: string;
-  category: 'rent' | 'phone' | 'food' | 'transport' | 'shopping' | 'health' | 'entertainment' | 'other' | 'juhyu_income' | 'other_income';
+  category: 'rent' | 'phone' | 'food' | 'transport' | 'shopping' | 'health' | 'entertainment' | 'other' | 'juhyu_income' | 'overtime_income' | 'other_income';
   amount: number;
   date: string;
   note: string;
