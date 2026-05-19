@@ -481,12 +481,20 @@ function useJuhyuRecords() {
 }
 
 // ─── 연장근로수당 ─────────────────────────────────────────────────
+// Korean law triggers overtime on EITHER condition (whichever gives more hours):
+//   1) Daily  : any hours > 8h in a single day
+//   2) Weekly : any hours > 40h in a week  (Mon–Sun)
+// Must be calculated per-week — NOT averaged over the month.
 interface OvertimeWeek {
   weekStart: string;
   weekEnd: string;
-  weeklyHours: number;    // total hours worked this week
-  overtimeHours: number;  // max(weeklyHours - 40, 0)
-  amount: number;         // overtimeHours × hourlyRate × multiplier
+  weeklyHours: number;      // total hours worked Mon–Sun
+  workDays: number;
+  dailyOtHours: number;     // sum of max(0, daily_hours − 8) for each day
+  weeklyOtHours: number;    // max(0, weeklyHours − 40)
+  overtimeHours: number;    // max(dailyOtHours, weeklyOtHours) — the binding trigger
+  otTrigger: 'daily' | 'weekly' | 'none'; // which condition triggered
+  amount: number;           // overtimeHours × hourlyRate × premiumRate
 }
 
 interface OvertimeRecord {
@@ -514,7 +522,7 @@ function calcOvertimeWeeksFromShifts(
   hourlyRate: number,
   companySize: '5plus' | 'under5',
 ): OvertimeWeek[] {
-  const premiumRate = companySize === '5plus' ? 0.5 : 0; // extra 0.5× premium on top of base
+  const premiumRate = companySize === '5plus' ? 0.5 : 0;
   const fmt = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   const sd = new Date(startDate + 'T00:00:00');
@@ -537,12 +545,27 @@ function calcOvertimeWeeksFromShifts(
       const matchLabel = workplaceLabel ? s.label === workplaceLabel : true;
       return matchLabel && s.date >= effectiveFrom && s.date <= effectiveTo;
     });
-    const weeklyHours  = weekShifts.reduce((sum, s) => sum + calculateShiftPay(s).hours, 0);
-    const overtimeHours = Math.max(weeklyHours - 40, 0);
-    // amount = only the EXTRA premium (0.5×), base pay already in shift records
-    const amount = Math.round(overtimeHours * hourlyRate * premiumRate);
 
-    weeks.push({ weekStart: weekStartStr, weekEnd: weekEndStr, weeklyHours, overtimeHours, amount });
+    // ── Group by day to detect daily overtime (>8h/day) ──
+    const dailyMap: Record<string, number> = {};
+    weekShifts.forEach(s => {
+      dailyMap[s.date] = (dailyMap[s.date] ?? 0) + calculateShiftPay(s).hours;
+    });
+    const workDays = Object.keys(dailyMap).length;
+    const weeklyHours  = Object.values(dailyMap).reduce((a, b) => a + b, 0);
+
+    // Condition 1 — daily: sum of excess beyond 8h per day
+    const dailyOtHours = Object.values(dailyMap).reduce((sum, h) => sum + Math.max(0, h - 8), 0);
+    // Condition 2 — weekly: excess beyond 40h per week
+    const weeklyOtHours = Math.max(0, weeklyHours - 40);
+    // Binding trigger = whichever gives MORE overtime hours
+    const overtimeHours = Math.max(dailyOtHours, weeklyOtHours);
+    const otTrigger: OvertimeWeek['otTrigger'] =
+      overtimeHours === 0 ? 'none'
+      : weeklyOtHours >= dailyOtHours ? 'weekly' : 'daily';
+
+    const amount = Math.round(overtimeHours * hourlyRate * premiumRate);
+    weeks.push({ weekStart: weekStartStr, weekEnd: weekEndStr, weeklyHours, workDays, dailyOtHours, weeklyOtHours, overtimeHours, otTrigger, amount });
     mon = new Date(mon);
     mon.setDate(mon.getDate() + 7);
   }
@@ -2753,7 +2776,14 @@ export function IncomeScreen({
                             {' '}
                             <em>
                               {w.weeklyHours > 0
-                                ? `${w.weeklyHours.toFixed(1)}h ${isKo ? '(연장' : '(tăng ca'} +${w.overtimeHours.toFixed(1)}h)`
+                                ? (() => {
+                                    const base = `${w.weeklyHours.toFixed(1)}h`;
+                                    if (w.overtimeHours === 0) return base;
+                                    const trigger = w.otTrigger === 'daily'
+                                      ? (isKo ? `일 8h초과 +${w.dailyOtHours.toFixed(1)}h` : `>8h/ngày +${w.dailyOtHours.toFixed(1)}h`)
+                                      : (isKo ? `주 40h초과 +${w.weeklyOtHours.toFixed(1)}h` : `>40h/tuần +${w.weeklyOtHours.toFixed(1)}h`);
+                                    return `${base} · ${trigger}`;
+                                  })()
                                 : (isKo ? '근무 없음' : 'Không có ca')}
                             </em>
                           </span>
@@ -2770,7 +2800,7 @@ export function IncomeScreen({
                     <div className="income-juhyu-calc-row total income-ot-total-row" style={{ marginTop: '6px' }}>
                       <span>
                         {ui.otTotalHours}: {otForm.totalOvertimeHours.toFixed(1)}h
-                        {otForm.companySize === '5plus' && ` · ${isKo ? '가산수당' : 'Phụ cấp'}`}
+                        {otForm.companySize === '5plus' && ` · ${isKo ? '가산수당 (0.5×)' : 'Phụ cấp (0.5×)'}`}
                       </span>
                       <strong className="income-ot-amount">
                         {otForm.companySize === '5plus'
@@ -2886,7 +2916,15 @@ export function IncomeScreen({
                                     {isKo ? `${i + 1}주차` : `Tuần ${i + 1}`}
                                     {' '}({w.weekStart.slice(5).replace('-', '/')} – {w.weekEnd.slice(5).replace('-', '/')})
                                     {' '}
-                                    <em>{w.weeklyHours > 0 ? `${w.weeklyHours.toFixed(1)}h (+${w.overtimeHours.toFixed(1)}h)` : '–'}</em>
+                                    <em>
+                                    {w.weeklyHours > 0
+                                      ? w.overtimeHours > 0
+                                        ? `${w.weeklyHours.toFixed(1)}h · ${w.otTrigger === 'daily'
+                                            ? (isKo ? `일초과 +${w.dailyOtHours.toFixed(1)}h` : `ngày +${w.dailyOtHours.toFixed(1)}h`)
+                                            : (isKo ? `주초과 +${w.weeklyOtHours.toFixed(1)}h` : `tuần +${w.weeklyOtHours.toFixed(1)}h`)}`
+                                        : `${w.weeklyHours.toFixed(1)}h`
+                                      : '–'}
+                                  </em>
                                   </span>
                                   <strong className={w.overtimeHours > 0 ? 'income-ot-amount' : ''}>
                                     {w.overtimeHours > 0 && rec.companySize === '5plus'
