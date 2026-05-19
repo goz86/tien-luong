@@ -998,11 +998,19 @@ export function CalendarScreen({
                         ? `≥ ${(10320 * Math.max(draftHrs, 8)).toLocaleString()}₩/일`
                         : '≥ 2,156,880₩/월'}
                     </button>
-                    {draft.wageType === 'daily' && draftHrs > 0 && (
-                      <p style={{ fontSize: '11px', color: '#657080', marginTop: '5px', lineHeight: 1.4 }}>
+                    {draft.wageType === 'daily' && (
+                      <p style={{ fontSize: '11px', color: '#657080', marginTop: '5px', lineHeight: 1.6 }}>
                         {lang === 'ko'
-                          ? `≈ ${(draft.hourlyWage).toLocaleString()}₩/h (${draftHrs.toFixed(1)}h 기준)`
-                          : `≈ ${(draft.hourlyWage).toLocaleString()}₩/h (ca ${draftHrs.toFixed(1)}h)`}
+                          ? <>
+                              <span style={{ color: '#f59e0b', fontWeight: 700 }}>※ 일급 기준 8h/일</span>
+                              {' — 최저 일급은 8h 기준 (10,320 × 8 = 82,560₩)'}
+                              {draftHrs > 0 && <><br />{'≈ '}{(draft.hourlyWage).toLocaleString()}{'₩/h (이 ca '}{draftHrs.toFixed(1)}{'h 기준)'}</>}
+                            </>
+                          : <>
+                              <span style={{ color: '#f59e0b', fontWeight: 700 }}>※ Tiêu chuẩn 8h/ngày</span>
+                              {' — lương tối thiểu tính theo 8h (10,320 × 8 = 82,560₩)'}
+                              {draftHrs > 0 && <><br />{'≈ '}{(draft.hourlyWage).toLocaleString()}{'₩/h (ca này '}{draftHrs.toFixed(1)}{'h)'}</>}
+                            </>}
                       </p>
                     )}
                     {draft.wageType === 'monthly' && (
