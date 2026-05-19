@@ -40,6 +40,8 @@ import { formatCurrencyFlowAmount } from '../lib/currency';
 import { DateWheelModal } from './shared/DateWheelModal';
 import { getVenueColor, shiftMonth, formatHoursCompact } from '../utils/helpers';
 import { localDateStr } from '../lib/localDate';
+import { supabase } from '../lib/supabase';
+import { useAppStore } from '../store/appStore';
 
 // ── Companion / mascot helpers (synced with AchievementScreen) ──
 const COMPANION_STORAGE_KEY = 'duhoc-mate-ach-companion';
@@ -62,10 +64,16 @@ const CHARACTER_STAGE_THRESHOLDS: Array<{ threshold: number; imgKey: string }> =
   { threshold: 0,           imgKey: 'hamster_egg' },
 ];
 
+const incomeExpenseCategories = new Set<Expense['category']>(['juhyu_income', 'other_income']);
+
+function isIncomeEntry(expense: Pick<Expense, 'category' | 'type'>) {
+  return expense.type === 'thu' || incomeExpenseCategories.has(expense.category);
+}
+
 function resolveStageImgKey(shifts: Shift[], expenses: Expense[], rateValue: number): string {
   const grossKrw = shifts.reduce((sum, s) => sum + calculateShiftPay(s).total, 0);
-  const expenseKrw = expenses.reduce((sum, e) => sum + e.amount, 0);
-  const totalVnd = Math.max(0, grossKrw - expenseKrw) * rateValue;
+  const flowKrw = expenses.reduce((sum, e) => sum + (isIncomeEntry(e) ? e.amount : -e.amount), 0);
+  const totalVnd = Math.max(0, grossKrw + flowKrw) * rateValue;
   return (CHARACTER_STAGE_THRESHOLDS.find(s => totalVnd >= s.threshold) ?? CHARACTER_STAGE_THRESHOLDS[CHARACTER_STAGE_THRESHOLDS.length - 1]).imgKey;
 }
 
@@ -173,18 +181,95 @@ function loadInsRecords(): InsuranceRecord[] {
 function saveInsRecords(records: InsuranceRecord[]) {
   window.localStorage.setItem(INS_STORAGE_KEY, JSON.stringify(records));
 }
+function insToRow(rec: InsuranceRecord, userId: string) {
+  return {
+    id: rec.id,
+    user_id: userId,
+    month: rec.month,
+    workplace_label: rec.workplaceLabel,
+    work_start_date: rec.workStartDate,
+    pay_date: rec.payDate,
+    base_salary: rec.baseSalary,
+    insurance_type: rec.insuranceType,
+    health_rate: rec.healthRate,
+    long_care_rate: rec.longCareRate,
+    pension_rate: rec.pensionRate,
+    employment_rate: rec.employmentRate,
+    health_amt: rec.healthAmt,
+    long_care_amt: rec.longCareAmt,
+    pension_amt: rec.pensionAmt,
+    employment_amt: rec.employmentAmt,
+    confirmed: rec.confirmed,
+    note: rec.note,
+    updated_at: new Date().toISOString(),
+  };
+}
+function rowToIns(row: any): InsuranceRecord {
+  return {
+    id: row.id,
+    month: row.month ?? '',
+    workplaceLabel: row.workplace_label ?? '',
+    workStartDate: row.work_start_date ?? localDateStr(),
+    payDate: row.pay_date ?? localDateStr(),
+    baseSalary: Number(row.base_salary) || 0,
+    insuranceType: (row.insurance_type ?? '4') as InsuranceRecord['insuranceType'],
+    healthRate: Number(row.health_rate) || 0,
+    longCareRate: Number(row.long_care_rate) || 0,
+    pensionRate: Number(row.pension_rate) || 0,
+    employmentRate: Number(row.employment_rate) || 0,
+    healthAmt: Number(row.health_amt) || 0,
+    longCareAmt: Number(row.long_care_amt) || 0,
+    pensionAmt: Number(row.pension_amt) || 0,
+    employmentAmt: Number(row.employment_amt) || 0,
+    confirmed: row.confirmed === true,
+    note: row.note ?? '',
+  };
+}
 function useInsuranceRecords() {
+  const session = useAppStore((s) => s.session);
+  const online = useAppStore((s) => s.online);
   const [records, setRaw] = useState<InsuranceRecord[]>(loadInsRecords);
+  const userId = session?.user.id;
+  const syncOne = (rec: InsuranceRecord) => {
+    if (!supabase || !userId || !online) return;
+    void supabase.from('insurance_records').upsert(insToRow(rec, userId), { onConflict: 'id' });
+  };
+  useEffect(() => {
+    if (!supabase || !userId || !online) return;
+    let cancelled = false;
+    supabase
+      .from('insurance_records')
+      .select('*')
+      .eq('user_id', userId)
+      .then(({ data }) => {
+        if (cancelled) return;
+        const remote = (data ?? []).map(rowToIns);
+        const local = loadInsRecords();
+        const remoteIds = new Set(remote.map((r) => r.id));
+        const merged = [...remote, ...local.filter((r) => !remoteIds.has(r.id))];
+        saveInsRecords(merged);
+        setRaw(merged);
+        local.filter((r) => !remoteIds.has(r.id)).forEach((rec) => syncOne(rec));
+      });
+    return () => { cancelled = true; };
+  }, [online, userId]);
   const set = (next: InsuranceRecord[]) => { saveInsRecords(next); setRaw(next); };
   const add = (rec: Omit<InsuranceRecord, 'id'>) => {
     const r = { ...rec, id: `ins-${Date.now()}-${Math.random().toString(16).slice(2)}` };
     set([...loadInsRecords(), r]);
+    syncOne(r);
     return r;
   };
   const update = (id: string, patch: Partial<InsuranceRecord>) => {
-    set(loadInsRecords().map(r => r.id === id ? { ...r, ...patch } : r));
+    const next = loadInsRecords().map(r => r.id === id ? { ...r, ...patch } : r);
+    set(next);
+    const updated = next.find((r) => r.id === id);
+    if (updated) syncOne(updated);
   };
-  const remove = (id: string) => set(loadInsRecords().filter(r => r.id !== id));
+  const remove = (id: string) => {
+    set(loadInsRecords().filter(r => r.id !== id));
+    if (supabase && userId && online) void supabase.from('insurance_records').delete().eq('id', id).eq('user_id', userId);
+  };
   return { records, add, update, remove };
 }
 
@@ -289,18 +374,87 @@ function loadJuhyuRecords(): JuhyuRecord[] {
 function saveJuhyuRecords(records: JuhyuRecord[]) {
   window.localStorage.setItem(JUHYU_STORAGE_KEY, JSON.stringify(records));
 }
+function juhyuToRow(rec: JuhyuRecord, userId: string) {
+  return {
+    id: rec.id,
+    user_id: userId,
+    month: rec.month,
+    workplace_label: rec.workplaceLabel,
+    start_date: rec.startDate,
+    end_date: rec.endDate,
+    hourly_rate: rec.hourlyRate,
+    juhyu_hours_per_week: rec.juhyuHoursPerWeek,
+    juhyu_per_week: rec.juhyuPerWeek,
+    juhyu_per_month: rec.juhyuPerMonth,
+    weeks: rec.weeks,
+    qualifies: rec.qualifies,
+    confirmed: rec.confirmed,
+    note: rec.note,
+    updated_at: new Date().toISOString(),
+  };
+}
+function rowToJuhyu(row: any): JuhyuRecord {
+  return {
+    id: row.id,
+    month: row.month ?? '',
+    workplaceLabel: row.workplace_label ?? '',
+    startDate: row.start_date ?? localDateStr(),
+    endDate: row.end_date ?? localDateStr(),
+    hourlyRate: Number(row.hourly_rate) || 0,
+    juhyuHoursPerWeek: Number(row.juhyu_hours_per_week) || 0,
+    juhyuPerWeek: Number(row.juhyu_per_week) || 0,
+    juhyuPerMonth: Number(row.juhyu_per_month) || 0,
+    weeks: Array.isArray(row.weeks) ? row.weeks : [],
+    qualifies: row.qualifies === true,
+    confirmed: row.confirmed === true,
+    note: row.note ?? '',
+  };
+}
 function useJuhyuRecords() {
+  const session = useAppStore((s) => s.session);
+  const online = useAppStore((s) => s.online);
   const [records, setRaw] = useState<JuhyuRecord[]>(loadJuhyuRecords);
+  const userId = session?.user.id;
+  const syncOne = (rec: JuhyuRecord) => {
+    if (!supabase || !userId || !online) return;
+    void supabase.from('juhyu_records').upsert(juhyuToRow(rec, userId), { onConflict: 'id' });
+  };
+  useEffect(() => {
+    if (!supabase || !userId || !online) return;
+    let cancelled = false;
+    supabase
+      .from('juhyu_records')
+      .select('*')
+      .eq('user_id', userId)
+      .then(({ data }) => {
+        if (cancelled) return;
+        const remote = (data ?? []).map(rowToJuhyu);
+        const local = loadJuhyuRecords();
+        const remoteIds = new Set(remote.map((r) => r.id));
+        const merged = [...remote, ...local.filter((r) => !remoteIds.has(r.id))];
+        saveJuhyuRecords(merged);
+        setRaw(merged);
+        local.filter((r) => !remoteIds.has(r.id)).forEach((rec) => syncOne(rec));
+      });
+    return () => { cancelled = true; };
+  }, [online, userId]);
   const set = (next: JuhyuRecord[]) => { saveJuhyuRecords(next); setRaw(next); };
   const add = (rec: Omit<JuhyuRecord, 'id'>) => {
     const r = { ...rec, id: `juhyu-${Date.now()}-${Math.random().toString(16).slice(2)}` };
     set([...loadJuhyuRecords(), r]);
+    syncOne(r);
     return r;
   };
   const update = (id: string, patch: Partial<JuhyuRecord>) => {
-    set(loadJuhyuRecords().map(r => r.id === id ? { ...r, ...patch } : r));
+    const next = loadJuhyuRecords().map(r => r.id === id ? { ...r, ...patch } : r);
+    set(next);
+    const updated = next.find((r) => r.id === id);
+    if (updated) syncOne(updated);
   };
-  const remove = (id: string) => set(loadJuhyuRecords().filter(r => r.id !== id));
+  const remove = (id: string) => {
+    set(loadJuhyuRecords().filter(r => r.id !== id));
+    if (supabase && userId && online) void supabase.from('juhyu_records').delete().eq('id', id).eq('user_id', userId);
+  };
   return { records, add, update, remove };
 }
 
@@ -731,8 +885,15 @@ export function IncomeScreen({
     [currentWeekShifts]
   );
 
-  const totalExpenses = useMemo(() => monthExpenses.reduce((sum, expense) => sum + expense.amount, 0), [monthExpenses]);
-  const netBalance = monthlyTotal - totalExpenses;
+  const totalIncomeEntries = useMemo(
+    () => monthExpenses.filter(isIncomeEntry).reduce((sum, expense) => sum + expense.amount, 0),
+    [monthExpenses]
+  );
+  const totalExpenses = useMemo(
+    () => monthExpenses.filter((expense) => !isIncomeEntry(expense)).reduce((sum, expense) => sum + expense.amount, 0),
+    [monthExpenses]
+  );
+  const netBalance = monthlyTotal + totalIncomeEntries - totalExpenses;
   const saveRatio = monthlyTotal > 0 ? Math.max(0, Math.min(100, (netBalance / monthlyTotal) * 100)) : 0;
   const maxWeekdayTotal = Math.max(...weekdayTotals, 1);
   const strongestDay = weekdayTotals.indexOf(Math.max(...weekdayTotals));
@@ -1359,8 +1520,8 @@ export function IncomeScreen({
             ) : null}
 
             {monthExpenses.length > 0 && (() => {
-              const thuTotal = monthExpenses.filter(e => e.type === 'thu').reduce((s, e) => s + e.amount, 0);
-              const chiTotal = monthExpenses.filter(e => e.type !== 'thu').reduce((s, e) => s + e.amount, 0);
+              const thuTotal = monthExpenses.filter(isIncomeEntry).reduce((s, e) => s + e.amount, 0);
+              const chiTotal = monthExpenses.filter(e => !isIncomeEntry(e)).reduce((s, e) => s + e.amount, 0);
               return (
                 <div className="income-thuchi-summary">
                   <div className="income-thuchi-sum thu">
@@ -1380,7 +1541,7 @@ export function IncomeScreen({
                 monthExpenses.map((expense) => {
                   const meta = categoryMeta[expense.category] ?? categoryMeta['other'];
                   const Icon = meta.icon;
-                  const isThu = expense.type === 'thu';
+                  const isThu = isIncomeEntry(expense);
                   return (
                     <article key={expense.id} className={`income-expense-row${isThu ? ' thu' : ''}`}>
                       <div className={`income-expense-icon ${meta.tone}`}>
