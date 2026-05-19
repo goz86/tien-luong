@@ -152,6 +152,26 @@ const INS_STORAGE_KEY = 'duhoc-mate-insurance';
 // Default 2025-2026 rates as %-values (employee share)
 const INS_RATES = { health: 3.545, longCare: 12.95, pension: 4.5, employment: 0.9 };
 
+const INS_DEFAULT_RATES_KEY = 'duhoc-mate-ins-default-rates';
+type InsRates = typeof INS_RATES;
+
+function loadSavedDefaultRates(): InsRates {
+  try {
+    const stored = localStorage.getItem(INS_DEFAULT_RATES_KEY);
+    if (stored) return { ...INS_RATES, ...JSON.parse(stored) };
+  } catch { /* ignore */ }
+  return { ...INS_RATES };
+}
+
+function persistDefaultRates(rates: InsRates) {
+  localStorage.setItem(INS_DEFAULT_RATES_KEY, JSON.stringify(rates));
+}
+
+function ratesDiffer(a: InsRates, b: InsRates) {
+  return a.health !== b.health || a.longCare !== b.longCare ||
+    a.pension !== b.pension || a.employment !== b.employment;
+}
+
 function calcIns(
   base: number,
   type: '2' | 'partial' | '4',
@@ -276,6 +296,9 @@ function useInsuranceRecords() {
       });
     return () => { cancelled = true; };
   }, [online, userId]);
+  // Sentinel ID pattern for default-rates record (filtered from display)
+  const defaultRatesId = userId ? `ins-defaults-${userId}` : null;
+
   const set = (next: InsuranceRecord[]) => { saveInsRecords(next); setRaw(next); };
   const add = (rec: Omit<InsuranceRecord, 'id'>) => {
     const r = { ...rec, id: `ins-${Date.now()}-${Math.random().toString(16).slice(2)}` };
@@ -293,7 +316,37 @@ function useInsuranceRecords() {
     set(loadInsRecords().filter(r => r.id !== id));
     if (supabase && userId && online) void supabase.from('insurance_records').delete().eq('id', id).eq('user_id', userId);
   };
-  return { records, add, update, remove };
+  const saveDefaultRates = (rates: InsRates) => {
+    persistDefaultRates(rates);
+    if (!supabase || !userId) return;
+    // Upsert a sentinel record that stores rates — not displayed (filtered below)
+    const sentinel: InsuranceRecord = {
+      id: `ins-defaults-${userId}`,
+      month: '__ins_defaults__',
+      workplaceLabel: '',
+      workStartDate: '',
+      payDate: '',
+      baseSalary: 0,
+      insuranceType: '4',
+      healthRate: rates.health,
+      longCareRate: rates.longCare,
+      pensionRate: rates.pension,
+      employmentRate: rates.employment,
+      healthAmt: 0, longCareAmt: 0, pensionAmt: 0, employmentAmt: 0,
+      confirmed: false,
+      note: '__ins_defaults__',
+    };
+    // Update local store (sentinel kept in raw but filtered from display)
+    const existing = loadInsRecords();
+    const next = existing.some(r => r.id === sentinel.id)
+      ? existing.map(r => r.id === sentinel.id ? sentinel : r)
+      : [...existing, sentinel];
+    set(next);
+    void supabase.from('insurance_records').upsert(insToRow(sentinel, userId), { onConflict: 'id' });
+  };
+  // Filter out sentinel from displayed records
+  const displayRecords = records.filter(r => r.month !== '__ins_defaults__');
+  return { records: displayRecords, add, update, remove, saveDefaultRates, defaultRatesId };
 }
 
 // ─── 주휴수당 ────────────────────────────────────────────────────
@@ -947,13 +1000,16 @@ export function IncomeScreen({
   const prevTotalRef = useRef<number | null>(null);
 
   // ── Insurance tab state (moved below memoized values — see further down) ──
-  const { records: allInsRecords, add: addInsRecord, update: updateInsRecord, remove: removeInsRecord } = useInsuranceRecords();
+  const { records: allInsRecords, add: addInsRecord, update: updateInsRecord, remove: removeInsRecord, saveDefaultRates } = useInsuranceRecords();
+  const [showSaveRatesConfirm, setShowSaveRatesConfirm] = useState(false);
+  const [pendingSaveRates, setPendingSaveRates] = useState<InsRates | null>(null);
   const [isAddingIns, setIsAddingIns] = useState(false);
   const [editingInsId, setEditingInsId] = useState<string | null>(null);
   const [expandedInsId, setExpandedInsId] = useState<string | null>(null);
   const [insDatePickerField, setInsDatePickerField] = useState<InsFormField | null>(null);
   const todayStr = localDateStr();
   // insForm initialised with safe zero-defaults; populated in the "Add" click handler
+  const savedDefRates = loadSavedDefaultRates();
   const [insForm, setInsForm] = useState<Omit<InsuranceRecord, 'id'>>({
     month: '',
     workplaceLabel: '',
@@ -961,10 +1017,10 @@ export function IncomeScreen({
     payDate: todayStr,
     baseSalary: 0,
     insuranceType: '4',
-    healthRate: INS_RATES.health,
-    longCareRate: INS_RATES.longCare,
-    pensionRate: INS_RATES.pension,
-    employmentRate: INS_RATES.employment,
+    healthRate: savedDefRates.health,
+    longCareRate: savedDefRates.longCare,
+    pensionRate: savedDefRates.pension,
+    employmentRate: savedDefRates.employment,
     healthAmt: 0,
     longCareAmt: 0,
     pensionAmt: 0,
@@ -1970,6 +2026,46 @@ export function IncomeScreen({
         ) : null}
 
 
+        {/* ── Save-rates confirmation popup ── */}
+        {showSaveRatesConfirm && pendingSaveRates && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(8,22,43,0.55)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 24px' }}>
+            <div style={{ background: '#fff', borderRadius: '20px', padding: '24px', maxWidth: '340px', width: '100%', boxShadow: '0 8px 32px rgba(8,22,43,0.18)' }}>
+              <p style={{ fontWeight: 800, fontSize: '15px', color: '#08162b', marginBottom: '8px' }}>
+                {isKo ? '보험료율 기본값 저장' : 'Lưu tỷ lệ bảo hiểm mặc định?'}
+              </p>
+              <p style={{ fontSize: '13px', color: '#657080', marginBottom: '16px', lineHeight: 1.5 }}>
+                {isKo
+                  ? '입력한 요율을 다음 번 기본값으로 저장할까요?'
+                  : 'Tỷ lệ vừa nhập sẽ được dùng làm mặc định cho lần tiếp theo.'}
+              </p>
+              <div style={{ background: '#f5f7fa', borderRadius: '12px', padding: '10px 14px', fontSize: '12px', color: '#08162b', marginBottom: '18px', lineHeight: 1.8 }}>
+                <span>건강보험 {pendingSaveRates.health}%</span> · <span>장기요양 {pendingSaveRates.longCare}%</span><br />
+                <span>국민연금 {pendingSaveRates.pension}%</span> · <span>고용보험 {pendingSaveRates.employment}%</span>
+              </div>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => { setShowSaveRatesConfirm(false); setPendingSaveRates(null); }}
+                  style={{ flex: 1, padding: '11px', borderRadius: '12px', border: '1.5px solid #e2e8f0', background: '#fff', fontWeight: 700, fontSize: '14px', color: '#657080', cursor: 'pointer' }}
+                >
+                  {isKo ? '이번만' : 'Chỉ lần này'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    saveDefaultRates(pendingSaveRates);
+                    setShowSaveRatesConfirm(false);
+                    setPendingSaveRates(null);
+                  }}
+                  style={{ flex: 1, padding: '11px', borderRadius: '12px', border: 'none', background: '#08162b', fontWeight: 700, fontSize: '14px', color: '#fff', cursor: 'pointer' }}
+                >
+                  {isKo ? '저장' : 'Lưu mặc định'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ── Insurance Tab ── */}
         {activeTab === 'insurance' ? (
           <section className="income-insurance-panel">
@@ -2258,6 +2354,17 @@ export function IncomeScreen({
                         addInsRecord({ ...insForm, month: selectedMonthKey, confirmed: false });
                         setIsAddingIns(false);
                       }
+                      // Check if rates changed from saved defaults
+                      const currentRates: InsRates = {
+                        health: insForm.healthRate,
+                        longCare: insForm.longCareRate,
+                        pension: insForm.pensionRate,
+                        employment: insForm.employmentRate,
+                      };
+                      if (ratesDiffer(currentRates, loadSavedDefaultRates())) {
+                        setPendingSaveRates(currentRates);
+                        setShowSaveRatesConfirm(true);
+                      }
                     }}
                   >
                     {ui.insSave}
@@ -2277,11 +2384,11 @@ export function IncomeScreen({
                     payDate: todayStr,
                     baseSalary: base,
                     insuranceType: '4',
-                    healthRate: INS_RATES.health,
-                    longCareRate: INS_RATES.longCare,
-                    pensionRate: INS_RATES.pension,
-                    employmentRate: INS_RATES.employment,
-                    ...calcIns(base, '4'),
+                    healthRate: loadSavedDefaultRates().health,
+                    longCareRate: loadSavedDefaultRates().longCare,
+                    pensionRate: loadSavedDefaultRates().pension,
+                    employmentRate: loadSavedDefaultRates().employment,
+                    ...calcIns(base, '4', loadSavedDefaultRates()),
                     confirmed: false,
                     note: '',
                   });
