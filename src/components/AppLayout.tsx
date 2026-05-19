@@ -531,6 +531,8 @@ export default function AppLayout() {
       nightShift: s.draft.nightShift,
       taxDeduction: s.draft.taxDeduction,
       holidayAllowance: s.draft.holidayAllowance,
+      wageType: s.draft.wageType,
+      monthlyWage: s.draft.wageType === 'monthly' ? (s.draft.wageInput ?? undefined) : undefined,
     };
     s.addShift(shift, nextTab);
     if (supabaseClient && s.session) {

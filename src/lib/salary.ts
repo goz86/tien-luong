@@ -1,6 +1,8 @@
 export const MINIMUM_WAGE_2026 = 10320;
 export const DEFAULT_KRW_TO_VND = 18.1;
 
+export type WageType = 'hourly' | 'daily' | 'monthly';
+
 export type Shift = {
   id: string;
   date: string;
@@ -10,16 +12,20 @@ export type Shift = {
   hourlyWage: number;
   breakMinutes: number;
   notes: string;
-  
+
   // NEW: Phụ cấp ca đêm (Night shift allowance - x1.5)
-  // Người dùng tự tick xác nhận ca này được nhân 1.5
-  nightShift?: boolean; 
-  
+  nightShift?: boolean;
+
   // NEW: Thuế 3.3% (Freelancer tax deduction)
-  taxDeduction?: boolean; 
-  
+  taxDeduction?: boolean;
+
   // NEW: Phụ cấp nghỉ lễ / cuối tuần (주휴수당 - Holiday pay)
-  holidayAllowance?: number; 
+  holidayAllowance?: number;
+
+  // Wage format: 'monthly' means income is a fixed monthly total (monthlyWage),
+  // not calculated per-shift. hourlyWage still stored for 주휴/연장 rights checks.
+  wageType?: WageType;
+  monthlyWage?: number; // Only set when wageType === 'monthly'
 };
 
 export function formatKrw(value: number) {
@@ -42,9 +48,36 @@ export function shiftHours(shift: Shift) {
   return Math.max(0, (end - start - shift.breakMinutes) / 60);
 }
 
+/**
+ * Sum monthly wages for a set of shifts, deduplicating by venue.
+ * Each venue counts only once (its fixed monthly wage), regardless of
+ * how many shifts are logged in that period.
+ *
+ * @param shifts - shifts to examine
+ * @param monthOrStart - 'YYYY-MM' prefix (month mode) or start ISO date (range mode)
+ * @param end - end ISO date for range mode (optional)
+ */
+export function getMonthlyWageTotal(shifts: Shift[], monthOrStart: string, end?: string): number {
+  const relevant = end
+    ? shifts.filter(s => s.date >= monthOrStart && s.date <= end)
+    : shifts.filter(s => s.date.startsWith(monthOrStart));
+  const venueWages: Record<string, number> = {};
+  relevant
+    .filter(s => s.wageType === 'monthly' && s.monthlyWage)
+    .forEach(s => { venueWages[s.label] = s.monthlyWage!; });
+  return Object.values(venueWages).reduce((sum, w) => sum + w, 0);
+}
+
 export function calculateShiftPay(shift: Shift) {
   const hours = shiftHours(shift);
-  
+
+  // Monthly-wage shifts: income is a fixed monthly total tracked via monthlyWage.
+  // Return 0 here so it is NOT double-counted in per-shift totals.
+  // hourlyWage is still valid for 주휴/연장근로 rights calculations.
+  if (shift.wageType === 'monthly') {
+    return { hours, total: 0, nightPay: 0, holidayPay: 0, taxAmount: 0 };
+  }
+
   // 1. Lương cơ bản
   let baseTotal = hours * shift.hourlyWage;
   

@@ -1,4 +1,4 @@
-import { Shift } from './salary';
+import { Shift, WageType } from './salary';
 
 export type Tab = 'home' | 'calendar' | 'income' | 'friends' | 'profile' | 'admin';
 
@@ -72,8 +72,6 @@ export type StoredState = {
   personalGoals?: PersonalGoal[];
   currencyMode?: CurrencyMode;
 };
-
-export type WageType = 'hourly' | 'daily' | 'monthly';
 
 export type ShiftDraft = {
   venue: string;

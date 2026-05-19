@@ -258,19 +258,22 @@ export function CalendarScreen({
   }, [draft.date, draft.startTime, draft.endTime, draft.breakMinutes, draft.venue, shifts, editingShiftId]);
   // ─────────────────────────────────────────────────────────────────────────
 
-  const quickPreview = calculateShiftPay({
-    id: 'quick-preview',
-    date: draft.date,
-    label: draft.venue,
-    startTime: draft.startTime,
-    endTime: draft.endTime,
-    hourlyWage: draft.hourlyWage,
-    breakMinutes: draft.breakMinutes,
-    notes: draft.note,
-    nightShift: draft.nightShift,
-    taxDeduction: draft.taxDeduction,
-    holidayAllowance: draft.holidayAllowance
-  }).total;
+  // For monthly-wage shifts, preview = fixed monthly total (not per-shift calculation)
+  const quickPreview = draft.wageType === 'monthly'
+    ? (draft.wageInput ?? 0)
+    : calculateShiftPay({
+        id: 'quick-preview',
+        date: draft.date,
+        label: draft.venue,
+        startTime: draft.startTime,
+        endTime: draft.endTime,
+        hourlyWage: draft.hourlyWage,
+        breakMinutes: draft.breakMinutes,
+        notes: draft.note,
+        nightShift: draft.nightShift,
+        taxDeduction: draft.taxDeduction,
+        holidayAllowance: draft.holidayAllowance
+      }).total;
 
   // Custom Select State
   const [activeSelect, setActiveSelect] = useState<string | null>(null);
@@ -1016,22 +1019,18 @@ export function CalendarScreen({
                     {draft.wageType === 'monthly' && (
                       <p style={{ fontSize: '11px', color: '#657080', marginTop: '5px', lineHeight: 1.7 }}>
                         <span style={{ color: '#22963f', fontWeight: 700 }}>
-                          {lang === 'ko' ? '✓ 209h 기준 (주휴수당 포함)' : '✓ Đã gồm 주휴수당 (209h/tháng)'}
+                          {lang === 'ko' ? '✓ 월급 고정 수입' : '✓ Lương tháng cố định'}
                         </span>
                         <br />
                         {lang === 'ko'
-                          ? <>{(draft.wageInput ?? draft.hourlyWage * 209).toLocaleString()}₩ ÷ 209h = <strong style={{ color: '#08162b' }}>{(draft.hourlyWage).toLocaleString()}₩/h</strong></>
-                          : <>{(draft.wageInput ?? draft.hourlyWage * 209).toLocaleString()}₩ ÷ 209h = <strong style={{ color: '#08162b' }}>{(draft.hourlyWage).toLocaleString()}₩/h</strong></>}
-                        {draftHrs > 0 && (
-                          <>
-                            <br />
-                            <span style={{ color: '#08162b', fontWeight: 700 }}>
-                              {lang === 'ko'
-                                ? `→ 이 ca (${draftHrs.toFixed(1)}h): ${(Math.round(draft.hourlyWage * draftHrs)).toLocaleString()}₩`
-                                : `→ Ca này (${draftHrs.toFixed(1)}h): ${(Math.round(draft.hourlyWage * draftHrs)).toLocaleString()}₩`}
-                            </span>
-                          </>
-                        )}
+                          ? '이 금액이 해당 월 해당 직장의 최종 수입입니다.'
+                          : 'Số tiền này là thu nhập cuối cùng của tháng tại nơi làm này.'}
+                        <br />
+                        <span style={{ color: '#657080' }}>
+                          {lang === 'ko'
+                            ? `(주휴·연장 권리 계산용 시급: ≈ ${(draft.hourlyWage).toLocaleString()}₩/h)`
+                            : `(Lương giờ quy đổi dùng tính 주휴/연장: ≈ ${(draft.hourlyWage).toLocaleString()}₩/h)`}
+                        </span>
                       </p>
                     )}
                   </label>

@@ -35,7 +35,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { calculateShiftPay } from '../lib/salary';
+import { calculateShiftPay, getMonthlyWageTotal } from '../lib/salary';
 import type { CurrencyMode, Expense, RateState, Shift, VenueColors } from '../lib/types';
 import { formatCurrencyFlowAmount } from '../lib/currency';
 import { DateWheelModal } from './shared/DateWheelModal';
@@ -72,7 +72,19 @@ function isIncomeEntry(expense: Pick<Expense, 'category' | 'type'>) {
 }
 
 function resolveStageImgKey(shifts: Shift[], expenses: Expense[], rateValue: number): string {
-  const grossKrw = shifts.reduce((sum, s) => sum + calculateShiftPay(s).total, 0);
+  // Per-shift income (monthly-wage shifts return 0 from calculateShiftPay)
+  const shiftKrw = shifts.reduce((sum, s) => sum + calculateShiftPay(s).total, 0);
+  // Monthly wages: count once per unique (venue, month) combination
+  const monthlyKrw = (() => {
+    const seen = new Set<string>();
+    let total = 0;
+    shifts.filter(s => s.wageType === 'monthly' && s.monthlyWage).forEach(s => {
+      const key = `${s.label}:${s.date.slice(0, 7)}`;
+      if (!seen.has(key)) { seen.add(key); total += s.monthlyWage!; }
+    });
+    return total;
+  })();
+  const grossKrw = shiftKrw + monthlyKrw;
   const flowKrw = expenses.reduce((sum, e) => sum + (isIncomeEntry(e) ? e.amount : -e.amount), 0);
   const totalVnd = Math.max(0, grossKrw + flowKrw) * rateValue;
   return (CHARACTER_STAGE_THRESHOLDS.find(s => totalVnd >= s.threshold) ?? CHARACTER_STAGE_THRESHOLDS[CHARACTER_STAGE_THRESHOLDS.length - 1]).imgKey;
@@ -1032,14 +1044,18 @@ export function IncomeScreen({
     const startMonthKey = merged.workStartDate.slice(0, 7);
     const shouldUseStartMonthBase = shouldSyncBaseToStartMonth && /^\d{4}-\d{2}$/.test(startMonthKey);
     const baseSalary = shouldUseStartMonthBase
-      ? shifts
-          .filter((shift) => {
+      ? (() => {
+          const relevant = shifts.filter((shift) => {
             if (!shift.date.startsWith(startMonthKey)) return false;
             return merged.workplaceLabel && merged.workplaceLabel !== '__all__'
               ? shift.label === merged.workplaceLabel
               : true;
-          })
-          .reduce((sum, shift) => sum + calculateShiftPay(shift).total, 0)
+          });
+          return (
+            relevant.reduce((sum, shift) => sum + calculateShiftPay(shift).total, 0) +
+            getMonthlyWageTotal(relevant, startMonthKey)
+          );
+        })()
       : merged.baseSalary;
     const insuranceType = shouldInferType
       ? inferInsuranceTypeFromStartDate(merged.workStartDate, merged.insuranceType)
@@ -1095,8 +1111,10 @@ export function IncomeScreen({
   );
 
   const monthlyTotal = useMemo(
-    () => monthShifts.reduce((sum, shift) => sum + calculateShiftPay(shift).total, 0),
-    [monthShifts]
+    () =>
+      monthShifts.reduce((sum, shift) => sum + calculateShiftPay(shift).total, 0) +
+      getMonthlyWageTotal(monthShifts, selectedMonthKey),
+    [monthShifts, selectedMonthKey]
   );
 
   const monthlyHours = useMemo(
@@ -1107,16 +1125,27 @@ export function IncomeScreen({
   const averageHourly = monthlyHours ? monthlyTotal / monthlyHours : 0;
 
   const workplaces = useMemo(() => {
-    const map = new Map<string, { label: string; total: number; count: number; hours: number }>();
+    const map = new Map<string, { label: string; total: number; count: number; hours: number; isMonthly?: boolean }>();
     monthShifts.forEach((shift) => {
       const current = map.get(shift.label) ?? { label: shift.label, total: 0, count: 0, hours: 0 };
       const pay = calculateShiftPay(shift);
-      map.set(shift.label, {
-        label: shift.label,
-        total: current.total + pay.total,
-        count: current.count + 1,
-        hours: current.hours + pay.hours,
-      });
+      if (shift.wageType === 'monthly') {
+        // Monthly-wage venue: total = fixed monthlyWage (overwrite, same value every shift)
+        map.set(shift.label, {
+          label: shift.label,
+          total: shift.monthlyWage ?? 0,
+          count: current.count + 1,
+          hours: current.hours + pay.hours,
+          isMonthly: true,
+        });
+      } else {
+        map.set(shift.label, {
+          label: shift.label,
+          total: current.total + pay.total,
+          count: current.count + 1,
+          hours: current.hours + pay.hours,
+        });
+      }
     });
     return [...map.values()].sort((a, b) => b.total - a.total);
   }, [monthShifts]);
@@ -1290,9 +1319,10 @@ export function IncomeScreen({
     for (let i = 5; i >= 0; i--) {
       const d = new Date(chartMonthDate.getFullYear(), chartMonthDate.getMonth() - i, 1);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      const total = shifts
-        .filter(s => s.date.startsWith(key))
-        .reduce((sum, s) => sum + calculateShiftPay(s).total, 0);
+      const monthShiftsForKey = shifts.filter(s => s.date.startsWith(key));
+      const total =
+        monthShiftsForKey.reduce((sum, s) => sum + calculateShiftPay(s).total, 0) +
+        getMonthlyWageTotal(monthShiftsForKey, key);
       result.push({ total, label: isKo ? `${d.getMonth() + 1}월` : `Th${d.getMonth() + 1}`, isCurrent: i === 0 });
     }
     return result;
