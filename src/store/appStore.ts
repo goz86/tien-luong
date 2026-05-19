@@ -219,7 +219,7 @@ export interface AppState {
   monthlyTotal: number;
   monthlyHours: number;
   averageHourly: number;
-  workplaceSummary: Array<{ label: string; total: number; count: number; hours: number; isMonthly?: boolean }>;
+  workplaceSummary: Array<{ label: string; total: number; count: number; hours: number; isMonthly?: boolean; isDaily?: boolean }>;
   recentShifts: Shift[];
   monthShifts: Shift[];
   unreadCount: number;
@@ -328,7 +328,7 @@ export const useAppStore = create<AppState>((set, get) => {
       .reduce((sum, s) => sum + calculateShiftPay(s).total, 0);
     const averageHourly = monthlyHours ? hourlyOnlyTotal / monthlyHours : 0;
 
-    const map = new Map<string, { label: string; total: number; count: number; hours: number; isMonthly?: boolean }>();
+    const map = new Map<string, { label: string; total: number; count: number; hours: number; isMonthly?: boolean; isDaily?: boolean }>();
     monthShifts.forEach((s) => {
       const cur = map.get(s.label) ?? { label: s.label, total: 0, count: 0, hours: 0 };
       const pay = calculateShiftPay(s);
@@ -339,6 +339,7 @@ export const useAppStore = create<AppState>((set, get) => {
         cur.total += pay.total;
         cur.count += 1;
         cur.hours += pay.hours;
+        if (s.wageType === 'daily') cur.isDaily = true;
         map.set(s.label, cur);
       }
     });
