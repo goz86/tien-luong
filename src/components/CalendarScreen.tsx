@@ -205,6 +205,17 @@ export function CalendarScreen({
   const yearOptions = Array.from({ length: 9 }, (_, index) => calendarYear - 4 + index);
   const monthOptions = Array.from({ length: 12 }, (_, index) => index + 1);
 
+  // ── Computed draft shift hours (component-level, for wage conversion) ────
+  const draftHrs = (() => {
+    if (!draft.startTime || !draft.endTime) return 0;
+    const [sh, sm] = draft.startTime.split(':').map(Number);
+    const [eh, em] = draft.endTime.split(':').map(Number);
+    let startMins = sh * 60 + sm;
+    let endMins   = eh * 60 + em;
+    if (endMins <= startMins) endMins += 24 * 60;
+    return Math.max(0, (endMins - startMins - draft.breakMinutes) / 60);
+  })();
+
   // ── 주휴수당 auto-suggestion ──────────────────────────────────────────────
   // Tính từ thứ 2 đến ngày ca hiện tại, CHỈ tính riêng nơi làm đang nhập.
   // Yêu cầu tối thiểu 15h/tuần mới được hưởng 주휴수당.
@@ -893,18 +904,72 @@ export function CalendarScreen({
                   </label>
                 </div>
 
+                {/* ── Wage type toggle (시급 / 일급 / 월급) ── */}
+                <div style={{ display: 'flex', gap: '6px', margin: '4px 0 8px' }}>
+                  {(['hourly', 'daily', 'monthly'] as const).map((type) => {
+                    const wType = draft.wageType ?? 'hourly';
+                    const labels: Record<string, string> = lang === 'ko'
+                      ? { hourly: '시급', daily: '일급', monthly: '월급' }
+                      : { hourly: 'Theo giờ', daily: 'Theo ngày', monthly: 'Theo tháng' };
+                    const selected = wType === type;
+                    return (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => {
+                          const prevInput = draft.wageInput ?? draft.hourlyWage;
+                          let newHourly = draft.hourlyWage;
+                          if (type === 'hourly') newHourly = prevInput;
+                          else if (type === 'daily') newHourly = draftHrs > 0 ? Math.round(prevInput / draftHrs) : draft.hourlyWage;
+                          else if (type === 'monthly') newHourly = Math.round(prevInput / 209);
+                          setDraft({ ...draft, wageType: type, wageInput: prevInput, hourlyWage: newHourly });
+                        }}
+                        style={{
+                          flex: 1,
+                          padding: '8px 0',
+                          borderRadius: '10px',
+                          border: 'none',
+                          fontWeight: 700,
+                          fontSize: '12px',
+                          background: selected ? '#08162b' : '#eef0f4',
+                          color: selected ? '#fff' : '#657080',
+                          cursor: 'pointer',
+                          transition: 'background 0.15s, color 0.15s',
+                        }}
+                      >
+                        {labels[type]}
+                      </button>
+                    );
+                  })}
+                </div>
+
                 <div className="sheet-row">
                   <label className="micro-field">
-                    <span className="field-label">{ui.hourlyWage}</span>
+                    <span className="field-label">
+                      {(draft.wageType ?? 'hourly') === 'hourly'
+                        ? ui.hourlyWage
+                        : draft.wageType === 'daily'
+                        ? (lang === 'ko' ? '일급' : 'Lương ngày')
+                        : (lang === 'ko' ? '월급' : 'Lương tháng')}
+                    </span>
                     <div className="settings-select-wrap">
                       <input
                         type="text"
                         inputMode="numeric"
                         className="premium-input"
-                        value={draft.hourlyWage ? draft.hourlyWage.toLocaleString('en-US') : ''}
+                        value={
+                          (draft.wageInput ?? draft.hourlyWage)
+                            ? (draft.wageInput ?? draft.hourlyWage)!.toLocaleString('en-US')
+                            : ''
+                        }
                         onChange={(event) => {
                           const val = event.target.value.replace(/\D/g, '');
-                          setDraft({ ...draft, hourlyWage: val ? Number(val) : 0 });
+                          const num = val ? Number(val) : 0;
+                          const wType = draft.wageType ?? 'hourly';
+                          let hourlyWage = num;
+                          if (wType === 'daily') hourlyWage = draftHrs > 0 ? Math.round(num / draftHrs) : num;
+                          else if (wType === 'monthly') hourlyWage = Math.round(num / 209);
+                          setDraft({ ...draft, wageInput: num, hourlyWage });
                         }}
                       />
                       <span className="input-unit">KRW</span>
@@ -912,11 +977,41 @@ export function CalendarScreen({
                     <button
                       type="button"
                       className="min-wage-badge-v2"
-                      onClick={() => setDraft({ ...draft, hourlyWage: 10320 })}
+                      onClick={() => {
+                        const wType = draft.wageType ?? 'hourly';
+                        const hrs = Math.max(draftHrs, 8);
+                        const minInput =
+                          wType === 'hourly' ? 10320
+                          : wType === 'daily' ? Math.round(10320 * hrs)
+                          : 2156880; // 10320 × 209
+                        const minHourly =
+                          wType === 'hourly' ? 10320
+                          : wType === 'daily' ? (draftHrs > 0 ? Math.round(minInput / draftHrs) : 10320)
+                          : 10320;
+                        setDraft({ ...draft, wageInput: minInput, hourlyWage: minHourly });
+                      }}
                       style={{ marginTop: '2px' }}
                     >
-                      {ui.minWage}
+                      {(draft.wageType ?? 'hourly') === 'hourly'
+                        ? ui.minWage
+                        : draft.wageType === 'daily'
+                        ? `≥ ${(10320 * Math.max(draftHrs, 8)).toLocaleString()}₩/일`
+                        : '≥ 2,156,880₩/월'}
                     </button>
+                    {draft.wageType === 'daily' && draftHrs > 0 && (
+                      <p style={{ fontSize: '11px', color: '#657080', marginTop: '5px', lineHeight: 1.4 }}>
+                        {lang === 'ko'
+                          ? `≈ ${(draft.hourlyWage).toLocaleString()}₩/h (${draftHrs.toFixed(1)}h 기준)`
+                          : `≈ ${(draft.hourlyWage).toLocaleString()}₩/h (ca ${draftHrs.toFixed(1)}h)`}
+                      </p>
+                    )}
+                    {draft.wageType === 'monthly' && (
+                      <p style={{ fontSize: '11px', color: '#22963f', marginTop: '5px', fontWeight: 600, lineHeight: 1.4 }}>
+                        {lang === 'ko'
+                          ? `✓ 209h 기준 (주휴수당 포함) ≈ ${(draft.hourlyWage).toLocaleString()}₩/h`
+                          : `✓ Đã gồm 주휴수당 (209h/tháng) ≈ ${(draft.hourlyWage).toLocaleString()}₩/h`}
+                      </p>
+                    )}
                   </label>
                   <label className="micro-field">
                     <span className="field-label">{ui.breakTime}</span>

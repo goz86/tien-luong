@@ -73,6 +73,8 @@ export type StoredState = {
   currencyMode?: CurrencyMode;
 };
 
+export type WageType = 'hourly' | 'daily' | 'monthly';
+
 export type ShiftDraft = {
   venue: string;
   date: string;
@@ -85,6 +87,10 @@ export type ShiftDraft = {
   nightShift?: boolean;
   taxDeduction?: boolean;
   holidayAllowance?: number;
+  /** UI-only: which wage format the user entered (converted to hourlyWage on save) */
+  wageType?: WageType;
+  /** UI-only: raw value the user typed (일급 or 월급 amount before conversion) */
+  wageInput?: number;
 };
 
 export type CalendarDisplay = 'duration' | 'range';
