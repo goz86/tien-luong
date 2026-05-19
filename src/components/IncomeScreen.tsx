@@ -1920,18 +1920,24 @@ export function IncomeScreen({
                       <div className="settings-dropdown" style={{ top: '100%', left: 0, right: 0, marginTop: '4px', zIndex: 10 }}>
                         {Object.entries(categoryMeta)
                           .filter(([, m]) => m.entryType === (expenseForm.type ?? 'chi'))
-                          .map(([value]) => (
-                          <button
-                            key={value}
-                            type="button"
-                            onClick={() => {
+                          .map(([value]) => {
+                            const doSelect = () => {
                               setExpenseForm({ ...expenseForm, category: value as Expense['category'] });
                               setActiveSelect(null);
-                            }}
-                          >
-                            {categoryLabels[value as Expense['category']]}
-                          </button>
-                        ))}
+                            };
+                            return (
+                              <button
+                                key={value}
+                                type="button"
+                                // onTouchEnd + preventDefault stops the ghost 'click' that mobile
+                                // browsers fire ~300ms later, which would re-open the dropdown
+                                onTouchEnd={(e) => { e.preventDefault(); doSelect(); }}
+                                onClick={doSelect}
+                              >
+                                {categoryLabels[value as Expense['category']]}
+                              </button>
+                            );
+                          })}
                       </div>
                     )}
                   </div>
