@@ -2693,7 +2693,8 @@ export function IncomeScreen({
                     employmentRate: defRates.employment,
                     ...calcIns(base, '4', defRates),
                     nonTaxable: 0,
-                    ...calcIncomeTax(base, 0, insForm.dependants ?? 1, defRates),
+                    dependants: 1,
+                    ...calcIncomeTax(base, 0, 1, defRates),
                     confirmed: false,
                     note: '',
                   });

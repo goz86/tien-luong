@@ -777,13 +777,33 @@ export default function AppLayout() {
                 initial={{ opacity: 0, y: 24, scale: 0.96 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 18, scale: 0.96 }}
-                transition={{ type: 'spring', damping: 24, stiffness: 260 }}
+                transition={{ type: 'spring', damping: 24, stiffness: 260, delay: 0.15 }}
               >
                 <div className="first-setup-orbit" aria-hidden="true" />
                 <div className="first-setup-head">
                   <span className="first-setup-kicker">{store.lang === 'ko' ? '처음 설정' : 'Chào mừng bạn đến với Duhoc Mate'}</span>
-                  <h2 id="first-setup-title">{store.lang === 'ko' ? '나만의 친구를 골라요' : 'Chọn người bạn đồng hành'}</h2>
-                  <p>{store.lang === 'ko' ? '캐릭터와 배경을 먼저 정해볼까요.' : 'Chọn linh vật và màu nền cho không gian của bạn.'}</p>
+                  <h2 id="first-setup-title">{store.lang === 'ko' ? '함께할 캐릭터를 골라요' : 'Chọn người bạn đồng hành'}</h2>
+                  <div className="first-setup-lang-container">
+                    <div className="first-setup-lang-label">
+                      <span>{store.lang === 'ko' ? '언어 선택' : 'Ngôn ngữ'}</span>
+                    </div>
+                    <div className="first-setup-lang-toggle">
+                      <button
+                        type="button"
+                        className={`first-setup-lang-btn ${store.lang === 'vi' ? 'active' : ''}`}
+                        onClick={() => store.setLang('vi')}
+                      >
+                        Tiếng Việt
+                      </button>
+                      <button
+                        type="button"
+                        className={`first-setup-lang-btn ${store.lang === 'ko' ? 'active' : ''}`}
+                        onClick={() => store.setLang('ko')}
+                      >
+                        한국어
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="first-setup-section">
@@ -802,7 +822,7 @@ export default function AppLayout() {
                           aria-pressed={active}
                         >
                           <span className="first-setup-companion-img">
-                            <img src={iconUrl(option.imgKey)} alt="" />
+                            <img src={iconUrl(option.imgKey)} alt="" decoding="async" loading="eager" />
                           </span>
                           <span>{store.lang === 'ko' ? option.label_ko : option.label_vi}</span>
                           {active ? <Check size={15} className="first-setup-check" /> : null}
