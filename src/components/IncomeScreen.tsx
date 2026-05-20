@@ -143,14 +143,19 @@ interface InsuranceRecord {
   longCareAmt: number;
   pensionAmt: number;      // 0 if '2'
   employmentAmt: number;   // 0 if '2'
+  // 소득세 / 지방소득세
+  nonTaxable: number;      // 비과세액(식대포함) in KRW — deducted before income-tax calc
+  incomeTaxAmt: number;    // 소득세 (근로소득세)
+  localTaxAmt: number;     // 지방소득세 (10% of 소득세, rounded to 10원)
   confirmed: boolean;
   note: string;
 }
 type InsFormField = 'workStartDate' | 'payDate';
 
 const INS_STORAGE_KEY = 'duhoc-mate-insurance';
-// Default 2025-2026 rates as %-values (employee share)
-const INS_RATES = { health: 3.545, longCare: 12.95, pension: 4.5, employment: 0.9 };
+// Default 2026 rates as %-values (employee share)
+// 국민연금 4.75%, 건강보험 3.595%, 장기요양 13.14%(of health), 고용보험 0.9%
+const INS_RATES = { health: 3.595, longCare: 13.14, pension: 4.75, employment: 0.9 };
 
 const INS_DEFAULT_RATES_KEY = 'duhoc-mate-ins-default-rates';
 type InsRates = typeof INS_RATES;
@@ -201,6 +206,79 @@ function calcIns(
   }
 }
 
+// ─── 소득세 간이세액표 근사 계산 (2026 기준) ─────────────────────────
+// 근로소득 간이세액표 공식으로 계산. 실제 세액표와 약간 차이가 있을 수 있으므로
+// 사용자가 직접 수정할 수 있도록 필드는 편집 가능합니다.
+function calcIncomeTax(
+  monthlySalary: number,
+  nonTaxable: number,
+  dependents: number = 1,
+  insRates?: { health?: number; longCare?: number; pension?: number; employment?: number },
+): { incomeTaxAmt: number; localTaxAmt: number } {
+  const taxableMonthly = Math.max(0, monthlySalary - nonTaxable);
+  if (taxableMonthly <= 0) return { incomeTaxAmt: 0, localTaxAmt: 0 };
+
+  const annualIncome = taxableMonthly * 12;
+
+  // 근로소득공제 (employment income deduction)
+  let empDeduction = 0;
+  if (annualIncome <= 5_000_000)       empDeduction = annualIncome * 0.70;
+  else if (annualIncome <= 15_000_000) empDeduction = 3_500_000 + (annualIncome - 5_000_000) * 0.40;
+  else if (annualIncome <= 45_000_000) empDeduction = 7_500_000 + (annualIncome - 15_000_000) * 0.15;
+  else if (annualIncome <= 100_000_000) empDeduction = 12_000_000 + (annualIncome - 45_000_000) * 0.05;
+  else empDeduction = 14_750_000;
+
+  const earnedIncome = annualIncome - empDeduction;
+
+  // 기본공제 (personal deduction: 본인 + 부양가족)
+  const basicDeduction = dependents * 1_500_000;
+
+  // 보험료공제 (estimated from rates)
+  const h  = insRates?.health      ?? INS_RATES.health;
+  const lc = insRates?.longCare    ?? INS_RATES.longCare;
+  const p  = insRates?.pension     ?? INS_RATES.pension;
+  const e  = insRates?.employment  ?? INS_RATES.employment;
+  const pensionAnnual     = taxableMonthly * (p  / 100) * 12;
+  const healthAnnual      = taxableMonthly * (h  / 100) * 12;
+  const longCareAnnual    = healthAnnual   * (lc / 100);
+  const employmentAnnual  = taxableMonthly * (e  / 100) * 12;
+  const insDeduction = pensionAnnual + healthAnnual + longCareAnnual + employmentAnnual;
+
+  const taxableBase = Math.max(0, earnedIncome - basicDeduction - insDeduction);
+
+  // 산출세액 — progressive tax rates (2026, 소득세법 제55조)
+  let annualTax = 0;
+  if (taxableBase <= 14_000_000)          annualTax = taxableBase * 0.06;
+  else if (taxableBase <= 50_000_000)     annualTax = 840_000   + (taxableBase - 14_000_000)  * 0.15;
+  else if (taxableBase <= 88_000_000)     annualTax = 6_240_000 + (taxableBase - 50_000_000)  * 0.24;
+  else if (taxableBase <= 150_000_000)    annualTax = 15_360_000 + (taxableBase - 88_000_000) * 0.35;
+  else if (taxableBase <= 300_000_000)    annualTax = 37_060_000 + (taxableBase - 150_000_000) * 0.38;
+  else if (taxableBase <= 500_000_000)    annualTax = 94_060_000 + (taxableBase - 300_000_000) * 0.40;
+  else if (taxableBase <= 1_000_000_000)  annualTax = 174_060_000 + (taxableBase - 500_000_000) * 0.42;
+  else                                    annualTax = 384_060_000 + (taxableBase - 1_000_000_000) * 0.45;
+
+  // 근로소득세액공제 (소득세법 제59조)
+  let taxCredit = annualTax <= 1_300_000
+    ? annualTax * 0.74
+    : 962_000 + (annualTax - 1_300_000) * 0.30;
+  // 한도 (총급여 기준)
+  let taxCreditCap: number;
+  if (annualIncome <= 33_000_000)       taxCreditCap = 740_000;
+  else if (annualIncome <= 70_000_000)  taxCreditCap = Math.max(660_000, 740_000 - (annualIncome - 33_000_000) * 0.008);
+  else                                  taxCreditCap = Math.max(500_000, 660_000 - (annualIncome - 70_000_000) * 0.5 / 1_000);
+  taxCredit = Math.min(taxCredit, taxCreditCap);
+
+  // 표준세액공제 130,000원
+  const netAnnualTax = Math.max(0, annualTax - taxCredit - 130_000);
+
+  // 월별 소득세 (10원 단위 절사)
+  const incomeTaxAmt = Math.floor(netAnnualTax / 12 / 10) * 10;
+  // 지방소득세 = 소득세 × 10%, 10원 단위 절사
+  const localTaxAmt = Math.floor(incomeTaxAmt * 0.10 / 10) * 10;
+
+  return { incomeTaxAmt, localTaxAmt };
+}
+
 function inferInsuranceTypeFromStartDate(
   workStartDate: string,
   currentType: InsuranceRecord['insuranceType'],
@@ -211,8 +289,8 @@ function inferInsuranceTypeFromStartDate(
   return startDay === 1 ? '4' : 'partial';
 }
 
-function insTotal(rec: Pick<InsuranceRecord, 'healthAmt' | 'longCareAmt' | 'pensionAmt' | 'employmentAmt'>) {
-  return rec.healthAmt + rec.longCareAmt + rec.pensionAmt + rec.employmentAmt;
+function insTotal(rec: Pick<InsuranceRecord, 'healthAmt' | 'longCareAmt' | 'pensionAmt' | 'employmentAmt' | 'incomeTaxAmt' | 'localTaxAmt'>) {
+  return rec.healthAmt + rec.longCareAmt + rec.pensionAmt + rec.employmentAmt + (rec.incomeTaxAmt ?? 0) + (rec.localTaxAmt ?? 0);
 }
 
 function loadInsRecords(): InsuranceRecord[] {
@@ -242,6 +320,9 @@ function insToRow(rec: InsuranceRecord, userId: string) {
     long_care_amt: rec.longCareAmt,
     pension_amt: rec.pensionAmt,
     employment_amt: rec.employmentAmt,
+    non_taxable: rec.nonTaxable ?? 0,
+    income_tax_amt: rec.incomeTaxAmt ?? 0,
+    local_tax_amt: rec.localTaxAmt ?? 0,
     confirmed: rec.confirmed,
     note: rec.note,
     updated_at: new Date().toISOString(),
@@ -264,6 +345,9 @@ function rowToIns(row: any): InsuranceRecord {
     longCareAmt: Number(row.long_care_amt) || 0,
     pensionAmt: Number(row.pension_amt) || 0,
     employmentAmt: Number(row.employment_amt) || 0,
+    nonTaxable: Number(row.non_taxable) || 0,
+    incomeTaxAmt: Number(row.income_tax_amt) || 0,
+    localTaxAmt: Number(row.local_tax_amt) || 0,
     confirmed: row.confirmed === true,
     note: row.note ?? '',
   };
@@ -333,6 +417,7 @@ function useInsuranceRecords() {
       pensionRate: rates.pension,
       employmentRate: rates.employment,
       healthAmt: 0, longCareAmt: 0, pensionAmt: 0, employmentAmt: 0,
+      nonTaxable: 0, incomeTaxAmt: 0, localTaxAmt: 0,
       confirmed: false,
       note: '__ins_defaults__',
     };
@@ -1025,6 +1110,9 @@ export function IncomeScreen({
     longCareAmt: 0,
     pensionAmt: 0,
     employmentAmt: 0,
+    nonTaxable: 0,
+    incomeTaxAmt: 0,
+    localTaxAmt: 0,
     confirmed: false,
     note: '',
   });
@@ -1122,8 +1210,14 @@ export function IncomeScreen({
       pension: merged.pensionRate,
       employment: merged.employmentRate,
     });
+    const taxCalc = calcIncomeTax(baseSalary, merged.nonTaxable ?? 0, 1, {
+      health: merged.healthRate,
+      longCare: merged.longCareRate,
+      pension: merged.pensionRate,
+      employment: merged.employmentRate,
+    });
 
-    return { ...merged, baseSalary, insuranceType, ...calc };
+    return { ...merged, baseSalary, insuranceType, ...calc, ...taxCalc };
   }
 
   useEffect(() => {
@@ -2227,6 +2321,47 @@ export function IncomeScreen({
                   />
                 </label>
 
+                {/* 비과세액 (식대포함) checkbox + input */}
+                <div className="income-ins-nontax-row">
+                  <label className="income-ins-nontax-checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={(insForm.nonTaxable ?? 0) > 0}
+                      onChange={e => {
+                        const nt = e.target.checked ? 200_000 : 0;
+                        setInsForm(f => {
+                          const taxCalc = calcIncomeTax(f.baseSalary, nt, 1, {
+                            health: f.healthRate, longCare: f.longCareRate,
+                            pension: f.pensionRate, employment: f.employmentRate,
+                          });
+                          return { ...f, nonTaxable: nt, ...taxCalc };
+                        });
+                      }}
+                    />
+                    <span>비과세액(식대포함)</span>
+                  </label>
+                  {(insForm.nonTaxable ?? 0) > 0 && (
+                    <input
+                      className="income-ins-nontax-input"
+                      type="number"
+                      inputMode="numeric"
+                      value={insForm.nonTaxable || ''}
+                      onChange={e => {
+                        const nt = Number(e.target.value) || 0;
+                        setInsForm(f => {
+                          const taxCalc = calcIncomeTax(f.baseSalary, nt, 1, {
+                            health: f.healthRate, longCare: f.longCareRate,
+                            pension: f.pensionRate, employment: f.employmentRate,
+                          });
+                          return { ...f, nonTaxable: nt, ...taxCalc };
+                        });
+                      }}
+                      placeholder="200000"
+                    />
+                  )}
+                  {(insForm.nonTaxable ?? 0) > 0 && <span className="income-ins-unit">₩</span>}
+                </div>
+
                 {/* Breakdown — rates + amounts all editable */}
                 <div className="income-ins-breakdown">
                   <div className="income-ins-breakdown-title">{isKo ? '보험료 내역 (% · 금액 모두 수정 가능)' : 'Chi tiết bảo hiểm (% và ₩ đều có thể sửa)'}</div>
@@ -2318,6 +2453,38 @@ export function IncomeScreen({
                     </div>
                   )}
 
+                  {/* 소득세 — 근로소득 간이세액표 근사 (편집 가능) */}
+                  <div className="income-ins-row">
+                    <span className="income-ins-name">소득세</span>
+                    <span className="income-ins-rate-label">≈</span>
+                    <input className="income-ins-amt" type="number" inputMode="numeric"
+                      value={insForm.incomeTaxAmt || ''}
+                      placeholder="0"
+                      onChange={e => {
+                        const incomeTaxAmt = Number(e.target.value) || 0;
+                        const localTaxAmt = Math.floor(incomeTaxAmt * 0.10 / 10) * 10;
+                        setInsForm(f => ({ ...f, incomeTaxAmt, localTaxAmt }));
+                      }}
+                    />
+                    <span className="income-ins-unit">₩</span>
+                  </div>
+                  {/* 지방소득세 = 소득세 × 10% */}
+                  <div className="income-ins-row">
+                    <span className="income-ins-name">지방소득세</span>
+                    <span className="income-ins-rate-label">10%</span>
+                    <input className="income-ins-amt" type="number" inputMode="numeric"
+                      value={insForm.localTaxAmt || ''}
+                      placeholder="0"
+                      onChange={e => setInsForm(f => ({ ...f, localTaxAmt: Number(e.target.value) || 0 }))}
+                    />
+                    <span className="income-ins-unit">₩</span>
+                  </div>
+                  <p className="income-ins-tax-note">
+                    {isKo
+                      ? '소득세는 간이세액표 근사값입니다. 실제 급여명세서와 다를 수 있으니 직접 수정하세요.'
+                      : 'Thuế thu nhập (소득세) là giá trị ước tính. Hãy sửa lại nếu khác với phiếu lương thực tế.'}
+                  </p>
+
                   <div className="income-ins-row income-ins-total-row">
                     <span>{ui.insTotal}</span>
                     <strong>{insTotal(insForm).toLocaleString()} ₩</strong>
@@ -2383,6 +2550,7 @@ export function IncomeScreen({
                 className="income-ins-add-btn"
                 onClick={() => {
                   const base = monthlyTotal;
+                  const defRates = loadSavedDefaultRates();
                   setInsForm({
                     month: selectedMonthKey,
                     workplaceLabel: workplaces[0]?.label ?? '',
@@ -2390,11 +2558,13 @@ export function IncomeScreen({
                     payDate: todayStr,
                     baseSalary: base,
                     insuranceType: '4',
-                    healthRate: loadSavedDefaultRates().health,
-                    longCareRate: loadSavedDefaultRates().longCare,
-                    pensionRate: loadSavedDefaultRates().pension,
-                    employmentRate: loadSavedDefaultRates().employment,
-                    ...calcIns(base, '4', loadSavedDefaultRates()),
+                    healthRate: defRates.health,
+                    longCareRate: defRates.longCare,
+                    pensionRate: defRates.pension,
+                    employmentRate: defRates.employment,
+                    ...calcIns(base, '4', defRates),
+                    nonTaxable: 0,
+                    ...calcIncomeTax(base, 0, 1, defRates),
                     confirmed: false,
                     note: '',
                   });
@@ -2488,7 +2658,27 @@ export function IncomeScreen({
                                 <span className="ins-brow-amt">{rec.employmentAmt.toLocaleString()} ₩</span>
                               </div>
                             )}
+                            {/* 소득세 / 지방소득세 */}
+                            {(rec.incomeTaxAmt ?? 0) > 0 && (
+                              <div className="income-ins-card-brow">
+                                <span className="ins-brow-name">소득세</span>
+                                <span className="ins-brow-rate">≈</span>
+                                <span className="ins-brow-amt">{(rec.incomeTaxAmt ?? 0).toLocaleString()} ₩</span>
+                              </div>
+                            )}
+                            {(rec.localTaxAmt ?? 0) > 0 && (
+                              <div className="income-ins-card-brow">
+                                <span className="ins-brow-name">지방소득세</span>
+                                <span className="ins-brow-rate">10%</span>
+                                <span className="ins-brow-amt">{(rec.localTaxAmt ?? 0).toLocaleString()} ₩</span>
+                              </div>
+                            )}
                           </div>
+                          {(rec.nonTaxable ?? 0) > 0 && (
+                            <p className="income-ins-nontax-note">
+                              비과세액(식대) {(rec.nonTaxable ?? 0).toLocaleString()} ₩ 제외 기준
+                            </p>
+                          )}
 
                           {rec.note ? <p className="income-ins-card-note">{rec.note}</p> : null}
 
@@ -2501,7 +2691,7 @@ export function IncomeScreen({
                               <div style={{ display: 'flex', gap: '6px' }}>
                                 {!rec.confirmed && (
                                   <button type="button" className="income-ins-edit-btn"
-                                    onClick={() => { setInsForm({ ...rec }); setEditingInsId(rec.id); setIsAddingIns(false); setExpandedInsId(null); }}
+                                    onClick={() => { setInsForm({ ...rec, nonTaxable: rec.nonTaxable ?? 0, incomeTaxAmt: rec.incomeTaxAmt ?? 0, localTaxAmt: rec.localTaxAmt ?? 0 }); setEditingInsId(rec.id); setIsAddingIns(false); setExpandedInsId(null); }}
                                   >{ui.insEdit}</button>
                                 )}
                                 <button type="button" className="income-ins-del-btn" onClick={() => removeInsRecord(rec.id)}>
