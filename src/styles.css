@@ -18323,6 +18323,65 @@ button.admin-stat-card {
   line-height: 1.5;
   margin-top: 2px;
 }
+/* 비과세액 row */
+.income-ins-nontax-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+.income-ins-nontax-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-soft);
+  cursor: pointer;
+}
+.income-ins-nontax-checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #2752ff;
+  cursor: pointer;
+}
+.income-ins-nontax-input {
+  width: 90px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 5px 7px;
+  font-size: 13px;
+  text-align: right;
+  outline: none;
+  background: var(--card);
+  color: var(--text);
+}
+.income-ins-nontax-input:focus { border-color: #2752ff; }
+/* 소득세 approximate label */
+.income-ins-rate-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-faint);
+  white-space: nowrap;
+  min-width: 28px;
+  text-align: center;
+}
+/* 소득세 note */
+.income-ins-tax-note {
+  font-size: 11px;
+  color: var(--text-faint);
+  line-height: 1.5;
+  margin-top: 2px;
+  font-style: italic;
+}
+/* 비과세액 note in card */
+.income-ins-nontax-note {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin: 4px 0 0 0;
+  padding: 0;
+}
 
 /* ── Form actions ── */
 .income-ins-form-actions {
