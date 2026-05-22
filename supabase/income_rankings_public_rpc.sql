@@ -27,7 +27,9 @@ RETURNS TABLE (
   total_income NUMERIC,
   rank INTEGER,
   display_name TEXT,
-  is_anonymous_rank BOOLEAN
+  is_anonymous_rank BOOLEAN,
+  total_shifts INTEGER,
+  total_hours NUMERIC
 )
 LANGUAGE sql
 STABLE
@@ -85,6 +87,8 @@ AS $$
   totals AS (
     SELECT
       priced.user_id,
+      COUNT(1)::INTEGER AS total_shifts,
+      ROUND(SUM(priced.hours), 2)::NUMERIC AS total_hours,
       SUM(
         GREATEST(
           (
@@ -103,7 +107,9 @@ AS $$
       totals.user_id,
       left(p_start_date, 7) AS month_key,
       ROUND(totals.total_income) AS total_income,
-      RANK() OVER (ORDER BY totals.total_income DESC)::INTEGER AS rank
+      RANK() OVER (ORDER BY totals.total_income DESC)::INTEGER AS rank,
+      totals.total_shifts,
+      totals.total_hours
     FROM totals
     WHERE totals.total_income > 0
   )
@@ -113,7 +119,9 @@ AS $$
     ranked.total_income,
     ranked.rank,
     COALESCE(NULLIF(profiles.display_name, ''), 'Ẩn danh') AS display_name,
-    COALESCE(profiles.is_anonymous_rank, false) AS is_anonymous_rank
+    COALESCE(profiles.is_anonymous_rank, false) AS is_anonymous_rank,
+    ranked.total_shifts,
+    ranked.total_hours
   FROM ranked
   LEFT JOIN public.profiles profiles ON profiles.id = ranked.user_id
   WHERE ranked.rank <= 3

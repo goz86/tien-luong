@@ -148,3 +148,25 @@ export function isKoreanHoliday(dateIso: string): boolean {
 
   return false;
 }
+
+export function formatRankHours(hours: number, lang: 'vi' | 'ko') {
+  const h = Math.floor(hours);
+  let m = Math.round((hours - h) * 60);
+  let finalH = h;
+  if (m === 60) {
+    finalH += 1;
+    m = 0;
+  }
+  
+  if (lang === 'ko') {
+    if (m === 0) {
+      return `${finalH}시간`;
+    }
+    return `${finalH}시간 ${m}분`;
+  } else {
+    if (m === 0) {
+      return `${finalH} giờ`;
+    }
+    return `${finalH} giờ ${m} phút`;
+  }
+}

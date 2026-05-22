@@ -5,7 +5,7 @@ import type { Shift, Expense, CompanionProfile } from '../lib/types';
 import { useEffect, useRef, useState } from 'react';
 import type { CommunityNotification } from '../data/communityData';
 import { BADGES } from '../data/badgeData';
-import { calculateShiftPay } from '../lib/salary';
+import { calculateShiftPay, shiftHours } from '../lib/salary';
 import { getSyncQueue, removeSyncQueueItem } from '../lib/offlineSyncQueue';
 
 /* ── query key factories ── */
@@ -317,6 +317,8 @@ export function useRankingsQuery(userId: string | undefined) {
             total_income: Math.max(0, Number(r.total_income) || 0),
             rank: Number(r.rank) || 0,
             is_anonymous_rank: r.is_anonymous_rank === true,
+            total_shifts: Number(r.total_shifts) || 0,
+            total_hours: Number(r.total_hours) || 0,
           }))
           .filter((r: any) => r.total_income > 0)
           .sort((a: any, b: any) => a.rank - b.rank);
@@ -330,17 +332,28 @@ export function useRankingsQuery(userId: string | undefined) {
         .lte('work_date', todayDate);
 
       if (!shiftError && shiftRows) {
-        const totals = new Map<string, number>();
+        const totals = new Map<string, { total_income: number; total_shifts: number; total_hours: number }>();
 
         shiftRows.forEach((row: any) => {
           if (!row.user_id) return;
           const shift = rowToShift(row);
           const income = Math.max(0, Number(calculateShiftPay(shift).total) || 0);
-          totals.set(row.user_id, (totals.get(row.user_id) || 0) + income);
+          const hours = Math.max(0, shiftHours(shift));
+          const current = totals.get(row.user_id) || { total_income: 0, total_shifts: 0, total_hours: 0 };
+          totals.set(row.user_id, {
+            total_income: current.total_income + income,
+            total_shifts: current.total_shifts + 1,
+            total_hours: current.total_hours + hours
+          });
         });
 
         const sorted = [...totals.entries()]
-          .map(([rowUserId, totalIncome]) => ({ user_id: rowUserId, total_income: Math.max(0, Math.round(totalIncome)) }))
+          .map(([rowUserId, val]) => ({
+            user_id: rowUserId,
+            total_income: Math.max(0, Math.round(val.total_income)),
+            total_shifts: val.total_shifts,
+            total_hours: Math.round(val.total_hours * 100) / 100
+          }))
           .filter((item) => item.total_income > 0)
           .sort((a, b) => b.total_income - a.total_income);
 
@@ -385,7 +398,13 @@ export function useRankingsQuery(userId: string | undefined) {
 
       let final: any[] = (topRows || [])
         .filter((r: any) => Number(r.total_income) > 0)
-        .map((r: any, i: number) => ({ ...r, total_income: Math.max(0, Number(r.total_income) || 0), rank: i + 1 }));
+        .map((r: any, i: number) => ({
+          ...r,
+          total_income: Math.max(0, Number(r.total_income) || 0),
+          rank: i + 1,
+          total_shifts: Number(r.total_shifts) || 0,
+          total_hours: Number(r.total_hours) || 0
+        }));
 
       if (userId) {
         const inTop3 = final.some((r: any) => r.user_id === userId);
@@ -404,7 +423,13 @@ export function useRankingsQuery(userId: string | undefined) {
               .eq('month_key', monthKey)
               .gte('total_income', 0)
               .gt('total_income', me.total_income);
-            final = [...final, { ...me, total_income: Math.max(0, Number(me.total_income) || 0), rank: (count || 0) + 1 }];
+            final = [...final, {
+              ...me,
+              total_income: Math.max(0, Number(me.total_income) || 0),
+              rank: (count || 0) + 1,
+              total_shifts: Number(me.total_shifts) || 0,
+              total_hours: Number(me.total_hours) || 0
+            }];
           }
         }
       }
@@ -421,7 +446,7 @@ export function useRankingsQuery(userId: string | undefined) {
         }, {});
         final = final.map((item: any) => ({
           ...item,
-          display_name: item.display_name || pmap[item.user_id]?.display_name || '梳쮖 danh',
+          display_name: item.display_name || pmap[item.user_id]?.display_name || 'Ẩn danh',
           is_anonymous_rank: pmap[item.user_id]?.is_anonymous_rank ?? item.is_anonymous_rank,
         }));
       }

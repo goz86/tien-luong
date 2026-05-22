@@ -3,7 +3,7 @@ import { Plus, ChevronLeft, ChevronRight, X, Edit3, Trash2, Bell, TrendingUp, Sh
 import { formatKrw, calculateShiftPay, shiftHours } from '../lib/salary';
 import { CurrencyMode, Expense, RateState, Shift, VenueColors } from '../lib/types';
 import { formatCurrencyFlowAmount } from '../lib/currency';
-import { formatDateChip, getVenueColor, formatHoursCompact } from '../utils/helpers';
+import { formatDateChip, getVenueColor, formatHoursCompact, formatRankHours } from '../utils/helpers';
 import { FinanceMetric } from './shared/ui';
 import { ActivityTicker } from './shared/ActivityTicker';
 import { AchievementBanner, AchievementCompanionNudge } from './AchievementWidgets';
@@ -78,7 +78,7 @@ export function HomeScreen({
     noWorkData: '근무 데이터가 없습니다',
     shiftHistory: '근무 내역',
     community: 'Duhoc Mate 커뮤니티',
-    incomeRanking: '수입 랭킹',
+    incomeRanking: '랭킹',
     noRanking: '이번 달 랭킹 데이터가 없습니다',
     deleteConfirm: '이 근무 기록을 삭제할까요? 삭제한 데이터는 복구할 수 없습니다.',
     cancel: '취소',
@@ -98,7 +98,7 @@ export function HomeScreen({
     noWorkData: 'Chưa có dữ liệu làm việc',
     shiftHistory: 'Lịch sử ca làm',
     community: 'Cộng đồng Duhoc Mate',
-    incomeRanking: 'Bảng xếp hạng thu nhập',
+    incomeRanking: 'Bảng xếp hạng',
     noRanking: `Chưa có dữ liệu xếp hạng tháng`,
     deleteConfirm: 'Bạn có chắc chắn muốn xoá ca làm việc này không? Dữ liệu đã xoá sẽ không thể khôi phục.',
     cancel: 'Hủy bỏ',
@@ -612,8 +612,13 @@ export function HomeScreen({
                     </div>
                   </div>
 
-                  <div className="rank-value">
-                    <span className="rank-amount">{formatKrw(item.total_income)}</span>
+                  <div className="rank-value" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+                    <span className="rank-amount" style={{ fontSize: '13.5px', color: '#2752ff', fontWeight: '800' }}>
+                      {item.total_shifts || 0} {lang === 'ko' ? '교대' : 'ca làm'}
+                    </span>
+                    <span className="rank-hours" style={{ fontSize: '11px', color: '#64748b', fontWeight: '700' }}>
+                      {formatRankHours(item.total_hours || 0, lang)}
+                    </span>
                   </div>
                 </div>
               );
