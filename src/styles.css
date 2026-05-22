@@ -1261,6 +1261,9 @@ select {
   position: relative;
   padding-bottom: 7px;
 }
+.dark .home-wordmark {
+  color: #ffffff !important;
+}
 
 .home-wordmark::after {
   content: "";
@@ -6431,6 +6434,9 @@ button.ticker-inner {
   color: #08162b !important;
   position: relative;
   padding-bottom: 7px;
+}
+.dark .cm-wordmark {
+  color: #ffffff !important;
 }
 .cm-wordmark::after {
   content: "";
