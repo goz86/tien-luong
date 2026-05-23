@@ -146,10 +146,11 @@ const COMPANION_MOTIVATIONS = [
 ];
 
 const GOAL_PRESETS = [
-  { icon: '✈️', title_vi: 'Vé máy bay về nhà', title_ko: '귀국 항공권', amount: 8_000_000, currency: 'VND' as const },
-  { icon: '📱', title_vi: 'iPhone mới', title_ko: '새 아이폰', amount: 1_500_000, currency: 'KRW' as const },
-  { icon: '🏠', title_vi: 'Tiền nhà 1 tháng', title_ko: '한 달 월세', amount: 500_000, currency: 'KRW' as const },
+  { icon: '✈️', title_vi: 'Vé máy bay', title_ko: '귀국 항공권', amount: 8_000_000, currency: 'VND' as const },
   { icon: '💌', title_vi: 'Gửi về gia đình', title_ko: '가족에게 송금', amount: 10_000_000, currency: 'VND' as const },
+  { icon: '', title_vi: 'iPhone mới', title_ko: '새 아이폰', amount: 1_500_000, currency: 'KRW' as const },
+  { icon: '', title_vi: 'Tiền nhà 1 tháng', title_ko: '한 달 월세', amount: 500_000, currency: 'KRW' as const },
+  
 ];
 
 const MOTIVATION_POOL = {

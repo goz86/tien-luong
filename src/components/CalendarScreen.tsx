@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useMemo } from 'react';
 import { toPng } from 'html-to-image';
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Download, Settings2, Plus, Clock } from 'lucide-react';
+import { useAppStore } from '../store/appStore';
 import { calculateShiftPay, shiftHours, formatKrw, MINIMUM_WAGE_2026 } from '../lib/salary';
 import { Shift, ShiftDraft, VenueColors } from '../lib/types';
 import {
@@ -64,6 +65,7 @@ export function CalendarScreen({
   onSetVenueColor: (venue: string, color: string) => void;
   lang?: AppLang;
 }) {
+  const isDarkMode = useAppStore((state) => state.isDarkMode);
   const isKo = lang === 'ko';
   const locale = isKo ? 'ko-KR' : 'vi-VN';
   const ui = isKo ? {
@@ -794,13 +796,13 @@ export function CalendarScreen({
                       textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px'
                     }}
                   >
-                    <h3 style={{ fontSize: 'clamp(17px, 5.5vw, 24px)', fontWeight: 900, color: '#08162b', margin: 0, whiteSpace: 'nowrap' }}>
+                    <h3 style={{ fontSize: 'clamp(17px, 5.5vw, 24px)', fontWeight: 900, color: isDarkMode ? '#e2e8f0' : '#08162b', margin: 0, whiteSpace: 'nowrap' }}>
                       {isKo ? new Intl.DateTimeFormat(locale, { weekday: 'long', month: '2-digit', day: '2-digit' }).format(new Date(`${draft.date}T00:00:00`)) : formatSelectedDate(draft.date)}
                     </h3>
                     <ChevronDown size={20} color="#64748b" />
                   </button>
                 ) : (
-                  <h3 style={{ fontSize: 'clamp(17px, 5.5vw, 24px)', fontWeight: 900, color: '#08162b', margin: 0, whiteSpace: 'nowrap' }}>
+                  <h3 style={{ fontSize: 'clamp(17px, 5.5vw, 24px)', fontWeight: 900, color: isDarkMode ? '#e2e8f0' : '#08162b', margin: 0, whiteSpace: 'nowrap' }}>
                     {isKo ? new Intl.DateTimeFormat(locale, { weekday: 'long', month: '2-digit', day: '2-digit' }).format(new Date(`${selectedDate}T00:00:00`)) : formatSelectedDate(selectedDate)}
                   </h3>
                 )}
@@ -903,7 +905,7 @@ export function CalendarScreen({
                       style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 12px' }}
                       onClick={() => setIsStartTimeOpen(true)}
                     >
-                      <span style={{ fontSize: '15px', fontWeight: 700, color: '#08162b' }}>{draft.startTime}</span>
+                      <span style={{ fontSize: '15px', fontWeight: 700, color: isDarkMode ? '#e2e8f0' : '#08162b' }}>{draft.startTime}</span>
                       <Clock size={16} color="#657080" />
                     </button>
                   </label>
@@ -915,7 +917,7 @@ export function CalendarScreen({
                       style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 12px' }}
                       onClick={() => setIsEndTimeOpen(true)}
                     >
-                      <span style={{ fontSize: '15px', fontWeight: 700, color: '#08162b' }}>{draft.endTime}</span>
+                      <span style={{ fontSize: '15px', fontWeight: 700, color: isDarkMode ? '#e2e8f0' : '#08162b' }}>{draft.endTime}</span>
                       <Clock size={16} color="#657080" />
                     </button>
                   </label>
@@ -948,8 +950,8 @@ export function CalendarScreen({
                           border: 'none',
                           fontWeight: 700,
                           fontSize: '12px',
-                          background: selected ? '#08162b' : '#eef0f4',
-                          color: selected ? '#fff' : '#657080',
+                          background: selected ? (isDarkMode ? '#818cf8' : '#08162b') : (isDarkMode ? '#1e293b' : '#eef0f4'),
+                          color: selected ? '#fff' : (isDarkMode ? '#cbd5e1' : '#657080'),
                           cursor: 'pointer',
                           transition: 'background 0.15s, color 0.15s',
                         }}
@@ -1057,19 +1059,19 @@ export function CalendarScreen({
                         style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 12px' }}
                         onClick={() => setIsBreakTimeOpen(true)}
                       >
-                        <span style={{ fontSize: '15px', fontWeight: 700, color: '#08162b' }}>{draft.breakMinutes}</span>
+                        <span style={{ fontSize: '15px', fontWeight: 700, color: isDarkMode ? '#e2e8f0' : '#08162b' }}>{draft.breakMinutes}</span>
                         <span className="input-unit" style={{ position: 'static', transform: 'none' }}>{ui.minutes}</span>
                       </button>
                     </div>
                   </label>
                 </div>
 
-                <div className="korean-law-fields" style={{ marginTop: '16px', background: '#f5f7fa', padding: '16px', borderRadius: '16px' }}>
-                  <p style={{ fontSize: '13px', fontWeight: 800, color: '#08162b', marginBottom: '12px' }}>{ui.paySettings}</p>
+                <div className="korean-law-fields" style={{ marginTop: '16px', background: isDarkMode ? '#1e293b' : '#f5f7fa', padding: '16px', borderRadius: '16px' }}>
+                  <p style={{ fontSize: '13px', fontWeight: 800, color: isDarkMode ? '#e2e8f0' : '#08162b', marginBottom: '12px' }}>{ui.paySettings}</p>
 
                   <label className="korean-law-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <strong style={{ fontSize: '14px', color: '#08162b' }}>{ui.tax}</strong>
+                      <strong style={{ fontSize: '14px', color: isDarkMode ? '#e2e8f0' : '#08162b' }}>{ui.tax}</strong>
                       <span style={{ fontSize: '12px', color: '#657080' }}>{ui.taxHint}</span>
                     </div>
                     <input
@@ -1082,7 +1084,7 @@ export function CalendarScreen({
 
                   <label className="korean-law-row" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
-                      <strong style={{ fontSize: '14px', color: '#08162b' }}>{ui.holiday}</strong>
+                      <strong style={{ fontSize: '14px', color: isDarkMode ? '#e2e8f0' : '#08162b' }}>{ui.holiday}</strong>
                       {weekJuhyuSuggestion && (
                         <button
                           type="button"

@@ -16,6 +16,13 @@
     <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <title>Duhoc Mate – Tính lương & kết nối du học sinh Việt tại Hàn</title>
+    <script>
+      (function() {
+        if (localStorage.getItem('duhoc-mate-dark') === 'true') {
+          document.documentElement.classList.add('dark');
+        }
+      })();
+    </script>
 
     <!-- Open Graph / Facebook / Zalo / KakaoTalk link preview -->
     <meta property="og:type"        content="website" />

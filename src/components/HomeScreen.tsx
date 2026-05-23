@@ -152,7 +152,9 @@ export function HomeScreen({
   return (
     <>
       <header className="appbar">
-        <h1 className="appbar-title home-wordmark">Duhoc Mate</h1>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', flex: '1 1 auto', minWidth: 0 }}>
+          <h1 className="appbar-title home-wordmark" style={{ paddingBottom: '4px' }}>Duhoc Mate</h1>
+        </div>
         <AchievementCompanionNudge
           allShifts={allShifts}
           expenses={expenses}

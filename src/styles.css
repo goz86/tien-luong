@@ -1573,6 +1573,7 @@ select {
   font-size: 15px;
   line-height: 1.2;
   font-weight: 800;
+  white-space: nowrap;
 }
 
 .primary-cta,
@@ -17705,6 +17706,14 @@ button.admin-stat-card {
 }
 
 .dark .ach-char-total-value { color: #818cf8; }
+.dark .ach-char-total {
+  background: rgba(15, 23, 42, 0.45);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.dark .ach-char-total--toggle:hover {
+  background: rgba(15, 23, 42, 0.65);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
 
 .dark .ach-progress-card {
   background: #111a2d;
@@ -17738,9 +17747,11 @@ button.admin-stat-card {
   background: rgba(148, 163, 184, 0.2);
 }
 
-.dark .ach-ms-label   { color: #475569; }
-.dark .ach-ms-amount  { color: #475569; }
+.dark .ach-ms-label   { color: #cbd5e1; }
+.dark .ach-ms-amount  { color: #94a3b8; }
 .dark .ach-ms-desc    { color: #94a3b8; }
+.dark .ach-ms--reached .ach-ms-label { color: #f8fafc; }
+.dark .ach-ms--current .ach-ms-label { color: #818cf8; }
 .dark .ach-char-name  { color: #f1f5f9; }
 .dark .ach-char-desc  { color: #94a3b8; }
 .dark .ach-companion-option {
@@ -19059,3 +19070,111 @@ button.admin-stat-card {
   background: #d97706 !important;
 }
 .income-ot-confirm-btn:active { opacity: .75; }
+
+/* Additional dark mode fixes */
+.dark .income-flow-line-chart {
+  background: rgba(30, 41, 59, 0.4);
+  border-color: rgba(255, 255, 255, 0.06);
+  box-shadow: none;
+}
+.dark .income-flow-legend span {
+  color: #94a3b8;
+}
+.dark .income-share-report {
+  background: rgba(30, 41, 59, 0.92);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+.dark .ach-map-wrap {
+  background:
+    radial-gradient(circle at 14% 8%, rgba(45, 212, 191, 0.08), transparent 30%),
+    radial-gradient(circle at 84% 18%, rgba(99, 102, 241, 0.08), transparent 28%),
+    linear-gradient(180deg, #111a2d 0%, #0c1424 100%);
+  border-color: rgba(255, 255, 255, 0.05);
+  box-shadow: none;
+}
+
+.dark .ach-goal-panel {
+  background: rgba(15, 23, 42, 0.48);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+.dark .ach-goal-preset {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: #cbd5e1;
+}
+.dark .ach-goal-icon-btn,
+.dark .ach-goal-add-btn {
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  color: #cbd5e1;
+}
+.dark .ach-goal-input,
+.dark .ach-goal-amount-input {
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
+}
+.dark .ach-goal-currency button {
+  background: rgba(255, 255, 255, 0.08);
+  color: #94a3b8;
+}
+.dark .ach-goal-item {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+.dark .ach-goal-item--done {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.25);
+}
+
+/* Additional dark mode fixes for inputs and labels */
+.dark .premium-input,
+.dark .micro-field input {
+  background: #0f172a !important;
+  color: #f1f5f9 !important;
+  border-color: #334155 !important;
+}
+.dark .premium-input:focus,
+.dark .micro-field input:focus {
+  background: #1e293b !important;
+  border-color: #4f46e5 !important;
+  box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.25) !important;
+}
+.dark .premium-input::placeholder,
+.dark .micro-field input::placeholder {
+  color: #64748b !important;
+}
+.dark .field-label,
+.dark .micro-field span {
+  color: #94a3b8 !important;
+}
+.dark .min-wage-badge-v2 {
+  background: rgba(39, 82, 255, 0.15) !important;
+  color: #818cf8 !important;
+  border-color: rgba(39, 82, 255, 0.25) !important;
+}
+
+/* Fix active button and chip text color in dark mode */
+.dark .income-ins-type-btn.active {
+  background: #ffffff !important;
+  color: #0f172a !important;
+}
+.dark .income-ins-type-btn.active .income-ins-type-sub {
+  color: #4b5563 !important;
+}
+.dark .income-ins-wp-chip.active {
+  background: #ffffff !important;
+}
+.dark .income-ins-wp-chip.active > span {
+  color: #0f172a !important;
+}
+.dark .income-ins-wp-chip.active > small {
+  color: #4b5563 !important;
+}
+
+/* Fix policy, terms, and support sheet overlay in dark mode */
+.dark .pf-policy-sheet {
+  background: var(--surface) !important;
+  border: 1.5px solid var(--line) !important;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4) !important;
+}
