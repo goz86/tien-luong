@@ -633,10 +633,10 @@ export function useSyncQueriesToStore() {
   // Exchange rate
   useEffect(() => {
     let cancelled = false;
-    fetch('https://open.er-api.com/v6/latest/KRW')
+    fetch('https://api.coinbase.com/v2/exchange-rates?currency=KRW')
       .then((r) => r.json())
       .then((p: any) => {
-        const v = Number(p.rates?.VND);
+        const v = Number(p.data?.rates?.VND);
         if (Number.isFinite(v) && !cancelled) {
           setRate({ value: v, source: 'live', updatedAt: new Date().toISOString() });
         }

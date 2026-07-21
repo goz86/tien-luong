@@ -119,7 +119,7 @@ const WALLPAPER_THEME_VARS: Record<string, CSSProperties> = {
   } as CSSProperties,
 };
 
-const REFRESH_RATE_URL = 'https://open.er-api.com/v6/latest/KRW';
+const REFRESH_RATE_URL = 'https://api.coinbase.com/v2/exchange-rates?currency=KRW';
 
 const ANNOUNCEMENT_PERM_HIDE_KEY = 'duhocmate-announcement-perm-hide'; // user bấm "không hiển thị lại"
 const ANNOUNCEMENT_SESSION_DISMISS_KEY = 'duhocmate-announcement-session-dismissed';
@@ -152,7 +152,7 @@ function getStoredCompanionKey() {
 
 export default function AppLayout() {
   const store = useAppStore();
-  const suppressPopstate = useRef(false);
+  const wasDaySheetOpenRef = useRef(false);
   const [activeBanner, setActiveBanner] = useState<{ id: string; title: string; body: string; severity: string; created_at: string } | null>(null);
   const [communityTargetPostId, setCommunityTargetPostId] = useState<string | null>(null);
   const [showFirstSetup, setShowFirstSetup] = useState(() => (
@@ -263,12 +263,10 @@ export default function AppLayout() {
     if (nextTab !== 'calendar') s.setIsDaySheetOpen(false);
     s.setTab(nextTab);
     window.location.hash = nextTab === 'home' ? '' : nextTab;
-    suppressPopstate.current = true;
     history.pushState({ tab: nextTab }, '');
   }, []);
 
   const navigateToDate = useCallback((date: string, venue?: string) => {
-    suppressPopstate.current = true;
     useAppStore.getState().navigateToDate(date, venue);
     history.pushState({ modal: 'daysheet' }, '');
   }, []);
@@ -313,12 +311,23 @@ export default function AppLayout() {
     localStorage.setItem('duhoc-mate-demo-mode', 'true');
   }, [store]);
 
+  // Synchronize programmatical daysheet closing with browser history
+  useEffect(() => {
+    const isOpen = store.isDaySheetOpen;
+    if (isOpen && !wasDaySheetOpenRef.current) {
+      if (history.state?.modal !== 'daysheet') {
+        history.pushState({ modal: 'daysheet' }, '');
+      }
+    } else if (!isOpen && wasDaySheetOpenRef.current) {
+      if (history.state?.modal === 'daysheet') {
+        history.back();
+      }
+    }
+    wasDaySheetOpenRef.current = isOpen;
+  }, [store.isDaySheetOpen]);
+
   useEffect(() => {
     function handlePopstate(e: PopStateEvent) {
-      if (suppressPopstate.current) {
-        suppressPopstate.current = false;
-        return;
-      }
       const s = useAppStore.getState();
       if (s.isDaySheetOpen) {
         s.setIsDaySheetOpen(false);
@@ -367,7 +376,7 @@ export default function AppLayout() {
     fetch(REFRESH_RATE_URL)
       .then((r) => r.json())
       .then((p: any) => {
-        const v = Number(p.rates?.VND);
+        const v = Number(p.data?.rates?.VND);
         if (Number.isFinite(v)) useAppStore.getState().setRate({ value: v, source: 'live', updatedAt: new Date().toISOString() });
       })
       .catch(() => useAppStore.getState().setRate((prev) => ({ ...prev, source: 'cached' })));
