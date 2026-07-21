@@ -756,7 +756,7 @@ const NaverReviewMap = forwardRef<ReviewMapHandle, {
         window.setTimeout(() => {
           const mapText = containerRef.current?.innerText || '';
           if (!disposed && mapText.includes('인증')) {
-            setLoadError('Naver Map chưa được cấp quyền cho URL này. Hãy thêm http://127.0.0.1:4173 và http://127.0.0.1:5173 vào Web service URL.');
+            setLoadError('Naver Map chưa được cấp quyền cho URL này. Hãy thêm http://localhost và capacitor://localhost vào Web service URL trong Naver Console.');
           }
         }, 1800);
       })
@@ -4482,6 +4482,8 @@ function ReviewBoard({
     const content = sheetContentRef.current;
     if (!content) return;
 
+    const header = sheetRef.current?.querySelector('.rv-sheet-header') as HTMLElement | null;
+
     let touchStartY = 0;
     let touchStartScrollTop = 0;
     let touchOriginY = 0;
@@ -4793,12 +4795,10 @@ function ReviewBoard({
           className={`rv-bottom-sheet ${sheetExpanded ? 'is-expanded' : 'is-collapsed'}`}
           style={{ y: sheetY }}
           drag="y"
-          dragControls={dragControls}
-          dragListener={false}
+          dragListener={true}
           dragConstraints={{ top: sheetBounds.expanded, bottom: sheetBounds.collapsed }}
           dragElastic={0}
           dragMomentum={false}
-          onPointerDownCapture={startSheetDrag}
           onDragEnd={(_, info) => {
             const currentY = sheetY.get();
             const midpoint = sheetBounds.expanded + ((sheetBounds.collapsed - sheetBounds.expanded) * 0.52);
@@ -4887,6 +4887,7 @@ function ReviewBoard({
           <div
             className="rv-sheet-content"
             ref={sheetContentRef}
+            onPointerDownCapture={(e) => e.stopPropagation()}
             onPointerDown={handleSheetContentPointerDown}
             onPointerMove={handleSheetContentPointerMove}
             onPointerUp={finishSheetContentDrag}
@@ -4919,6 +4920,9 @@ function ReviewBoard({
                     onClick={() => {
                       setActiveSafetyReviewId(null);
                       setSelectedReviewId(review.id);
+                      if (review.place_lat != null && review.place_lng != null) {
+                        mapRef.current?.setView([review.place_lat, review.place_lng], 16);
+                      }
                     }}
                   >
                     <div className="rv-item-rank" style={{ background: isSelected ? '#2752ff' : '#94a3b8' }}>
